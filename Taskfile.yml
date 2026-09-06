@@ -1,5 +1,4 @@
 version: '3'
-dotenv: ['.env'] 
 
 tasks:
   generate:
@@ -16,5 +15,18 @@ tasks:
     desc: Run auth service
     deps: [generate, tidy]
     cmds:
-      - echo $JWT_SECRET
       - go run services/auth/cmd/main.go
+
+  # ===== ТЕСТЫ =====
+  test:
+    desc: Run all unit tests with verbose output
+    cmds:
+      - go test -v ./...
+
+  test-cover:
+    desc: Run tests with coverage report
+    cmds:
+      - mkdir -p coverage
+      - go test -v -coverprofile=coverage/coverage.out ./...
+      - go tool cover -html=coverage/coverage.out -o coverage/coverage.html
+      - echo "Coverage report saved to coverage/coverage.html"
