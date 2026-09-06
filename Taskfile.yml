@@ -1,4 +1,5 @@
 version: '3'
+dotenv: ['.env'] 
 
 tasks:
   generate:
@@ -15,4 +16,5 @@ tasks:
     desc: Run auth service
     deps: [generate, tidy]
     cmds:
+      - echo $JWT_SECRET
       - go run services/auth/cmd/main.go

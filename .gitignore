@@ -1,0 +1,30 @@
+# Секреты (не коммитить!)
+.env
+.env.local
+.env.*.local
+
+# Бинарники и тесты
+*.exe
+*.test
+*.out
+/exe
+/bin/
+
+# Логи и временные файлы
+*.log
+/tmp/
+/out/
+/logs/
+
+# Настройки редактора (личные)
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Go-модули (если не хотите vendor)
+/vendor/
+
+# Если собираете Docker-образы локально (опционально)
+*.dockerignore
