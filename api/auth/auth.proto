@@ -2,8 +2,7 @@ syntax = "proto3";
 
 package auth;
 
-option go_package = "github.com/BladeRunner322/orange-team-microservices/internal/gen/api/auth";
-
+option go_package = "internal/gen/api/auth";
 service AuthService {
     rpc Register(RegisterRequest) returns (RegisterResponse);
     rpc Login(LoginRequest) returns (LoginResponse);

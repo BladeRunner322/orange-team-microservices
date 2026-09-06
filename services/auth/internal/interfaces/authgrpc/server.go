@@ -12,26 +12,26 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/domain"
 )
 
-type AuthServer struct {
+type Server struct {
 	auth.UnimplementedAuthServiceServer
-	registerUC      *usecases.RegisterUseCase
-	loginUC         *usecases.LoginUseCase
-	validateTokenUC *usecases.ValidateTokenUseCase
+	registerUC      *usecases.Register
+	loginUC         *usecases.Login
+	validateTokenUC *usecases.Validate
 }
 
-func NewAuthServer(
-	registerUC *usecases.RegisterUseCase,
-	loginUC *usecases.LoginUseCase,
-	validateTokenUC *usecases.ValidateTokenUseCase,
-) *AuthServer {
-	return &AuthServer{
+func NewServer(
+	registerUC *usecases.Register,
+	loginUC *usecases.Login,
+	validateTokenUC *usecases.Validate,
+) *Server {
+	return &Server{
 		registerUC:      registerUC,
 		loginUC:         loginUC,
 		validateTokenUC: validateTokenUC,
 	}
 }
 
-func (s *AuthServer) Register(ctx context.Context, req *auth.RegisterRequest) (*auth.RegisterResponse, error) {
+func (s *Server) Register(ctx context.Context, req *auth.RegisterRequest) (*auth.RegisterResponse, error) {
 	user, err := s.registerUC.Execute(ctx, req.Email, req.Password, req.FullName)
 	if err != nil {
 		switch {
@@ -52,7 +52,7 @@ func (s *AuthServer) Register(ctx context.Context, req *auth.RegisterRequest) (*
 	}, nil
 }
 
-func (s *AuthServer) Login(ctx context.Context, req *auth.LoginRequest) (*auth.LoginResponse, error) {
+func (s *Server) Login(ctx context.Context, req *auth.LoginRequest) (*auth.LoginResponse, error) {
 	token, err := s.loginUC.Execute(ctx, req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidCredentials) {
@@ -66,7 +66,7 @@ func (s *AuthServer) Login(ctx context.Context, req *auth.LoginRequest) (*auth.L
 	}, nil
 }
 
-func (s *AuthServer) ValidateToken(ctx context.Context, req *auth.ValidateTokenRequest) (*auth.ValidateTokenResponse, error) {
+func (s *Server) ValidateToken(ctx context.Context, req *auth.ValidateTokenRequest) (*auth.ValidateTokenResponse, error) {
 	userID, err := s.validateTokenUC.Execute(ctx, req.Token)
 	if err != nil {
 		return &auth.ValidateTokenResponse{Valid: false}, nil

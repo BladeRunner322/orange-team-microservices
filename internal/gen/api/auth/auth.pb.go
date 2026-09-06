@@ -369,7 +369,7 @@ const file_auth_auth_proto_rawDesc = "" +
 	"\vAuthService\x129\n" +
 	"\bRegister\x12\x15.auth.RegisterRequest\x1a\x16.auth.RegisterResponse\x120\n" +
 	"\x05Login\x12\x12.auth.LoginRequest\x1a\x13.auth.LoginResponse\x12H\n" +
-	"\rValidateToken\x12\x1a.auth.ValidateTokenRequest\x1a\x1b.auth.ValidateTokenResponseB\x19Z\x17./internal/gen/api/authb\x06proto3"
+	"\rValidateToken\x12\x1a.auth.ValidateTokenRequest\x1a\x1b.auth.ValidateTokenResponseB\x17Z\x15internal/gen/api/authb\x06proto3"
 
 var (
 	file_auth_auth_proto_rawDescOnce sync.Once

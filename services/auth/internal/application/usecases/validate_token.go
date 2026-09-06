@@ -3,17 +3,26 @@ package usecases
 import (
 	"context"
 
+	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/application/ports"
 )
 
-type ValidateTokenUseCase struct {
+type Validate struct {
 	tokenManager ports.TokenManager
+	logger       *logger.Logger
 }
 
-func NewValidateTokenUseCase(tokenManager ports.TokenManager) *ValidateTokenUseCase {
-	return &ValidateTokenUseCase{tokenManager: tokenManager}
+func NewValidateToken(tokenManager ports.TokenManager, log *logger.Logger) *Validate {
+	return &Validate{tokenManager: tokenManager, logger: log}
 }
 
-func (uc *ValidateTokenUseCase) Execute(ctx context.Context, token string) (string, error) {
-	return uc.tokenManager.Validate(ctx, token)
+func (uc *Validate) Execute(ctx context.Context, token string) (string, error) {
+	log := uc.logger.With("operation", "ValidateToken")
+	userID, err := uc.tokenManager.Validate(ctx, token)
+	if err != nil {
+		log.Warn("invalid token", "error", err)
+		return "", err
+	}
+	log.Info("token validated successfully", "user_id", userID)
+	return userID, nil
 }

@@ -1,72 +1,60 @@
 package main
 
 import (
-	"log"
-	"net"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
-	"google.golang.org/grpc"
-
-	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
-
-	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/auth"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/config"
-	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/application/usecases"
-	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/infrastructure/jwt"
-	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/infrastructure/postgres"
-	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/interfaces/authgrpc"
+	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/bootstrap"
 )
 
 func main() {
-	cfg := config.MustLoad()
-
-	repo := postgres.NewInMemoryRepository()
-
-	tokenManager := jwt.NewManager(
-		cfg.JWTSecret,
-		cfg.JWTIssuer,
-		cfg.JWTAudience,
-		cfg.JWTExpiration,
-	)
-
-	registerUC := usecases.NewRegisterUseCase(repo)
-	loginUC := usecases.NewLoginUseCase(repo, tokenManager)
-	validateUC := usecases.NewValidateTokenUseCase(tokenManager)
-
-	// gRPC сервер с recovery интерсептором
-	s := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(
-			recovery.UnaryServerInterceptor(
-				recovery.WithRecoveryHandler(func(p interface{}) error {
-					log.Printf("panic recovered: %v", p)
-					return nil // или вернуть ошибку
-				}),
-			),
-		),
-	)
-	auth.RegisterAuthServiceServer(s, authgrpc.NewAuthServer(registerUC, loginUC, validateUC))
-
-	lis, err := net.Listen("tcp", cfg.GRPCPort)
+	log, err := logger.NewLogger(logger.MustLoad())
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		fmt.Println("failed to init application logger:", err)
+		os.Exit(1)
+	}
+	defer log.Close()
+
+	log.Info("starting auth service")
+
+	cfg := config.MustLoad()
+	log.Info("config loaded", "port", cfg.GRPCPort)
+
+	app, err := bootstrap.New(cfg, log)
+	if err != nil {
+		log.Error("failed to bootstrap app", "error", err)
+		os.Exit(1)
 	}
 
-	// Graceful Shutdown
 	go func() {
-		log.Printf("Auth service listening on %s", cfg.GRPCPort)
-		if err := s.Serve(lis); err != nil {
-			log.Fatalf("failed to serve: %v", err)
+		if err := app.Run(); err != nil {
+			log.Error("server failed", "error", err)
+			os.Exit(1)
 		}
 	}()
 
-	// Ожидание сигнала
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	log.Info("waiting for signal...")
 	<-stop
 
-	log.Println("Shutting down gracefully...")
-	s.GracefulStop()
-	log.Println("Server stopped")
+	log.Info("signal received, shutting down...")
+
+	done := make(chan struct{})
+	go func() {
+		app.GracefulStop()
+		close(done)
+	}()
+	select {
+	case <-done:
+		log.Info("server stopped gracefully")
+	case <-time.After(5 * time.Second):
+		log.Warn("graceful stop timeout, forcing stop")
+		app.Stop()
+	}
 }
