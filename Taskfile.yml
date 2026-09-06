@@ -1,0 +1,18 @@
+version: '3'
+
+tasks:
+  generate:
+    desc: Generate gRPC code from proto files
+    cmds:
+      - protoc -I api --go_out=. --go-grpc_out=. api/auth/auth.proto
+
+  tidy:
+    desc: Run go mod tidy
+    cmds:
+      - go mod tidy
+
+  run-auth:
+    desc: Run auth service
+    deps: [generate, tidy]
+    cmds:
+      - go run services/auth/cmd/main.go
