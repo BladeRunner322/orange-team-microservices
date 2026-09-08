@@ -1,0 +1,143 @@
+# ============================================================
+#  НАЗВАНИЕ РАБОЧЕГО ПРОЦЕССА
+# ============================================================
+name: CI/CD
+
+# ============================================================
+#  ТРИГГЕРЫ — когда запускать
+# ============================================================
+on:
+  pull_request:
+    branches: [ main ]          # при открытии/обновлении PR в main
+  push:
+    branches: [ main ]          # при пуше в main (вливание)
+
+# ============================================================
+#  ПЕРЕМЕННЫЕ
+# ============================================================
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+# ============================================================
+#  ЗАДАЧИ
+# ============================================================
+jobs:
+
+  # ------------------------------------------------------------
+  #  JOB 1: CI — проверка кода (тесты, сборка)
+  # ------------------------------------------------------------
+  ci:
+    name: CI - Test & Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.7'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run Unit Tests
+        run: go test -v ./... -short
+
+      - name: Build Auth Service (smoke test)
+        run: go build -v ./services/auth/cmd/...
+
+  # ------------------------------------------------------------
+  #  JOB 2: CD — сборка образа, пуш в реестр и деплой на сервер
+  # ------------------------------------------------------------
+  cd:
+    name: CD - Build, Push & Deploy
+    runs-on: ubuntu-latest
+    needs: ci                     # ждём успешного CI
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Определяем, какие сервисы изменились (чтобы собирать только нужные)
+      - name: Get changed services
+        id: changed-services
+        uses: tj-actions/changed-files@v44
+        with:
+          files: |
+            services/auth/**
+            pkg/**
+            go.mod
+            go.sum
+
+      # Сборка и пуш образа auth, если были изменения в auth или общих пакетах
+      - name: Build and push Auth image
+        if: steps.changed-services.outputs.any_changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./services/auth/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/auth:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/auth:${{ github.sha }}
+
+      # ------------------------------------------------------------
+      #  ДЕПЛОЙ НА СЕРВЕР ПО SSH (путь /root/projects/orange-team-microservices)
+      # ------------------------------------------------------------
+      - name: Deploy to production server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            set -e
+
+            # Папка, куда будет клонироваться проект (ты создал её в ~/projects)
+            PROJECT_DIR="/root/projects/orange-team-microservices"
+
+            # Если папки нет — клонируем репозиторий
+            if [ ! -d "$PROJECT_DIR" ]; then
+              git clone https://github.com/${{ github.repository }} $PROJECT_DIR
+            fi
+
+            cd $PROJECT_DIR
+
+            # Обновляем код (чтобы подтянуть изменения в docker-compose и т.д.)
+            git pull origin main
+
+            # Логинимся в GitHub Container Registry (чтобы скачать приватный образ)
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Скачиваем свежий образ auth:latest
+            docker compose pull auth
+
+            # Перезапускаем контейнер auth
+            docker compose up -d auth
+
+            # Удаляем старые неиспользуемые образы (экономия места)
+            docker image prune -f
