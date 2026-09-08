@@ -22,7 +22,7 @@ func NewRepository(pool postgres.Pool) *Repository {
 
 // Save сохраняет пользователя в БД.
 func (r *Repository) Save(ctx context.Context, user domain.User) error {
-	m := domainToUserModel(user)
+	m := DomainToUserModel(user)
 	query := `
 		INSERT INTO auth.users (id, email, password_hash, full_name, created_at)
 		VALUES ($1, $2, $3, $4, $5)
@@ -55,7 +55,7 @@ func (r *Repository) FindByEmail(ctx context.Context, email domain.Email) (domai
 	if err != nil {
 		return domain.User{}, fmt.Errorf("find user by email: %w", err)
 	}
-	return userModelToDomain(m)
+	return UserModelToDomain(m)
 }
 
 // FindByID ищет пользователя по ID.
@@ -73,5 +73,5 @@ func (r *Repository) FindByID(ctx context.Context, id uuid.UUID) (domain.User, e
 	if err != nil {
 		return domain.User{}, fmt.Errorf("find user by id: %w", err)
 	}
-	return userModelToDomain(m)
+	return UserModelToDomain(m)
 }

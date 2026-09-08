@@ -2,6 +2,9 @@ version: '3'
 dotenv: ['.env']
 
 tasks:
+  # ============================================================
+  #  ГЕНЕРАЦИЯ И ЗАВИСИМОСТИ
+  # ============================================================
   generate:
     desc: Generate gRPC code from proto files
     cmds:
@@ -12,12 +15,18 @@ tasks:
     cmds:
       - go mod tidy
 
+  # ============================================================
+  #  ЗАПУСК ЛОКАЛЬНО
+  # ============================================================
   run-auth:
     desc: Run auth service
     deps: [generate, tidy]
     cmds:
       - go run services/auth/cmd/main.go
 
+  # ============================================================
+  #  ТЕСТЫ
+  # ============================================================
   test:
     desc: Run all unit tests with verbose output
     cmds:
@@ -31,6 +40,14 @@ tasks:
       - go tool cover -html=coverage/coverage.out -o coverage/coverage.html
       - echo "Coverage report saved to coverage/coverage.html"
 
+  test-integration:
+    desc: Run integration tests with Testcontainers
+    cmds:
+      - go test -tags=integration -v ./...
+
+  # ============================================================
+  #  POSTGRES (локальный контейнер)
+  # ============================================================
   postgres-up:
     desc: Start PostgreSQL in background
     cmds:
@@ -51,6 +68,9 @@ tasks:
     cmds:
       - docker compose exec postgres psql -U ${POSTGRES_USER} -d ${POSTGRES_DB}
 
+  # ============================================================
+  #  МИГРАЦИИ (golang-migrate)
+  # ============================================================
   migrate-create:
     desc: Create a new migration
     cmds:
@@ -70,3 +90,44 @@ tasks:
     desc: Show current migration version
     cmds:
       - docker compose run --rm migrate -path /migrations -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable" version
+
+  # ============================================================
+  #  DOCKER COMPOSE (AUTH)
+  # ============================================================
+  auth-build:
+    desc: Build auth service Docker image
+    cmds:
+      - docker compose build auth
+
+  auth-up:
+    desc: Start auth service with PostgreSQL and migrations
+    cmds:
+      - docker compose up -d auth
+
+  auth-down:
+    desc: Stop auth service
+    cmds:
+      - docker compose down auth
+
+  auth-logs:
+    desc: Show auth service logs
+    cmds:
+      - docker compose logs -f auth
+
+  docker-up:
+    desc: Start all services (postgres + migrate + auth)
+    cmds:
+      - docker compose up -d --build
+
+  # ============================================================
+  #  ALL DOCKER-COMPOSE SERVICES (AUTH)
+  # ============================================================
+  docker-down:
+    desc: Stop all services
+    cmds:
+      - docker compose down
+
+  docker-down-v:
+    desc: Stop all services and remove volumes
+    cmds:
+      - docker compose down -v
