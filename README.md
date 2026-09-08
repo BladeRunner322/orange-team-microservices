@@ -19,13 +19,16 @@ go install github.com/go-task/task/v3/cmd/task@latest
 
 1. Склонируйте репозиторий
 
-```git clone https://github.com/BladeRunner322/orange-team-microservices cd orange-team-microservices```
+```
+git clone https://github.com/BladeRunner322/orange-team-microservices cd orange-team-microservices
+```
 
 2. Настройте переменные окружения
 
 Скопируйте .env.example в .env и заполните значения:
-
-```cp .env.example .env```
+```
+cp .env.example .env
+```
 
 Обязательно укажите:
 
@@ -34,8 +37,9 @@ go install github.com/go-task/task/v3/cmd/task@latest
 - POSTGRES_PASSWORD — пароль для БД.
 
 3. Запустите всё окружение (PostgreSQL + миграции + сервисы)
-
-```task docker-up```
+```
+task docker-up
+```
 
 Это поднимет:
 
@@ -46,14 +50,17 @@ go install github.com/go-task/task/v3/cmd/task@latest
 - Auth-сервис (gRPC, порт 50051)
 
 4. Проверьте, что сервис работает
-
-```grpcurl -plaintext localhost:50051 list```
+```
+grpcurl -plaintext localhost:50051 list
+```
 
 5. Протестируйте регистрацию и логин
-
-```grpcurl -plaintext -d '{"email":"test@example.com","password":"password123","full_name":"Test User"}' localhost:50051 auth.AuthService/Register```
-
-```grpcurl -plaintext -d '{"email":"test@example.com","password":"password123"}' localhost:50051 auth.AuthService/Login```
+```
+grpcurl -plaintext -d '{"email":"test@example.com","password":"password123","full_name":"Test User"}' localhost:50051 auth.AuthService/Register
+```
+```
+grpcurl -plaintext -d '{"email":"test@example.com","password":"password123"}' localhost:50051 auth.AuthService/Login
+```
 
 ## Структура проекта
 ```
@@ -97,43 +104,65 @@ go install github.com/go-task/task/v3/cmd/task@latest
 
 - Команды:
 
-  - ```task run-auth``` — запуск локально
+  - Запуск локально
+    ```
+    task run-auth
+    ```
 
-  - ```task auth-build``` — сборка Docker-образа
+  - Сборка Docker-образа
+    ```
+    task auth-build
+    ```
 
-  - ```task auth-up``` — запуск в Docker Compose
+  - Запуск в Docker Compose
+    ```
+    task auth-up
+    ```
 
-  - ```task auth-logs``` — просмотр логов
+  - Просмотр логов
+    ```
+    task auth-logs
+    ```
 
 ## Тестирование
 ### Юнит-тесты
-
-```task test```
+```
+task test
+```
 
 ### Интеграционные тесты (с Testcontainers)
-
-```task test-integration```
+```
+task test-integration
+```
 
 ### Покрытие
-
-```task test-cover```
+```
+task test-cover
+```
 
 Отчёт будет в coverage/coverage.html.
 
 ## Управление миграциями
 
 ### Создать новую миграцию
-```task migrate-create -- create_users_table```
+```
+task migrate-create -- create_users_table
+```
 
 ### Применить миграции
-```task migrate-up```
+```
+task migrate-up
+```
 
 ### Откатить последнюю
-```task migrate-down -- 1```
+```
+task migrate-down -- 1
+```
 
 ### Показать текущую версию
-
-```task migrate-version```
+```
+task migrate-version
+```
 
 ## Переменные окружения
 
