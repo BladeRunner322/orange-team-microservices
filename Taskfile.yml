@@ -114,14 +114,14 @@ tasks:
     cmds:
       - docker compose logs -f auth
 
+  # ============================================================
+  #  ALL DOCKER-COMPOSE SERVICES (AUTH)
+  # ============================================================
   docker-up:
     desc: Start all services (postgres + migrate + auth)
     cmds:
       - docker compose up -d --build
 
-  # ============================================================
-  #  ALL DOCKER-COMPOSE SERVICES (AUTH)
-  # ============================================================
   docker-down:
     desc: Stop all services
     cmds:

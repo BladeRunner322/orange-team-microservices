@@ -104,25 +104,39 @@ grpcurl -plaintext -d '{"email":"test@example.com","password":"password123"}' lo
 
 - Команды:
 
-  - Запуск локально
+  - Запуск локально:
     ```
     task run-auth
     ```
 
-  - Сборка Docker-образа
+  - Сборка Docker-образа:
     ```
     task auth-build
     ```
 
-  - Запуск в Docker Compose
+  - Запуск в Docker Compose:
     ```
     task auth-up
     ```
 
-  - Просмотр логов
+  - Просмотр логов:
     ```
     task auth-logs
     ```
+
+#### Healthcheck
+
+Auth-сервис предоставляет HTTP-эндпоинт для проверки состояния:
+
+- **Порт:** 8080
+- **Эндпоинт:** `/health`
+- **Ответ:** `{"status":"ok","service":"auth"}`
+
+Проверка:
+
+```
+curl http://localhost:8080/health
+```
 
 ## Тестирование
 ### Юнит-тесты
