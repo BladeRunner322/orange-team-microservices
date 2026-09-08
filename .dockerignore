@@ -1,0 +1,8 @@
+coverage/
+logs/
+.env
+.gitignore
+README.md
+Taskfile.yml
+docker-compose.yml
+.env.example

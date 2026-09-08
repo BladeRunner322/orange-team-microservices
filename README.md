@@ -90,6 +90,24 @@ grpcurl -plaintext -d '{"email":"test@example.com","password":"password123"}' lo
 ├── go.mod
 └── README.md
 ```
+
+## Разработка
+
+### Управление зависимостями (vendor)
+
+Проект использует `vendor` для ускорения сборки Docker. Все зависимости зафиксированы в папке `vendor`.
+
+Если вы добавили новую зависимость в `go.mod`, обновите `vendor`:
+
+```
+go mod vendor
+```
+ или
+ 
+ ```
+task vendor
+```
+
 ## Сервисы
 
 ### Auth (аутентификация)

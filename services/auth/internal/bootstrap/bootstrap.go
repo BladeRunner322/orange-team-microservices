@@ -7,12 +7,14 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
 	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/auth"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/grpc/interceptors"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/metrics"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/config"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/application/usecases"
@@ -22,6 +24,7 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/interfaces/authgrpc"
 )
 
+// App — структура, объединяющая все компоненты приложения.
 type App struct {
 	grpcServer *grpc.Server
 	listener   net.Listener
@@ -31,10 +34,13 @@ type App struct {
 	httpServer *http.Server
 }
 
+// New — сборка всех зависимостей и запуск компонентов.
 func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	ctx := context.Background()
 
+	// ============================================================
 	// 1. ПОДКЛЮЧЕНИЕ К POSTGRESQL
+	// ============================================================
 	pgCfg := postgres.MustLoad()
 	pool, err := postgres.NewPgxPool(ctx, pgCfg)
 	if err != nil {
@@ -42,10 +48,14 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	}
 	log.Info("postgres connection pool created")
 
+	// ============================================================
 	// 2. РЕПОЗИТОРИЙ (реализация для auth)
+	// ============================================================
 	repo := postgres_repo.NewRepository(pool)
 
+	// ============================================================
 	// 3. JWT-МЕНЕДЖЕР
+	// ============================================================
 	tokenManager := jwt.NewManager(
 		cfg.JWTSecret,
 		cfg.JWTIssuer,
@@ -54,42 +64,59 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	)
 	log.Info("jwt manager initialized")
 
+	// ============================================================
 	// 4. USE CASES
+	// ============================================================
 	registerUC := usecases.NewRegister(repo, log)
 	loginUC := usecases.NewLogin(repo, tokenManager, log)
 	validateUC := usecases.NewValidateToken(tokenManager, log)
 	log.Info("use cases initialized")
 
-	// 5. gRPC СЕРВЕР С ИНТЕРСЕПТОРАМИ
+	// ============================================================
+	// 5. МЕТРИКИ (PROMETHEUS)
+	// ============================================================
+	metrics.Register()
+	log.Info("metrics registered")
+
+	// ============================================================
+	// 6. gRPC СЕРВЕР С ИНТЕРСЕПТОРАМИ
+	// ============================================================
 	s := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
-			recovery.UnaryServerInterceptor(
-				recovery.WithRecoveryHandler(func(p interface{}) error {
-					log.Error("panic recovered", "panic", p)
-					return nil
-				}),
-			),
-			authgrpc.LoggingInterceptor(log),
+			// 6.1. Метрики (prometheus)
+			interceptors.MetricsInterceptor(),
+			// 6.2. Восстановление после паники
+			interceptors.RecoveryInterceptor(log),
+			// 6.3. Логирование запросов
+			interceptors.LoggingInterceptor(log),
 		),
 	)
+
+	// Регистрация gRPC-сервиса
 	auth.RegisterAuthServiceServer(s, authgrpc.NewServer(registerUC, loginUC, validateUC))
 
+	// Режим разработки — включаем reflection для grpcurl
 	if cfg.EnableReflection {
 		reflection.Register(s)
 	}
 	log.Info("gRPC server registered")
 
-	// 6. gRPC ЛИСТЕНЕР
+	// ============================================================
+	// 7. gRPC ЛИСТЕНЕР
+	// ============================================================
 	lis, err := net.Listen("tcp", cfg.GRPCPort)
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen: %w", err)
 	}
 	log.Info("gRPC listener created", "addr", cfg.GRPCPort)
 
-	// 7. HEALTHCHECK HTTP-СЕРВЕР (на отдельном порту 8080)
+	// ============================================================
+	// 8. HTTP СЕРВЕР (HEALTHCHECK + METRICS)
+	// ============================================================
 	healthMux := http.NewServeMux()
 	healthMux.HandleFunc("/health", health.Handler())
 	healthMux.HandleFunc("/ready", health.Handler())
+	healthMux.Handle("/metrics", promhttp.Handler())
 
 	httpSrv := &http.Server{
 		Addr:         ":8080",
@@ -98,14 +125,17 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		WriteTimeout: 5 * time.Second,
 	}
 
+	// Запускаем HTTP-сервер в горутине
 	go func() {
-		log.Info("healthcheck server listening", "addr", ":8080")
+		log.Info("HTTP server listening", "addr", ":8080", "endpoints", "/health, /ready, /metrics")
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Error("healthcheck server failed", "error", err)
+			log.Error("HTTP server failed", "error", err)
 		}
 	}()
 
-	// 8. СБОРКА APP
+	// ============================================================
+	// 9. СБОРКА APP
+	// ============================================================
 	return &App{
 		grpcServer: s,
 		listener:   lis,
@@ -116,35 +146,49 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	}, nil
 }
 
-// ЗАПУСК
+// ============================================================
+// ЗАПУСК gRPC СЕРВЕРА
+// ============================================================
 func (a *App) Run() error {
 	a.logger.Info("Auth service listening", "addr", a.config.GRPCPort)
 	return a.grpcServer.Serve(a.listener)
 }
 
-// GRACEFUL SHUTDOWN
+// ============================================================
+// GRACEFUL SHUTDOWN (ОСТАНОВКА gRPC СЕРВЕРА)
+// ============================================================
+// Дожидается завершения текущих запросов, затем останавливает сервер.
 func (a *App) GracefulStop() {
 	a.grpcServer.GracefulStop()
 }
 
+// ============================================================
+// ПРИНУДИТЕЛЬНАЯ ОСТАНОВКА gRPC СЕРВЕРА
+// ============================================================
+// Используется при таймауте graceful shutdown.
 func (a *App) Stop() {
 	a.grpcServer.Stop()
 }
 
-// ЗАКРЫТИЕ РЕСУРСОВ
+// ============================================================
+// ЗАКРЫТИЕ РЕСУРСОВ (БД, HTTP, ЛОГГЕР)
+// ============================================================
+// Закрывается в обратном порядке: сначала HTTP, потом БД.
 func (a *App) Close() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Закрываем HTTP-сервер (healthcheck)
+	// 1. Закрываем HTTP-сервер (healthcheck + metrics)
 	if a.httpServer != nil {
 		if err := a.httpServer.Shutdown(ctx); err != nil {
-			a.logger.Error("healthcheck server shutdown error", "error", err)
+			a.logger.Error("HTTP server shutdown error", "error", err)
 		}
 	}
 
-	// Закрываем пул соединений с БД
+	// 2. Закрываем пул соединений с БД
 	if a.pool != nil {
 		a.pool.Close()
 	}
+
+	a.logger.Info("all resources closed")
 }

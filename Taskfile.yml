@@ -15,6 +15,11 @@ tasks:
     cmds:
       - go mod tidy
 
+  vendor:
+    desc: Update vendor directory with current dependencies
+    cmds:
+      - go mod vendor
+
   # ============================================================
   #  ЗАПУСК ЛОКАЛЬНО
   # ============================================================
@@ -99,8 +104,14 @@ tasks:
     cmds:
       - docker compose build auth
 
+  auth-rebuild:
+    desc: Rebuild auth with fresh vendor and no cache
+    deps: [vendor]
+    cmds:
+      - docker compose build auth --no-cache
+
   auth-up:
-    desc: Start auth service with PostgreSQL and migrations
+    desc: Start auth service (assumes image is already built)
     cmds:
       - docker compose up -d auth
 
@@ -114,8 +125,15 @@ tasks:
     cmds:
       - docker compose logs -f auth
 
+  auth-restart:
+    desc: Restart auth service (update vendor, rebuild without cache and start)
+    deps: [vendor]
+    cmds:
+      - docker compose build auth --no-cache
+      - docker compose up -d auth
+
   # ============================================================
-  #  ALL DOCKER-COMPOSE SERVICES (AUTH)
+  #  ALL DOCKER-COMPOSE SERVICES
   # ============================================================
   docker-up:
     desc: Start all services (postgres + migrate + auth)

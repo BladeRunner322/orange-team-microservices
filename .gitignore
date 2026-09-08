@@ -23,8 +23,5 @@
 *.swo
 .DS_Store
 
-# Go (vendor не используем)
-/vendor/
-
 # Coverage reports
 coverage/
