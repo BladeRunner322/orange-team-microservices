@@ -32,7 +32,8 @@ func NewServer(
 }
 
 func (s *Server) Register(ctx context.Context, req *auth.RegisterRequest) (*auth.RegisterResponse, error) {
-	user, err := s.registerUC.Execute(ctx, req.Email, req.Password, req.FullName)
+	email, password, fullName := ToDomainRegisterParams(req)
+	user, err := s.registerUC.Execute(ctx, email, password, fullName)
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrEmailAlreadyExists):
@@ -45,34 +46,26 @@ func (s *Server) Register(ctx context.Context, req *auth.RegisterRequest) (*auth
 			return nil, status.Error(codes.Internal, "internal server error")
 		}
 	}
-	return &auth.RegisterResponse{
-		Id:       user.ID().String(),
-		Email:    user.Email().String(),
-		FullName: user.FullName().String(),
-	}, nil
+	return ToProtoRegisterResponse(user), nil
 }
 
 func (s *Server) Login(ctx context.Context, req *auth.LoginRequest) (*auth.LoginResponse, error) {
-	token, err := s.loginUC.Execute(ctx, req.Email, req.Password)
+	email, password := ToDomainLoginParams(req)
+	token, err := s.loginUC.Execute(ctx, email, password)
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidCredentials) {
 			return nil, status.Error(codes.Unauthenticated, "invalid credentials")
 		}
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
-	return &auth.LoginResponse{
-		AccessToken: token,
-		TokenType:   "Bearer",
-	}, nil
+	return ToProtoLoginResponse(token), nil
 }
 
 func (s *Server) ValidateToken(ctx context.Context, req *auth.ValidateTokenRequest) (*auth.ValidateTokenResponse, error) {
-	userID, err := s.validateTokenUC.Execute(ctx, req.Token)
+	token := ToDomainValidateTokenParams(req)
+	userID, err := s.validateTokenUC.Execute(ctx, token)
 	if err != nil {
 		return &auth.ValidateTokenResponse{Valid: false}, nil
 	}
-	return &auth.ValidateTokenResponse{
-		UserId: userID,
-		Valid:  true,
-	}, nil
+	return ToProtoValidateTokenResponse(userID, true), nil
 }
