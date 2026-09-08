@@ -22,7 +22,7 @@ func (m *mockRepository) Save(ctx context.Context, user domain.User) error {
 	if m.err != nil {
 		return m.err
 	}
-	m.users[user.Email.String()] = user
+	m.users[user.Email().String()] = user
 	return nil
 }
 
@@ -42,7 +42,7 @@ func (m *mockRepository) FindByID(ctx context.Context, id uuid.UUID) (domain.Use
 		return domain.User{}, m.err
 	}
 	for _, u := range m.users {
-		if u.ID == id {
+		if u.ID() == id {
 			return u, nil
 		}
 	}

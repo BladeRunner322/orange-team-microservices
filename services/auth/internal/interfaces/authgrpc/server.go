@@ -46,9 +46,9 @@ func (s *Server) Register(ctx context.Context, req *auth.RegisterRequest) (*auth
 		}
 	}
 	return &auth.RegisterResponse{
-		Id:       user.ID.String(),
-		Email:    user.Email.String(),
-		FullName: user.FullName.String(),
+		Id:       user.ID().String(),
+		Email:    user.Email().String(),
+		FullName: user.FullName().String(),
 	}, nil
 }
 

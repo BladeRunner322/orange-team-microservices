@@ -6,6 +6,9 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/domain"
 )
@@ -16,7 +19,6 @@ func TestLogin_Execute(t *testing.T) {
 
 	t.Run("успешный вход", func(t *testing.T) {
 		repo := newMockRepository()
-		// создаём пользователя с известным паролем
 		email, _ := domain.NewEmail("test@example.com")
 		fullName, _ := domain.NewFullName("Test User")
 		password := "password123"
@@ -27,24 +29,19 @@ func TestLogin_Execute(t *testing.T) {
 
 		uc := NewLogin(repo, tokenManager, log)
 		token, err := uc.Execute(context.Background(), "test@example.com", "password123")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if token != "test-token" {
-			t.Errorf("expected test-token, got %s", token)
-		}
+
+		require.NoError(t, err)
+		assert.Equal(t, "test-token", token)
 	})
 
 	t.Run("неверные учётные данные — пользователь не найден", func(t *testing.T) {
 		repo := newMockRepository()
 		uc := NewLogin(repo, tokenManager, log)
+
 		_, err := uc.Execute(context.Background(), "unknown@example.com", "password123")
-		if err == nil {
-			t.Error("expected error, got nil")
-		}
-		if err != domain.ErrInvalidCredentials {
-			t.Errorf("expected ErrInvalidCredentials, got %v", err)
-		}
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrInvalidCredentials)
 	})
 
 	t.Run("неверный пароль", func(t *testing.T) {
@@ -58,11 +55,8 @@ func TestLogin_Execute(t *testing.T) {
 
 		uc := NewLogin(repo, tokenManager, log)
 		_, err := uc.Execute(context.Background(), "test@example.com", "wrongpass")
-		if err == nil {
-			t.Error("expected error, got nil")
-		}
-		if err != domain.ErrInvalidCredentials {
-			t.Errorf("expected ErrInvalidCredentials, got %v", err)
-		}
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrInvalidCredentials)
 	})
 }

@@ -34,17 +34,17 @@ func (uc *Login) Execute(ctx context.Context, emailStr, password string) (string
 		log.Warn("user not found")
 		return "", domain.ErrInvalidCredentials
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash.String()), []byte(password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash().String()), []byte(password)); err != nil {
 		log.Warn("invalid password")
 		return "", domain.ErrInvalidCredentials
 	}
 
-	token, err := uc.tokenManager.Generate(ctx, user.ID.String())
+	token, err := uc.tokenManager.Generate(ctx, user.ID().String())
 	if err != nil {
 		log.Error("failed to generate token", "error", err)
 		return "", err
 	}
 
-	log.Info("user logged in successfully", "user_id", user.ID.String())
+	log.Info("user logged in successfully", "user_id", user.ID().String())
 	return token, nil
 }

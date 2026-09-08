@@ -2,6 +2,8 @@ package domain
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewEmail(t *testing.T) {
@@ -15,24 +17,19 @@ func TestNewEmail(t *testing.T) {
 		{"empty", "", true},
 		{"missing @", "testexample.com", true},
 		{"no domain", "test@", true},
-		{"uppercase", "Test@Example.com", false}, // должен привести к нижнему регистру
+		{"uppercase", "Test@Example.com", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			email, err := NewEmail(tt.input)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-				}
+				assert.Error(t, err)
 				return
 			}
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-			// проверяем, что email приведён к нижнему регистру
-			if tt.input == "Test@Example.com" && email.String() != "test@example.com" {
-				t.Errorf("expected normalized email 'test@example.com', got '%s'", email.String())
+			assert.NoError(t, err)
+			if tt.input == "Test@Example.com" {
+				assert.Equal(t, "test@example.com", email.String())
 			}
 		})
 	}
@@ -52,8 +49,10 @@ func TestNewFullName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := NewFullName(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewFullName() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
@@ -70,26 +69,16 @@ func TestNewPasswordHash(t *testing.T) {
 		{"valid password len", "1234567890", false},
 		{"valid password hash len", "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy", false},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := NewPasswordHash(tt.input)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-				}
-				// Проверяем, что это именно ErrInvalidPasswordHash
-				if err != nil && err != ErrInvalidPasswordHash {
-					t.Errorf("expected ErrInvalidPasswordHash, got %v", err)
-				}
+				assert.Error(t, err)
+				assert.ErrorIs(t, err, ErrInvalidPasswordHash)
 				return
 			}
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
-			if string(result) == "" {
-				t.Errorf("expected non-empty PasswordHash, got empty")
-			}
+			assert.NoError(t, err)
+			assert.NotEmpty(t, result.String())
 		})
 	}
 }
@@ -107,8 +96,11 @@ func TestNewPassword(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := NewPassword(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("NewPassword() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.ErrorIs(t, err, ErrWeakPassword)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}
