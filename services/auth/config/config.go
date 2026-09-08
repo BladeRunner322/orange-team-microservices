@@ -14,6 +14,9 @@ type Config struct {
 	JWTAudience      string        `envconfig:"JWT_AUDIENCE" default:"orange-team"`
 	JWTExpiration    time.Duration `envconfig:"JWT_EXPIRATION" default:"24h"`
 	EnableReflection bool          `envconfig:"ENABLE_REFLECTION" default:"false"`
+	EnableTLS        bool          `envconfig:"ENABLE_TLS" default:"false"`
+	TLSCertFile      string        `envconfig:"TLS_CERT_FILE" default:""`
+	TLSKeyFile       string        `envconfig:"TLS_KEY_FILE" default:""`
 }
 
 func Load() (Config, error) {

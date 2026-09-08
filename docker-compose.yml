@@ -1,5 +1,5 @@
 services:
-  postgres:
+  postgres-auth:
     image: postgres:18.6-bookworm
     container_name: auth-postgres
     env_file:
@@ -15,17 +15,17 @@ services:
       timeout: 5s
       retries: 5
 
-  migrate:
+  migrate-auth:
     image: migrate/migrate:v4.19.1
     container_name: auth-migrate
     volumes:
-      - ./migrations:/migrations
+      - ./services/auth/migrations:/migrations
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-auth:5432/${POSTGRES_DB}?sslmode=disable
     depends_on:
-      postgres:
+      postgres-auth:
         condition: service_healthy
     restart: "no"
 
@@ -34,32 +34,21 @@ services:
       context: .
       dockerfile: services/auth/Dockerfile
     container_name: auth-service
+    volumes:
+      - ./certs:/app/certs:ro
     env_file:
       - .env
     ports:
       - "50051:50051"
       - "8080:8080"
     environment:
-      - GRPC_PORT=:50051
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_ISSUER=${JWT_ISSUER}
-      - JWT_AUDIENCE=${JWT_AUDIENCE}
-      - JWT_EXPIRATION=${JWT_EXPIRATION}
-      - LOGGER_LEVEL=${LOGGER_LEVEL}
-      - LOGGER_FORMAT=${LOGGER_FORMAT}
-      - LOGGER_FOLDER=${LOGGER_FOLDER}
-      - ENABLE_REFLECTION=${ENABLE_REFLECTION}
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_SSLMODE=${POSTGRES_SSLMODE}
-      - POSTGRES_TIMEOUT=${POSTGRES_TIMEOUT}
+      - POSTGRES_HOST=postgres-auth
+      - TLS_CERT_FILE=/app/certs/server.crt
+      - TLS_KEY_FILE=/app/certs/server.key
     depends_on:
-      postgres:
+      postgres-auth:
         condition: service_healthy
-      migrate:
+      migrate-auth:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]

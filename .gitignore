@@ -2,6 +2,7 @@
 .env
 .env.local
 .env.*.local
+certs/
 
 # Бинарники и тесты
 *.exe

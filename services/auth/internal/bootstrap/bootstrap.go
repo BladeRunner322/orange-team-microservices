@@ -9,6 +9,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 
 	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/auth"
@@ -81,7 +82,12 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	// ============================================================
 	// 6. gRPC СЕРВЕР С ИНТЕРСЕПТОРАМИ
 	// ============================================================
-	s := grpc.NewServer(
+
+	// Собираем опции сервера
+	var grpcOpts []grpc.ServerOption
+
+	// Интерсепторы (были)
+	grpcOpts = append(grpcOpts,
 		grpc.ChainUnaryInterceptor(
 			// 6.1. Метрики (prometheus)
 			interceptors.MetricsInterceptor(),
@@ -91,6 +97,21 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 			interceptors.LoggingInterceptor(log),
 		),
 	)
+
+	// TLS
+	if cfg.EnableTLS {
+		creds, err := credentials.NewServerTLSFromFile(cfg.TLSCertFile, cfg.TLSKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load TLS credentials: %w", err)
+		}
+		grpcOpts = append(grpcOpts, grpc.Creds(creds))
+		log.Info("TLS enabled for gRPC")
+	} else {
+		log.Warn("gRPC running without TLS (insecure mode)")
+	}
+
+	// Создаём сервер с опциями
+	s := grpc.NewServer(grpcOpts...)
 
 	// Регистрация gRPC-сервиса
 	auth.RegisterAuthServiceServer(s, authgrpc.NewServer(registerUC, loginUC, validateUC))

@@ -18,25 +18,30 @@ go install github.com/go-task/task/v3/cmd/task@latest
 ## Быстрый старт
 
 1. Склонируйте репозиторий
-
 ```
-git clone https://github.com/BladeRunner322/orange-team-microservices cd orange-team-microservices
+git clone https://github.com/BladeRunner322/orange-team-microservices
+cd orange-team-microservices
 ```
-
 2. Настройте переменные окружения
 
 Скопируйте .env.example в .env и заполните значения:
 ```
 cp .env.example .env
 ```
-
 Обязательно укажите:
 
 - JWT_SECRET — секретный ключ для JWT (минимум 32 байта).
 
 - POSTGRES_PASSWORD — пароль для БД.
 
-3. Запустите всё окружение (PostgreSQL + миграции + сервисы)
+3. Сгенерируйте TLS-сертификаты для разработки
+
+Auth Service использует gRPC с TLS. Для локальной разработки создайте самоподписанный сертификат:
+```
+mkdir -p certs
+openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.crt -days 365 -nodes -subj "/CN=localhost"
+```
+4. Запустите всё окружение (PostgreSQL + миграции + сервисы)
 ```
 task docker-up
 ```
@@ -49,48 +54,239 @@ task docker-up
 
 - Auth-сервис (gRPC, порт 50051)
 
-4. Проверьте, что сервис работает
+5. Проверьте, что сервис работает
 ```
-grpcurl -plaintext localhost:50051 list
+grpcurl -insecure localhost:50051 list
 ```
 
-5. Протестируйте регистрацию и логин
+6. Протестируйте регистрацию и логин
 ```
-grpcurl -plaintext -d '{"email":"test@example.com","password":"password123","full_name":"Test User"}' localhost:50051 auth.AuthService/Register
+grpcurl -insecure -d '{"email":"test@example.com","password":"password123","full_name":"Test User"}' localhost:50051 auth.AuthService/Register
 ```
 ```
-grpcurl -plaintext -d '{"email":"test@example.com","password":"password123"}' localhost:50051 auth.AuthService/Login
+grpcurl -insecure -d '{"email":"test@example.com","password":"password123"}' localhost:50051 auth.AuthService/Login
 ```
 
 ## Структура проекта
 ```
-├── api/                      # gRPC-контракты (.proto)
-│   └── auth/
-│       └── auth.proto
-├── internal/                 # сгенерированный код из proto
-│   └── gen/
-├── migrations/               # SQL-миграции
-├── pkg/                      # общие инфраструктурные пакеты
-│   ├── logger/               # структурированное логирование
-│   └── postgres/             # работа с PostgreSQL (pgx)
-├── services/                 # микросервисы
-│   └── auth/                 # сервис аутентификации
-│       ├── cmd/              # точка входа
-│       ├── config/           # конфигурация
-│       ├── internal/         # приватный код
-│       │   ├── bootstrap/    # сборка зависимостей
-│       │   ├── domain/       # DDD: сущности, value objects, ошибки
-│       │   ├── application/  # use cases и порты
-│       │   ├── infrastructure/ # реализации (JWT, PostgreSQL)
-│       │   └── interfaces/   # gRPC-адаптеры
-│       ├── Dockerfile
-│       └── .env.example
-├── docker-compose.yaml
-├── Taskfile.yml
+orange-team-microservices/
+├── api/                              # gRPC-контракты
+│   ├── auth/
+│   │   └── auth.proto
+│   ├── users/
+│   │   └── users.proto
+│   ├── exercises/
+│   │   └── exercises.proto
+│   ├── habits/
+│   │   └── habits.proto
+│   ├── workouts/
+│   │   └── workouts.proto
+│   └── leaderboard/
+│       └── leaderboard.proto
+│
+├── internal/
+│   └── gen/                          # сгенерированный код из proto
+│       └── api/
+│           ├── auth/
+│           ├── users/
+│           ├── exercises/
+│           ├── habits/
+│           ├── workouts/
+│           └── leaderboard/
+│
+├── pkg/                              # общие пакеты
+│   ├── logger/
+│   ├── postgres/
+│   ├── metrics/
+│   └── interceptors/
+│
+├── services/                         # микросервисы
+│   ├── gateway/                      # API Gateway (НОВЫЙ)
+│   │   ├── cmd/
+│   │   │   └── main.go
+│   │   ├── config/
+│   │   │   └── config.go
+│   │   ├── internal/
+│   │   │   ├── handlers/             # HTTP-хендлеры
+│   │   │   ├── middleware/           # аутентификация, логирование
+│   │   │   └── clients/              # gRPC-клиенты к сервисам
+│   │   └── Dockerfile
+│   │
+│   ├── auth/                         # ✅ ГОТОВ
+│   │   ├── cmd/
+│   │   ├── config/
+│   │   ├── internal/
+│   │   │   ├── bootstrap/
+│   │   │   ├── domain/
+│   │   │   ├── application/
+│   │   │   ├── infrastructure/
+│   │   │   └── interfaces/
+│   │   ├── migrations/               # auth_db
+│   │   └── Dockerfile
+│   │
+│   ├── users/                        # НОВЫЙ
+│   │   ├── cmd/
+│   │   ├── config/
+│   │   ├── internal/
+│   │   │   ├── bootstrap/
+│   │   │   ├── domain/
+│   │   │   ├── application/
+│   │   │   ├── infrastructure/
+│   │   │   └── interfaces/
+│   │   ├── migrations/               # users_db
+│   │   └── Dockerfile
+│   │
+│   ├── exercises/                    # НОВЫЙ
+│   │   └── ... (аналогично)
+│   │
+│   ├── habits/                       # НОВЫЙ
+│   │   └── ... (аналогично)
+│   │
+│   ├── workouts/                     # НОВЫЙ
+│   │   └── ... (аналогично)
+│   │
+│   └── leaderboard/                  # НОВЫЙ
+│       └── ... (аналогично)
+│
+├── docker-compose.yml                # все контейнеры
+├── Taskfile.yml                      # задачи для разработки
 ├── go.mod
 └── README.md
 ```
+## Полная архитектура микросервисного приложения
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          КЛИЕНТЫ (Внешние)                                  │
+│                    Браузер / Мобильное приложение                           │
+└────────────────────────────────┬────────────────────────────────────────────┘
+                                 │ HTTP (REST API)
+                                 ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         API GATEWAY                                        │
+│                    (HTTP → gRPC прокси)                                    │
+│                                                                            │
+│  📋 Функции:                                                               │
+│  • Принимает HTTP-запросы от клиентов                                      │
+│  • Для публичных эндпоинтов (/register, /login) → проксирует в Auth        │
+│  • Для защищённых эндпоинтов:                                              │
+│    1. Вызывает Auth.ValidateToken() → получает user_id                     │
+│    2. Добавляет user_id в gRPC-метаданные                                  │
+│    3. Проксирует запрос в нужный сервис                                    │
+│  • Преобразует gRPC-ответы в HTTP-ответы                                   │
+│  • Собирает метрики (Prometheus)                                           │
+│  • Логирует запросы (Loki)                                                 │
+│                                                                            │
+│  🔀 Маршруты:                                                              │
+│  POST   /register               → Auth.Register                            │
+│  POST   /login                  → Auth.Login                               │
+│  GET    /users/me               → Users.GetUser                            │
+│  PATCH  /users/me               → Users.PatchUser                          │
+│  DELETE /users/me               → Users.DeleteUser                         │
+│  GET    /exercises              → Exercises.GetExercises                   │
+│  POST   /exercises              → Exercises.CreateExercise (admin)         │
+│  GET    /habits                 → Habits.GetHabits                         │
+│  POST   /habits                 → Habits.CreateHabit                       │
+│  POST   /habits/{id}/complete   → Habits.CompleteHabit                     │
+│  DELETE /habits/{id}            → Habits.DeleteHabit                       │
+│  GET    /workouts               → Workouts.GetWorkouts                     │
+│  GET    /workouts/{id}          → Workouts.GetWorkout                      │
+│  POST   /workouts               → Workouts.CreateWorkout                   │
+│  PATCH  /workouts/{id}          → Workouts.PatchWorkout                    │
+│  DELETE /workouts/{id}          → Workouts.DeleteWorkout                   │
+│  POST   /workouts/{id}/exercises → Workouts.CreateWorkoutExercise          │
+│  GET    /workouts/{id}/exercises → Workouts.GetWorkoutExercises            │
+│  PATCH  /workouts/{id}/exercises/{eid} → Workouts.PatchWorkoutExercise     │
+│  DELETE /workouts/{id}/exercises/{eid} → Workouts.DeleteWorkoutExercise    │
+│  GET    /leaderboard/daily     → Leaderboard.GetDaily                      │
+│  GET    /leaderboard/weekly    → Leaderboard.GetWeekly                     │
+│  GET    /leaderboard/monthly   → Leaderboard.GetMonthly                    │
+└──────────────┬─────────────────┬─────────────────┬─────────────────────────┘
+               │                 │                 │
+               │ gRPC            │ gRPC            │ gRPC
+               ▼                 ▼                 ▼
+┌──────────────────────┐ ┌──────────────────┐ ┌───────────────────┐
+│   AUTH SERVICE       │ │   USERS SERVICE  │ │  EXERCISES        │
+│   (✅ ГОТОВ)         │ │   (НОВЫЙ)        │ │  SERVICE          │
+│                      │ │                  │ │  (НОВЫЙ)          │
+│  gRPC-методы:        │ │  gRPC-методы:    │ │  gRPC-методы:     │
+│  • Register          │ │  • GetUser       │ │  • GetExercises   │
+│  • Login             │ │  • PatchUser     │ │  • CreateExercise │
+│  • ValidateToken     │ │  • DeleteUser    │ │                   │
+│                      │ │                  │ │                   │
+│  БД: PostgreSQL      │ │  БД: PostgreSQL  │ │  БД: PostgreSQL   │
+│  └── auth_db         │ │  └── users_db    │ │  └── exercises_db │
+│      └── users       │ │      └── users   │ │      └── exercises│
+│                      │ │                  │ │                   │
+│  Порт: :50051        │ │  Порт: :50052    │ │  Порт: :50053     │
+└──────────────────────┘ └──────────────────┘ └───────────────────┘
+               │                 │                 │
+               │ gRPC            │ gRPC            │ gRPC
+               ▼                 ▼                 ▼
+┌──────────────────────┐ ┌───────────────────┐ ┌─────────────────────┐
+│   HABITS SERVICE     │ │  WORKOUTS         │ │  LEADERBOARD        │
+│   (НОВЫЙ)            │ │  SERVICE          │ │  SERVICE            │
+│                      │ │  (НОВЫЙ)          │ │  (НОВЫЙ)            │
+│  gRPC-методы:        │ │                   │ │                     │
+│  • GetHabits         │ │  gRPC-методы:     │ │  gRPC-методы:       │
+│  • CreateHabit       │ │  • GetWorkouts    │ │  • GetDaily         │
+│  • CompleteHabit     │ │  • GetWorkout     │ │  • GetWeekly        │
+│  • DeleteHabit       │ │  • CreateWorkout  │ │  • GetMonthly       │
+│                      │ │  • PatchWorkout   │ │                     │
+│                      │ │  • DeleteWorkout  │ │  БД: PostgreSQL     │
+│  БД: PostgreSQL      │ │  • CreateWorkout  │ │  └── leaderboard_db │
+│  └── habits_db       │ │    Exercise       │ │      └── snapshots  │
+│      └── habits      │ │  • GetWorkout     │ │      └── entries    │
+│                      │ │    Exercises      │ │                     │
+│                      │ │  • PatchWorkout   │ │                     │
+│  Порт: :50054        │ │    Exercise       │ │                     │
+│                      │ │  • DeleteWorkout  │ │  Порт: :50056       │
+│                      │ │    Exercise       │ │                     │
+│                      │ │                   │ │                     │
+│                      │ │  БД: PostgreSQL   │ │                     │
+│                      │ │  └── workouts_db  │ │                     │
+│                      │ │      └── workouts │ │                     │
+│                      │ │      └── workout_ │ │                     │
+│                      │ │          exercises│ │                     │
+│                      │ │                   │ │                     │
+│                      │ │  Порт: :50055     │ │                     │
+└──────────────────────┘ └───────────────────┘ └─────────────────────┘
+```
 
+## Инфраструктурные компоненты
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    ИНФРАСТРУКТУРА (Docker Compose)                  │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  🔷 PostgreSQL Контейнеры:                                          │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  postgres-auth     (порт 5432)  → auth_db                    │   │
+│  │  postgres-users    (порт 5433)  → users_db                   │   │
+│  │  postgres-exercises (порт 5434) → exercises_db               │   │
+│  │  postgres-habits   (порт 5435)  → habits_db                  │   │
+│  │  postgres-workouts (порт 5436)  → workouts_db                │   │
+│  │  postgres-leader   (порт 5437)  → leaderboard_db             │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  🔷 Мониторинг и логирование:                                       │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  Prometheus (порт 9090)  → сбор метрик                       │   │
+│  │  Grafana    (порт 3000)  → визуализация                      │   │
+│  │  Loki       (порт 3100)  → хранение логов                    │   │
+│  │  Promtail   (порт 9080)  → сбор логов из контейнеров         │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  🔷 Миграции:                                                       │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  migrate-auth     → для auth_db                              │   │
+│  │  migrate-users    → для users_db                             │   │
+│  │  migrate-exercises → для exercises_db                        │   │
+│  │  migrate-habits   → для habits_db                            │   │
+│  │  migrate-workouts → для workouts_db                          │   │
+│  │  migrate-leader   → для leaderboard_db                       │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
+```
 ## Разработка
 
 ### Управление зависимостями (vendor)
@@ -246,22 +442,22 @@ task test-cover
 
 ### Создать новую миграцию
 ```
-task migrate-create -- create_users_table
+task <service-name>:migrate-create -- create_users_table
 ```
 
 ### Применить миграции
 ```
-task migrate-up
+task <service-name>:migrate-up
 ```
 
 ### Откатить последнюю
 ```
-task migrate-down -- 1
+task <service-name>:migrate-down -- 1
 ```
 
 ### Показать текущую версию
 ```
-task migrate-version
+task <service-name>:migrate-version
 ```
 
 ## Переменные окружения

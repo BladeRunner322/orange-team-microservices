@@ -21,10 +21,19 @@ tasks:
       - go mod vendor
 
   # ============================================================
+  #  ГЕНЕРАЦИЯ TLS СЕРТИФИКАТА
+  # ============================================================
+  gen-certs:
+    desc: Generate self-signed TLS certificates
+    cmds:
+      - mkdir -p certs
+      - openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.crt -days 365 -nodes -subj "/CN=localhost"
+
+  # ============================================================
   #  ЗАПУСК ЛОКАЛЬНО
   # ============================================================
   run-auth:
-    desc: Run auth service
+    desc: Run auth service locally (without Docker)
     deps: [generate, tidy]
     cmds:
       - go run services/auth/cmd/main.go
@@ -51,95 +60,95 @@ tasks:
       - go test -tags=integration -v ./...
 
   # ============================================================
-  #  POSTGRES (локальный контейнер)
+  #  AUTH SERVICE – POSTGRES
   # ============================================================
-  postgres-up:
-    desc: Start PostgreSQL in background
+  auth:postgres-up:
+    desc: Start PostgreSQL for Auth service
     cmds:
-      - docker compose up -d postgres
+      - docker compose up -d postgres-auth
 
-  postgres-down:
-    desc: Stop and remove PostgreSQL container
+  auth:postgres-down:
+    desc: Stop PostgreSQL for Auth service
     cmds:
-      - docker compose down postgres
+      - docker compose down postgres-auth
 
-  postgres-logs:
-    desc: Show PostgreSQL logs
+  auth:postgres-logs:
+    desc: Show PostgreSQL logs for Auth
     cmds:
-      - docker compose logs -f postgres
+      - docker compose logs -f postgres-auth
 
-  postgres-psql:
-    desc: Open psql console
+  auth:postgres-psql:
+    desc: Open psql console for Auth database
     cmds:
-      - docker compose exec postgres psql -U ${POSTGRES_USER} -d ${POSTGRES_DB}
-
-  # ============================================================
-  #  МИГРАЦИИ (golang-migrate)
-  # ============================================================
-  migrate-create:
-    desc: Create a new migration
-    cmds:
-      - docker compose run --rm migrate create -ext sql -dir /migrations -seq {{.CLI_ARGS}}
-
-  migrate-up:
-    desc: Apply all pending migrations
-    cmds:
-      - docker compose run --rm migrate -path /migrations -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable" up
-
-  migrate-down:
-    desc: Rollback the last migration
-    cmds:
-      - docker compose run --rm migrate -path /migrations -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable" down {{.CLI_ARGS}}
-
-  migrate-version:
-    desc: Show current migration version
-    cmds:
-      - docker compose run --rm migrate -path /migrations -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable" version
+      - docker compose exec postgres-auth psql -U ${POSTGRES_USER} -d ${POSTGRES_DB}
 
   # ============================================================
-  #  DOCKER COMPOSE (AUTH)
+  #  AUTH SERVICE – МИГРАЦИИ
   # ============================================================
-  auth-build:
-    desc: Build auth service Docker image
+  auth:migrate-create:
+    desc: Create a new migration for Auth
+    cmds:
+      - docker compose run --rm migrate-auth create -ext sql -dir /migrations -seq {{.CLI_ARGS}}
+
+  auth:migrate-up:
+    desc: Apply all pending migrations for Auth
+    cmds:
+      - docker compose run --rm migrate-auth -path /migrations -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-auth:5432/${POSTGRES_DB}?sslmode=disable" up
+
+  auth:migrate-down:
+    desc: Rollback the last migration for Auth
+    cmds:
+      - docker compose run --rm migrate-auth -path /migrations -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-auth:5432/${POSTGRES_DB}?sslmode=disable" down {{.CLI_ARGS}}
+
+  auth:migrate-version:
+    desc: Show current migration version for Auth
+    cmds:
+      - docker compose run --rm migrate-auth -path /migrations -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-auth:5432/${POSTGRES_DB}?sslmode=disable" version
+
+  # ============================================================
+  #  AUTH SERVICE – DOCKER
+  # ============================================================
+  auth:build:
+    desc: Build Auth service Docker image
     cmds:
       - docker compose build auth
 
-  auth-rebuild:
-    desc: Rebuild auth with fresh vendor and no cache
+  auth:rebuild:
+    desc: Rebuild Auth service with fresh vendor and no cache
     deps: [vendor]
     cmds:
       - docker compose build auth --no-cache
 
-  auth-up:
-    desc: Start auth service (assumes image is already built)
+  auth:up:
+    desc: Start Auth service with all dependencies (postgres + migrations + auth)
     cmds:
-      - docker compose up -d auth
+      - docker compose up -d postgres-auth migrate-auth auth
 
-  auth-down:
-    desc: Stop auth service
+  auth:down:
+    desc: Stop Auth service container
     cmds:
       - docker compose down auth
 
-  auth-logs:
-    desc: Show auth service logs
-    cmds:
-      - docker compose logs -f auth
-
-  auth-restart:
-    desc: Restart auth service (update vendor, rebuild without cache and start)
+  auth:restart:
+    desc: Restart Auth service (rebuild without cache and start)
     deps: [vendor]
     cmds:
       - docker compose build auth --no-cache
       - docker compose up -d auth
 
+  auth:logs:
+    desc: Show Auth service logs
+    cmds:
+      - docker compose logs -f auth
+
   # ============================================================
-  #  ALL DOCKER-COMPOSE SERVICES
+  #  ОБЩИЕ КОМАНДЫ DOCKER COMPOSE
   # ============================================================
   docker-up:
     desc: Start all services (app + monitoring + logging)
     cmds:
       - docker compose up -d --build
-      - echo "✅ All services started! (postgres, migrate, auth, prometheus, grafana, loki, promtail)"
+      - echo "✅ All services started! (postgres-auth, migrate-auth, auth, prometheus, grafana, loki, promtail)"
 
   docker-down:
     desc: Stop all services
