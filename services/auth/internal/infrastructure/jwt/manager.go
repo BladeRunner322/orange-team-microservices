@@ -2,9 +2,9 @@ package jwt
 
 import (
 	"context"
-	"errors"
 	"time"
 
+	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/domain"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -52,7 +52,7 @@ func (m *Manager) Validate(ctx context.Context, tokenString string) (string, err
 	}
 	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
-		return "", errors.New("invalid token")
+		return "", domain.ErrInvalidToken
 	}
 	return claims.UserID, nil
 }
