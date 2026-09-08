@@ -115,7 +115,6 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	// ============================================================
 	healthMux := http.NewServeMux()
 	healthMux.HandleFunc("/health", health.Handler())
-	healthMux.HandleFunc("/ready", health.Handler())
 	healthMux.Handle("/metrics", promhttp.Handler())
 
 	httpSrv := &http.Server{

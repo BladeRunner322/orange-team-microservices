@@ -136,9 +136,10 @@ tasks:
   #  ALL DOCKER-COMPOSE SERVICES
   # ============================================================
   docker-up:
-    desc: Start all services (postgres + migrate + auth)
+    desc: Start all services (app + monitoring + logging)
     cmds:
       - docker compose up -d --build
+      - echo "✅ All services started! (postgres, migrate, auth, prometheus, grafana, loki, promtail)"
 
   docker-down:
     desc: Stop all services
@@ -149,3 +150,69 @@ tasks:
     desc: Stop all services and remove volumes
     cmds:
       - docker compose down -v
+
+  # ============================================================
+  #  МОНИТОРИНГ (Prometheus + Grafana)
+  # ============================================================
+  monitoring-up:
+    desc: Start Prometheus and Grafana
+    cmds:
+      - docker compose up -d prometheus grafana
+
+  monitoring-down:
+    desc: Stop Prometheus and Grafana
+    cmds:
+      - docker compose down prometheus grafana
+
+  monitoring-logs:
+    desc: Show logs from Prometheus and Grafana
+    cmds:
+      - docker compose logs -f prometheus grafana
+
+  # ============================================================
+  #  ЛОГИ (Loki + Promtail)
+  # ============================================================
+  loki-up:
+    desc: Start Loki
+    cmds:
+      - docker compose up -d loki
+
+  loki-down:
+    desc: Stop Loki
+    cmds:
+      - docker compose down loki
+
+  loki-logs:
+    desc: Show Loki logs
+    cmds:
+      - docker compose logs -f loki
+
+  promtail-up:
+    desc: Start Promtail
+    cmds:
+      - docker compose up -d promtail
+
+  promtail-down:
+    desc: Stop Promtail
+    cmds:
+      - docker compose down promtail
+
+  promtail-logs:
+    desc: Show Promtail logs
+    cmds:
+      - docker compose logs -f promtail
+
+  logging-up:
+    desc: Start Loki and Promtail
+    cmds:
+      - docker compose up -d loki promtail
+
+  logging-down:
+    desc: Stop Loki and Promtail
+    cmds:
+      - docker compose down loki promtail
+
+  logging-logs:
+    desc: Show logs from Loki and Promtail
+    cmds:
+      - docker compose logs -f loki promtail

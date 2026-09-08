@@ -22,6 +22,6 @@ COPY --from=builder /auth /app/auth
 
 ENV TZ=UTC
 
-EXPOSE 50051 8080 9090
+EXPOSE 50051 8080
 
 CMD ["/app/auth"]
