@@ -17,6 +17,7 @@ type Config struct {
 	EnableTLS        bool          `envconfig:"ENABLE_TLS" default:"false"`
 	TLSCertFile      string        `envconfig:"TLS_CERT_FILE" default:""`
 	TLSKeyFile       string        `envconfig:"TLS_KEY_FILE" default:""`
+	HTTPPort         string        `envconfig:"HTTP_PORT" default:":8080"`
 }
 
 func Load() (Config, error) {

@@ -1,0 +1,996 @@
+{
+  "info": {
+    "name": "API Gateway (Auth + Services)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8081",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "email",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "password123",
+      "type": "string"
+    },
+    {
+      "key": "fullName",
+      "value": "Postman Test User",
+      "type": "string"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          "// Генерируем уникальный email только если он ещё не установлен",
+          "if (!pm.variables.get('email')) {",
+          "    const timestamp = Date.now();",
+          "    pm.variables.set('email', `postman_test_${timestamp}@example.com`);",
+          "    console.log('Generated email:', pm.variables.get('email'));",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Healthcheck",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Response has status ok', function () { pm.response.json().status === 'ok'; });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Register - Success",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"full_name\": \"{{fullName}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/register",
+          "host": ["{{base_url}}"],
+          "path": ["register"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+              "pm.test('Response has id, email, full_name', function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData).to.have.property('id');",
+              "    pm.expect(jsonData).to.have.property('email');",
+              "    pm.expect(jsonData).to.have.property('full_name');",
+              "    pm.environment.set('userId', jsonData.id);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Register - Duplicate Email (should fail)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"full_name\": \"Duplicate\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/register",
+          "host": ["{{base_url}}"],
+          "path": ["register"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 409', function () { pm.response.to.have.status(409); });",
+              "pm.test('Error message indicates duplicate', function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.error).to.include('already exists');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Register - Invalid Email",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"invalid\",\n  \"password\": \"{{password}}\",\n  \"full_name\": \"Test\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/register",
+          "host": ["{{base_url}}"],
+          "path": ["register"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 400', function () { pm.response.to.have.status(400); });",
+              "pm.test('Error message about invalid email', function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.error).to.include('email');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Register - Short Password",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"shortpass@example.com\",\n  \"password\": \"123\",\n  \"full_name\": \"Test\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/register",
+          "host": ["{{base_url}}"],
+          "path": ["register"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 400', function () { pm.response.to.have.status(400); });",
+              "pm.test('Error message about password length', function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.error).to.include('min');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Login - Success",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/login",
+          "host": ["{{base_url}}"],
+          "path": ["login"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Response has access_token and token_type', function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData).to.have.property('access_token');",
+              "    pm.expect(jsonData).to.have.property('token_type');",
+              "    pm.environment.set('accessToken', jsonData.access_token);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Login - Invalid Credentials",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"wrongpassword\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/login",
+          "host": ["{{base_url}}"],
+          "path": ["login"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 401', function () { pm.response.to.have.status(401); });",
+              "pm.test('Error message about invalid credentials', function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.error).to.include('invalid credentials');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Protected - Get User (stub)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/users/me",
+          "host": ["{{base_url}}"],
+          "path": ["users", "me"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Response has user_id and message', function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData).to.have.property('user_id');",
+              "    pm.expect(jsonData).to.have.property('message');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Protected - Patch User (not implemented)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sex\": \"male\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/users/me",
+          "host": ["{{base_url}}"],
+          "path": ["users", "me"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });",
+              "pm.test('Error message not implemented', function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.error).to.include('not implemented');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Protected - Delete User (not implemented)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/users/me",
+          "host": ["{{base_url}}"],
+          "path": ["users", "me"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Protected - Get Exercises (not implemented)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/exercises",
+          "host": ["{{base_url}}"],
+          "path": ["exercises"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Protected - Create Exercise (not implemented)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Push-up\",\n  \"description\": \"Basic\",\n  \"difficulty\": 5,\n  \"type\": \"weight\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/exercises",
+          "host": ["{{base_url}}"],
+          "path": ["exercises"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. Protected - Get Habits (not implemented)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/habits",
+          "host": ["{{base_url}}"],
+          "path": ["habits"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14. Protected - Create Habit (not implemented)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Morning run\",\n  \"description\": \"5km\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/habits",
+          "host": ["{{base_url}}"],
+          "path": ["habits"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15. Protected - Complete Habit (not implemented)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/habits/123e4567-e89b-12d3-a456-426614174000/complete",
+          "host": ["{{base_url}}"],
+          "path": ["habits", "123e4567-e89b-12d3-a456-426614174000", "complete"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16. Protected - Delete Habit (not implemented)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/habits/123e4567-e89b-12d3-a456-426614174000",
+          "host": ["{{base_url}}"],
+          "path": ["habits", "123e4567-e89b-12d3-a456-426614174000"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17. Protected - Get Workouts (not implemented)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/workouts",
+          "host": ["{{base_url}}"],
+          "path": ["workouts"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18. Protected - Get Workout by ID (not implemented)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/workouts/123e4567-e89b-12d3-a456-426614174000",
+          "host": ["{{base_url}}"],
+          "path": ["workouts", "123e4567-e89b-12d3-a456-426614174000"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19. Protected - Create Workout (not implemented)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/workouts",
+          "host": ["{{base_url}}"],
+          "path": ["workouts"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "20. Protected - Patch Workout (not implemented)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"completed\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/workouts/123e4567-e89b-12d3-a456-426614174000",
+          "host": ["{{base_url}}"],
+          "path": ["workouts", "123e4567-e89b-12d3-a456-426614174000"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "21. Protected - Delete Workout (not implemented)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/workouts/123e4567-e89b-12d3-a456-426614174000",
+          "host": ["{{base_url}}"],
+          "path": ["workouts", "123e4567-e89b-12d3-a456-426614174000"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "22. Protected - Add Workout Exercise (not implemented)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"exercise_id\": \"123e4567-e89b-12d3-a456-426614174000\",\n  \"sets\": 3,\n  \"reps\": 10\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/workouts/123e4567-e89b-12d3-a456-426614174000/exercises",
+          "host": ["{{base_url}}"],
+          "path": ["workouts", "123e4567-e89b-12d3-a456-426614174000", "exercises"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "23. Protected - Get Workout Exercises (not implemented)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/workouts/123e4567-e89b-12d3-a456-426614174000/exercises",
+          "host": ["{{base_url}}"],
+          "path": ["workouts", "123e4567-e89b-12d3-a456-426614174000", "exercises"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "24. Protected - Patch Workout Exercise (not implemented)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"completed\": true\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/workouts/123e4567-e89b-12d3-a456-426614174000/exercises/123e4567-e89b-12d3-a456-426614174000",
+          "host": ["{{base_url}}"],
+          "path": ["workouts", "123e4567-e89b-12d3-a456-426614174000", "exercises", "123e4567-e89b-12d3-a456-426614174000"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "25. Protected - Delete Workout Exercise (not implemented)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/workouts/123e4567-e89b-12d3-a456-426614174000/exercises/123e4567-e89b-12d3-a456-426614174000",
+          "host": ["{{base_url}}"],
+          "path": ["workouts", "123e4567-e89b-12d3-a456-426614174000", "exercises", "123e4567-e89b-12d3-a456-426614174000"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "26. Protected - Get Daily Leaderboard (not implemented)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/leaderboard/daily",
+          "host": ["{{base_url}}"],
+          "path": ["leaderboard", "daily"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "27. Protected - Get Weekly Leaderboard (not implemented)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/leaderboard/weekly",
+          "host": ["{{base_url}}"],
+          "path": ["leaderboard", "weekly"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "28. Protected - Get Monthly Leaderboard (not implemented)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/leaderboard/monthly",
+          "host": ["{{base_url}}"],
+          "path": ["leaderboard", "monthly"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 501', function () { pm.response.to.have.status(501); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "29. Error - Protected without Token",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/users/me",
+          "host": ["{{base_url}}"],
+          "path": ["users", "me"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 401', function () { pm.response.to.have.status(401); });",
+              "pm.test('Error message about missing header', function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.error).to.include('missing Authorization header');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "30. Error - Protected with Invalid Token",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer invalidtoken",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/users/me",
+          "host": ["{{base_url}}"],
+          "path": ["users", "me"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 401', function () { pm.response.to.have.status(401); });",
+              "pm.test('Error message about invalid token', function () {",
+              "    const jsonData = pm.response.json();",
+              "    pm.expect(jsonData.error).to.include('invalid or expired token');",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

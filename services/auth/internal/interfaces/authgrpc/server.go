@@ -42,6 +42,8 @@ func (s *Server) Register(ctx context.Context, req *auth.RegisterRequest) (*auth
 			return nil, status.Error(codes.InvalidArgument, "invalid email")
 		case errors.Is(err, domain.ErrInvalidFullName):
 			return nil, status.Error(codes.InvalidArgument, "invalid full name")
+		case errors.Is(err, domain.ErrWeakPassword):
+			return nil, status.Error(codes.InvalidArgument, "password must be at least 8 characters long")
 		default:
 			return nil, status.Error(codes.Internal, "internal server error")
 		}
