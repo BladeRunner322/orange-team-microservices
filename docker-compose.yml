@@ -1,4 +1,8 @@
 services:
+
+  # ============================================================
+  #  AUTH SERVICE – POSTGRES
+  # ============================================================
   postgres-auth:
     image: postgres:18.6-bookworm
     container_name: auth-postgres
@@ -15,6 +19,9 @@ services:
       timeout: 5s
       retries: 5
 
+  # ============================================================
+  #  AUTH SERVICE – МИГРАЦИИ
+  # ============================================================
   migrate-auth:
     image: migrate/migrate:v4.19.1
     container_name: auth-migrate
@@ -29,6 +36,9 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # ============================================================
+  #  AUTH SERVICE – gRPC СЕРВЕР
+  # ============================================================
   auth:
     build:
       context: .
@@ -39,9 +49,10 @@ services:
     env_file:
       - .env
     ports:
-      - "50051:50051"
-      - "8080:8080"
+      - "50051:50051"        # gRPC (внешний)
+      - "8080:8080"          # health / metrics
     environment:
+      - HTTP_PORT=:8080
       - POSTGRES_HOST=postgres-auth
       - TLS_CERT_FILE=/app/certs/server.crt
       - TLS_KEY_FILE=/app/certs/server.key
@@ -58,6 +69,36 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # ============================================================
+  #  API GATEWAY – HTTP → gRPC
+  # ============================================================
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+    container_name: gateway-service
+    env_file:
+      - .env
+    ports:
+      - "8081:8081"
+    environment:
+      - GATEWAY_HTTP_PORT=${GATEWAY_HTTP_PORT}
+      - AUTH_GRPC_ADDR=${AUTH_GRPC_ADDR}
+      - GATEWAY_TIMEOUT=${GATEWAY_TIMEOUT}
+    depends_on:
+      auth:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ============================================================
+  #  МОНИТОРИНГ (Prometheus + Grafana)
+  # ============================================================
   prometheus:
     image: prom/prometheus:latest
     container_name: auth-prometheus
@@ -78,6 +119,9 @@ services:
       - grafana-storage:/var/lib/grafana
     restart: unless-stopped
 
+  # ============================================================
+  #  ЛОГИ (Loki + Promtail)
+  # ============================================================
   loki:
     image: grafana/loki:latest
     container_name: auth-loki

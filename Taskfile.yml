@@ -2,9 +2,11 @@ version: '3'
 dotenv: ['.env']
 
 tasks:
+
   # ============================================================
-  #  ГЕНЕРАЦИЯ И ЗАВИСИМОСТИ
+  #  ОБЩИЕ ЗАДАЧИ (генерация, тесты, TLS)
   # ============================================================
+
   generate:
     desc: Generate gRPC code from proto files
     cmds:
@@ -20,27 +22,12 @@ tasks:
     cmds:
       - go mod vendor
 
-  # ============================================================
-  #  ГЕНЕРАЦИЯ TLS СЕРТИФИКАТА
-  # ============================================================
   gen-certs:
-    desc: Generate self-signed TLS certificates
+    desc: Generate self-signed TLS certificates for development
     cmds:
       - mkdir -p certs
       - openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.crt -days 365 -nodes -subj "/CN=localhost"
 
-  # ============================================================
-  #  ЗАПУСК ЛОКАЛЬНО
-  # ============================================================
-  run-auth:
-    desc: Run auth service locally (without Docker)
-    deps: [generate, tidy]
-    cmds:
-      - go run services/auth/cmd/main.go
-
-  # ============================================================
-  #  ТЕСТЫ
-  # ============================================================
   test:
     desc: Run all unit tests with verbose output
     cmds:
@@ -60,54 +47,20 @@ tasks:
       - go test -tags=integration -v ./...
 
   # ============================================================
-  #  AUTH SERVICE – POSTGRES
+  #  AUTH SERVICE – ЛОКАЛЬНЫЙ ЗАПУСК
   # ============================================================
-  auth:postgres-up:
-    desc: Start PostgreSQL for Auth service
-    cmds:
-      - docker compose up -d postgres-auth
 
-  auth:postgres-down:
-    desc: Stop PostgreSQL for Auth service
+  auth:run:
+    desc: Run auth service locally
+    deps: [generate, tidy]
     cmds:
-      - docker compose down postgres-auth
+      - env GRPC_PORT=:50061 POSTGRES_HOST=localhost ENABLE_TLS=true TLS_CERT_FILE=./certs/server.crt TLS_KEY_FILE=./certs/server.key HTTP_PORT=:8090 go run services/auth/cmd/main.go
 
-  auth:postgres-logs:
-    desc: Show PostgreSQL logs for Auth
-    cmds:
-      - docker compose logs -f postgres-auth
-
-  auth:postgres-psql:
-    desc: Open psql console for Auth database
-    cmds:
-      - docker compose exec postgres-auth psql -U ${POSTGRES_USER} -d ${POSTGRES_DB}
-
-  # ============================================================
-  #  AUTH SERVICE – МИГРАЦИИ
-  # ============================================================
-  auth:migrate-create:
-    desc: Create a new migration for Auth
-    cmds:
-      - docker compose run --rm migrate-auth create -ext sql -dir /migrations -seq {{.CLI_ARGS}}
-
-  auth:migrate-up:
-    desc: Apply all pending migrations for Auth
-    cmds:
-      - docker compose run --rm migrate-auth -path /migrations -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-auth:5432/${POSTGRES_DB}?sslmode=disable" up
-
-  auth:migrate-down:
-    desc: Rollback the last migration for Auth
-    cmds:
-      - docker compose run --rm migrate-auth -path /migrations -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-auth:5432/${POSTGRES_DB}?sslmode=disable" down {{.CLI_ARGS}}
-
-  auth:migrate-version:
-    desc: Show current migration version for Auth
-    cmds:
-      - docker compose run --rm migrate-auth -path /migrations -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-auth:5432/${POSTGRES_DB}?sslmode=disable" version
 
   # ============================================================
   #  AUTH SERVICE – DOCKER
   # ============================================================
+
   auth:build:
     desc: Build Auth service Docker image
     cmds:
@@ -142,13 +95,109 @@ tasks:
       - docker compose logs -f auth
 
   # ============================================================
-  #  ОБЩИЕ КОМАНДЫ DOCKER COMPOSE
+  #  AUTH SERVICE – POSTGRES
   # ============================================================
+
+  auth:postgres-up:
+    desc: Start PostgreSQL for Auth service
+    cmds:
+      - docker compose up -d postgres-auth
+
+  auth:postgres-down:
+    desc: Stop PostgreSQL for Auth service
+    cmds:
+      - docker compose down postgres-auth
+
+  auth:postgres-logs:
+    desc: Show PostgreSQL logs for Auth
+    cmds:
+      - docker compose logs -f postgres-auth
+
+  auth:postgres-psql:
+    desc: Open psql console for Auth database
+    cmds:
+      - docker compose exec postgres-auth psql -U ${POSTGRES_USER} -d ${POSTGRES_DB}
+
+  # ============================================================
+  #  AUTH SERVICE – МИГРАЦИИ
+  # ============================================================
+
+  auth:migrate-create:
+    desc: Create a new migration for Auth
+    cmds:
+      - docker compose run --rm migrate-auth create -ext sql -dir /migrations -seq {{.CLI_ARGS}}
+
+  auth:migrate-up:
+    desc: Apply all pending migrations for Auth
+    cmds:
+      - docker compose run --rm migrate-auth -path /migrations -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-auth:5432/${POSTGRES_DB}?sslmode=disable" up
+
+  auth:migrate-down:
+    desc: Rollback the last migration for Auth
+    cmds:
+      - docker compose run --rm migrate-auth -path /migrations -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-auth:5432/${POSTGRES_DB}?sslmode=disable" down {{.CLI_ARGS}}
+
+  auth:migrate-version:
+    desc: Show current migration version for Auth
+    cmds:
+      - docker compose run --rm migrate-auth -path /migrations -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-auth:5432/${POSTGRES_DB}?sslmode=disable" version
+
+  # ============================================================
+  #  GATEWAY SERVICE – ЛОКАЛЬНЫЙ ЗАПУСК
+  # ============================================================
+
+  gateway:run:
+    desc: Run gateway service locally
+    deps: [generate, tidy]
+    cmds:
+      - GATEWAY_HTTP_PORT=:8091 AUTH_GRPC_ADDR=localhost:50061 go run services/gateway/cmd/main.go
+
+  # ============================================================
+  #  GATEWAY SERVICE – DOCKER
+  # ============================================================
+
+  gateway:build:
+    desc: Build Gateway service Docker image
+    cmds:
+      - docker compose build gateway
+
+  gateway:rebuild:
+    desc: Rebuild Gateway with fresh vendor and no cache
+    deps: [vendor]
+    cmds:
+      - docker compose build gateway --no-cache
+
+  gateway:up:
+    desc: Start Gateway service (assumes image is already built)
+    cmds:
+      - docker compose up -d gateway
+
+  gateway:down:
+    desc: Stop Gateway service
+    cmds:
+      - docker compose down gateway
+
+  gateway:logs:
+    desc: Show Gateway service logs
+    cmds:
+      - docker compose logs -f gateway
+
+  gateway:restart:
+    desc: Restart Gateway service (rebuild without cache and start)
+    deps: [vendor]
+    cmds:
+      - docker compose build gateway --no-cache
+      - docker compose up -d gateway
+
+  # ============================================================
+  #  ОБЩИЕ ЗАДАЧИ ДЛЯ ВСЕГО DOCKER-СТЕКА
+  # ============================================================
+
   docker-up:
     desc: Start all services (app + monitoring + logging)
     cmds:
       - docker compose up -d --build
-      - echo "✅ All services started! (postgres-auth, migrate-auth, auth, prometheus, grafana, loki, promtail)"
+      - echo "✅ All services started! (postgres-auth, migrate-auth, auth, gateway, prometheus, grafana, loki, promtail)"
 
   docker-down:
     desc: Stop all services
@@ -163,6 +212,7 @@ tasks:
   # ============================================================
   #  МОНИТОРИНГ (Prometheus + Grafana)
   # ============================================================
+
   monitoring-up:
     desc: Start Prometheus and Grafana
     cmds:
@@ -181,6 +231,7 @@ tasks:
   # ============================================================
   #  ЛОГИ (Loki + Promtail)
   # ============================================================
+
   loki-up:
     desc: Start Loki
     cmds:

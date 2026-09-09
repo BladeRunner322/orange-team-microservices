@@ -139,7 +139,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	healthMux.Handle("/metrics", promhttp.Handler())
 
 	httpSrv := &http.Server{
-		Addr:         ":8080",
+		Addr:         cfg.HTTPPort,
 		Handler:      healthMux,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 5 * time.Second,
@@ -147,7 +147,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 
 	// Запускаем HTTP-сервер в горутине
 	go func() {
-		log.Info("HTTP server listening", "addr", ":8080", "endpoints", "/health, /ready, /metrics")
+		log.Info("HTTP server listening", "addr", cfg.HTTPPort, "endpoints", "/health, /ready, /metrics")
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Error("HTTP server failed", "error", err)
 		}
