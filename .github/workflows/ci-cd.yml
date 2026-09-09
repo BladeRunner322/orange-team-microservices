@@ -58,6 +58,9 @@ jobs:
       - name: Build Auth Service (smoke test)
         run: go build -v ./services/auth/cmd/...
 
+      - name: Build Gateway Service (smoke test)
+        run: go build -v ./services/gateway/cmd/...
+
   # ------------------------------------------------------------
   #  JOB 2: CD — сборка образа, пуш в реестр и деплой на сервер
   # ------------------------------------------------------------
@@ -75,6 +78,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Convert repository name to lowercase
+        run: echo "REPO_LOWER=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -89,6 +95,7 @@ jobs:
         with:
           files: |
             services/auth/**
+            services/gateway/**
             pkg/**
             go.mod
             go.sum
@@ -102,8 +109,20 @@ jobs:
           file: ./services/auth/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/auth:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/auth:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/auth:latest
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/auth:${{ github.sha }}
+
+      # Сборка и пуш образа gateway, если были изменения в gateway или общих пакетах
+      - name: Build and push Gateway image
+        if: steps.changed-services.outputs.any_changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./services/gateway/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/gateway:latest
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/gateway:${{ github.sha }}
 
       # ------------------------------------------------------------
       #  ДЕПЛОЙ НА СЕРВЕР ПО SSH (путь /root/projects/orange-team-microservices)
@@ -133,11 +152,13 @@ jobs:
             # Логинимся в GitHub Container Registry (чтобы скачать приватный образ)
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Скачиваем свежий образ auth:latest
+            # Скачиваем свежие образы auth и gateway
             docker compose pull auth
+            docker compose pull gateway
 
-            # Перезапускаем контейнер auth
+            # Перезапускаем контейнеры auth и gateway
             docker compose up -d auth
+            docker compose up -d gateway
 
             # Удаляем старые неиспользуемые образы (экономия места)
             docker image prune -f
