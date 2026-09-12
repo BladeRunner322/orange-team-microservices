@@ -7,11 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/reflection"
-
 	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/auth"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/grpc/interceptors"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
@@ -19,10 +14,14 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/config"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/application/usecases"
-	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/health"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/infrastructure/jwt"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/infrastructure/postgres_repo"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/interfaces/authgrpc"
+	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/interfaces/http/health"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/reflection"
 )
 
 // App — структура, объединяющая все компоненты приложения.
