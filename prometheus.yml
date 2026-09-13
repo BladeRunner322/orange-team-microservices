@@ -5,3 +5,7 @@ scrape_configs:
   - job_name: 'auth'
     static_configs:
       - targets: ['auth:8080']
+
+  - job_name: 'gateway'
+    static_configs:
+      - targets: ['gateway:8081']

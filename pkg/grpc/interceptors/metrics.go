@@ -13,8 +13,8 @@ import (
 func MetricsInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		// Увеличиваем счётчик in-flight
-		metrics.RequestsInFlight.Inc()
-		defer metrics.RequestsInFlight.Dec()
+		metrics.GRPCRequestsInFlight.Inc()
+		defer metrics.GRPCRequestsInFlight.Dec()
 
 		start := time.Now()
 		resp, err := handler(ctx, req)
@@ -31,8 +31,8 @@ func MetricsInterceptor() grpc.UnaryServerInterceptor {
 		}
 
 		// Обновляем метрики
-		metrics.RequestsTotal.WithLabelValues(info.FullMethod, statusCode).Inc()
-		metrics.RequestDuration.WithLabelValues(info.FullMethod).Observe(float64(duration))
+		metrics.GRPCRequestsTotal.WithLabelValues(info.FullMethod, statusCode).Inc()
+		metrics.GRPCRequestDuration.WithLabelValues(info.FullMethod).Observe(float64(duration))
 
 		return resp, err
 	}
