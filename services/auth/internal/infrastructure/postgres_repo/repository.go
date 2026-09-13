@@ -36,6 +36,9 @@ func (r *Repository) Save(ctx context.Context, user domain.User) error {
 		m.CreatedAt,
 	)
 	if err != nil {
+		if errors.Is(err, postgres.ErrViolatesUnique) {
+			return domain.ErrEmailAlreadyExists
+		}
 		return fmt.Errorf("save user: %w", err)
 	}
 	return nil

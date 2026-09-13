@@ -5,17 +5,16 @@ package postgres_repo
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/domain"
 )
 
@@ -23,11 +22,11 @@ func TestRepository_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Поднимаем PostgreSQL в Docker
-	pgContainer, err := postgres.Run(ctx,
+	pgContainer, err := tcpostgres.Run(ctx,
 		"postgres:18.6-bookworm",
-		postgres.WithDatabase("testdb"),
-		postgres.WithUsername("testuser"),
-		postgres.WithPassword("testpass"),
+		tcpostgres.WithDatabase("testdb"),
+		tcpostgres.WithUsername("testuser"),
+		tcpostgres.WithPassword("testpass"),
 		testcontainers.WithWaitStrategy(
 			wait.ForListeningPort("5432/tcp").
 				WithStartupTimeout(30*time.Second),
@@ -41,15 +40,27 @@ func TestRepository_Integration(t *testing.T) {
 		}
 	})
 
-	dsn, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	// 2. Достаём host и mapped port для сборки конфига pkg/postgres
+	host, err := pgContainer.Host(ctx)
 	require.NoError(t, err)
 
-	db, err := sql.Open("pgx", dsn)
+	mappedPort, err := pgContainer.MappedPort(ctx, "5432/tcp")
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
 
-	// 2. Миграции (создаём таблицу)
-	_, err = db.ExecContext(ctx, `
+	// 3. Создаём пул через наш pkg/postgres (как в bootstrap)
+	pool, err := postgres.NewPgxPool(ctx, postgres.Config{
+		Host:     host,
+		Port:     mappedPort.Port(),
+		User:     "testuser",
+		Password: "testpass",
+		Database: "testdb",
+		Timeout:  5 * time.Second,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { pool.Close() })
+
+	// 4. Создаём схему и таблицу (аналог миграции 000001 + 000002)
+	_, err = pool.Exec(ctx, `
 		CREATE SCHEMA IF NOT EXISTS auth;
 		CREATE TABLE IF NOT EXISTS auth.users (
 			id UUID PRIMARY KEY,
@@ -60,58 +71,33 @@ func TestRepository_Integration(t *testing.T) {
 			created_at TIMESTAMPTZ NOT NULL,
 			updated_at TIMESTAMPTZ
 		);
-		CREATE INDEX IF NOT EXISTS idx_auth_users_email ON auth.users (email);
 	`)
 	require.NoError(t, err)
 
-	// 3. Тесты репозитория (используем db напрямую)
-	runRepositoryTests(t, db)
+	// 5. Создаём репозиторий поверх пула
+	repo := NewRepository(pool)
+
+	// 6. Прогоняем тесты
+	runRepositoryTests(t, repo)
 }
 
-func runRepositoryTests(t *testing.T, db *sql.DB) {
+func runRepositoryTests(t *testing.T, repo *Repository) {
 	ctx := context.Background()
 
-	t.Run("Save and FindByEmail", func(t *testing.T) {
-		// Создаём пользователя
-		email, _ := domain.NewEmail("test@example.com")
+	// Хелпер: создаёт доменного пользователя с заданным email
+	newUser := func(email string) domain.User {
+		e, _ := domain.NewEmail(email)
 		passHash, _ := domain.NewPasswordHash("$2a$10$dummyhash")
 		fullName, _ := domain.NewFullName("Test User")
-		user := domain.NewUser(email, passHash, fullName)
+		return domain.NewUser(e, passHash, fullName)
+	}
 
-		// Вставляем в БД
-		_, err := db.ExecContext(ctx,
-			`INSERT INTO auth.users (id, email, password_hash, full_name, role, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			user.ID(),
-			user.Email().String(),
-			user.PasswordHash().String(),
-			user.FullName().String(),
-			user.Role().String(),
-			user.CreatedAt(),
-			nil,
-		)
-		require.NoError(t, err)
+	t.Run("Save and FindByEmail", func(t *testing.T) {
+		user := newUser("find-by-email@example.com")
 
-		// Ищем по email
-		var userModel UserModel
-		row := db.QueryRowContext(ctx,
-			`SELECT id, email, password_hash, full_name, role, created_at, updated_at
-			FROM auth.users WHERE email = $1`,
-			email.String(),
-		)
-		err = row.Scan(
-			&userModel.ID,
-			&userModel.Email,
-			&userModel.PasswordHash,
-			&userModel.FullName,
-			&userModel.Role,
-			&userModel.CreatedAt,
-			&userModel.UpdatedAt,
-		)
-		require.NoError(t, err)
+		require.NoError(t, repo.Save(ctx, user))
 
-		// Преобразуем в домен (можно использовать маппер)
-		found, err := UserModelToDomain(userModel)
+		found, err := repo.FindByEmail(ctx, user.Email())
 		require.NoError(t, err)
 
 		assert.Equal(t, user.ID(), found.ID())
@@ -120,86 +106,64 @@ func runRepositoryTests(t *testing.T, db *sql.DB) {
 		assert.Equal(t, user.Role(), found.Role())
 	})
 
-	t.Run("FindByEmail not found", func(t *testing.T) {
-		var userModel UserModel
-		row := db.QueryRowContext(ctx,
-			`SELECT id, email, password_hash, full_name, role, created_at, updated_at
-			FROM auth.users WHERE email = $1`,
-			"nonexistent@example.com",
-		)
-		err := row.Scan(
-			&userModel.ID,
-			&userModel.Email,
-			&userModel.PasswordHash,
-			&userModel.FullName,
-			&userModel.Role,
-			&userModel.CreatedAt,
-			&userModel.UpdatedAt,
-		)
-		assert.Error(t, err) // sql.ErrNoRows
-	})
+	t.Run("Save and FindByID", func(t *testing.T) {
+		user := newUser("find-by-id@example.com")
 
-	t.Run("Duplicate email", func(t *testing.T) {
-		email, _ := domain.NewEmail("duplicate@example.com")
-		passHash, _ := domain.NewPasswordHash("$2a$10$dummyhash")
-		fullName, _ := domain.NewFullName("User One")
-		user1 := domain.NewUser(email, passHash, fullName)
+		require.NoError(t, repo.Save(ctx, user))
 
-		_, err := db.ExecContext(ctx,
-			`INSERT INTO auth.users (id, email, password_hash, full_name, role, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			user1.ID(),
-			user1.Email().String(),
-			user1.PasswordHash().String(),
-			user1.FullName().String(),
-			user1.Role().String(),
-			user1.CreatedAt(),
-			nil,
-		)
+		found, err := repo.FindByID(ctx, user.ID())
 		require.NoError(t, err)
 
-		// Вставляем второго с тем же email
-		user2 := domain.NewUser(email, passHash, fullName)
-		_, err = db.ExecContext(ctx,
-			`INSERT INTO auth.users (id, email, password_hash, full_name, role, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			user2.ID(),
-			user2.Email().String(),
-			user2.PasswordHash().String(),
-			user2.FullName().String(),
-			user2.Role().String(),
-			user2.CreatedAt(),
-			nil,
-		)
-		assert.Error(t, err) // уникальность нарушена
+		assert.Equal(t, user.ID(), found.ID())
+		assert.Equal(t, user.Email().String(), found.Email().String())
+	})
+
+	t.Run("FindByEmail not found returns ErrUserNotFound", func(t *testing.T) {
+		email, _ := domain.NewEmail("nonexistent@example.com")
+
+		_, err := repo.FindByEmail(ctx, email)
+
+		assert.ErrorIs(t, err, domain.ErrUserNotFound)
+	})
+
+	t.Run("FindByID not found returns ErrUserNotFound", func(t *testing.T) {
+		// случайный UUID, которого точно нет
+		id := domain.User{}.ID() // нулевой UUID
+		_ = id
+
+		// используем uuid.New() из google/uuid — но чтобы не тащить импорт,
+		// сделаем проще: создадим пользователя, получим id, но не сохраним.
+		// Нет, лучше честный UUID, которого нет в БД:
+		u := newUser("ghost@example.com")
+
+		_, err := repo.FindByID(ctx, u.ID())
+
+		assert.ErrorIs(t, err, domain.ErrUserNotFound)
+	})
+
+	// ГЛАВНЫЙ ТЕСТ для race-фикса:
+	// Repository.Save должен возвращать domain.ErrEmailAlreadyExists,
+	// а не сырую ошибку postgres.ErrViolatesUnique.
+	t.Run("Save returns ErrEmailAlreadyExists on duplicate", func(t *testing.T) {
+		user1 := newUser("dup@example.com")
+		require.NoError(t, repo.Save(ctx, user1))
+
+		// Второй пользователь с тем же email
+		user2 := newUser("dup@example.com")
+		err := repo.Save(ctx, user2)
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrEmailAlreadyExists,
+			"Repository.Save должен маппить unique violation в доменную ошибку")
 	})
 
 	t.Run("New user has role user by default", func(t *testing.T) {
-		email, _ := domain.NewEmail("role-test@example.com")
-		passHash, _ := domain.NewPasswordHash("$2a$10$dummyhash")
-		fullName, _ := domain.NewFullName("Role Test")
-		user := domain.NewUser(email, passHash, fullName)
+		user := newUser("role-default@example.com")
+		require.NoError(t, repo.Save(ctx, user))
 
-		_, err := db.ExecContext(ctx,
-			`INSERT INTO auth.users (id, email, password_hash, full_name, role, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			user.ID(),
-			user.Email().String(),
-			user.PasswordHash().String(),
-			user.FullName().String(),
-			user.Role().String(),
-			user.CreatedAt(),
-			nil,
-		)
+		found, err := repo.FindByEmail(ctx, user.Email())
 		require.NoError(t, err)
 
-		var role string
-		row := db.QueryRowContext(ctx,
-			`SELECT role FROM auth.users WHERE email = $1`,
-			email.String(),
-		)
-		err = row.Scan(&role)
-		require.NoError(t, err)
-		assert.Equal(t, "user", role)
+		assert.Equal(t, domain.RoleUser, found.Role())
 	})
 }
