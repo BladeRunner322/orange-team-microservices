@@ -152,13 +152,12 @@ jobs:
             # Логинимся в GitHub Container Registry (чтобы скачать приватный образ)
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Скачиваем свежие образы auth и gateway
+            # Скачиваем свежие образы auth и gateway из GHCR
             docker compose pull auth
             docker compose pull gateway
 
-            # Перезапускаем контейнеры auth и gateway
-            docker compose up -d auth
-            docker compose up -d gateway
+            # Перезапускаем контейнеры из скачанных образов, БЕЗ локальной сборки
+            docker compose up -d --no-build auth gateway
 
             # Удаляем старые неиспользуемые образы (экономия места)
             docker image prune -f

@@ -59,6 +59,7 @@ services:
   #  AUTH SERVICE – gRPC СЕРВЕР
   # ============================================================
   auth:
+    image: ghcr.io/bladerunner322/orange-team-microservices/auth:latest
     build:
       context: .
       dockerfile: services/auth/Dockerfile
@@ -113,6 +114,7 @@ services:
   #  GATEWAY SERVICE – HTTP
   # ============================================================
   gateway:
+    image: ghcr.io/bladerunner322/orange-team-microservices/gateway:latest
     build:
       context: .
       dockerfile: services/gateway/Dockerfile
