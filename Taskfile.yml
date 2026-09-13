@@ -10,7 +10,7 @@ tasks:
   generate:
     desc: Generate gRPC code from proto files
     cmds:
-      - protoc -I api --go_out=. --go-grpc_out=. api/auth/auth.proto
+      - protoc -I api --go_out=. --go-grpc_out=. $(find api -name '*.proto')
 
   tidy:
     desc: Run go mod tidy
@@ -88,11 +88,9 @@ tasks:
       - docker compose down auth
 
   auth:restart:
-    desc: Restart Auth service (rebuild without cache and start)
-    deps: [vendor]
+    desc: Restart Auth service (rebuild and start)
     cmds:
-      - docker compose build auth --no-cache
-      - docker compose up -d auth
+      - docker compose up -d --build auth
 
   auth:logs:
     desc: Show Auth service logs
@@ -179,7 +177,7 @@ tasks:
     desc: Run gateway service locally
     deps: [generate, tidy]
     cmds:
-      - GATEWAY_HTTP_PORT=:8091 AUTH_GRPC_ADDR=localhost:50061 go run services/gateway/cmd/main.go
+      - GATEWAY_HTTP_PORT=:8091 AUTH_GRPC_ADDR=localhost:50061 REDIS_ADDR=localhost:6380 REDIS_PASSWORD=gateway_redis_secret go run services/gateway/cmd/main.go
 
   # ============================================================
   #  GATEWAY SERVICE – DOCKER
@@ -212,11 +210,9 @@ tasks:
       - docker compose logs -f gateway
 
   gateway:restart:
-    desc: Restart Gateway service (rebuild without cache and start)
-    deps: [vendor]
+    desc: Restart Gateway service (rebuild and start)
     cmds:
-      - docker compose build gateway --no-cache
-      - docker compose up -d gateway
+      - docker compose up -d --build gateway
 
   # ============================================================
   #  ОБЩИЕ ЗАДАЧИ ДЛЯ ВСЕГО DOCKER-СТЕКА
@@ -226,7 +222,7 @@ tasks:
     desc: Start all services (app + monitoring + logging)
     cmds:
       - docker compose up -d --build
-      - echo "✅ All services started! (postgres-auth, redis-auth, migrate-auth, auth, gateway, prometheus, grafana, loki, promtail)"
+      - echo "✅ All services started! (postgres-auth, redis-auth, migrate-auth, auth, redis-gateway, gateway, prometheus, grafana, loki, promtail)"
 
   docker-down:
     desc: Stop all services
