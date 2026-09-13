@@ -178,3 +178,36 @@ func TestHTTPMetricsMiddleware(t *testing.T) {
 		assert.GreaterOrEqual(t, after, before)
 	})
 }
+
+// TestHTTPMetricsMiddleware_ChiIntegration проверяет, что middleware
+// корректно определяет RoutePattern при работе через реальный chi-роутер.
+// Это защищает от регрессии: если middleware вернуть на top-level
+// или прочитать RoutePattern раньше времени — метрики будут писаться
+// с сырым путём, и кардинальность взорвётся.
+func TestHTTPMetricsMiddleware_ChiIntegration(t *testing.T) {
+	r := chi.NewRouter()
+	r.Use(HTTPMetricsMiddleware)
+	r.Get("/workouts/{workoutId}", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	path := "/workouts/{workoutId}"
+
+	before := testutil.ToFloat64(
+		metrics.HTTPRequestsTotal.WithLabelValues(http.MethodGet, path, "200"),
+	)
+
+	// Три разных UUID должны попасть в ОДНУ серию по pattern.
+	for _, id := range []string{"abc-123", "def-456", "ghi-789"} {
+		req := httptest.NewRequest(http.MethodGet, "/workouts/"+id, nil)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+	}
+
+	after := testutil.ToFloat64(
+		metrics.HTTPRequestsTotal.WithLabelValues(http.MethodGet, path, "200"),
+	)
+
+	assert.Equal(t, before+3, after,
+		"три разных UUID должны инкрементировать одну серию по pattern /workouts/{workoutId}")
+}
