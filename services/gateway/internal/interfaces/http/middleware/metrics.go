@@ -13,8 +13,9 @@ import (
 // HTTPMetricsMiddleware собирает HTTP-метрики Prometheus:
 // количество запросов, длительность и число в обработке.
 //
-// Путь нормализуется через chi RoutePattern, чтобы /workouts/123
-// и /workouts/456 не создавали отдельные метрики (кардинальность).
+// Путь нормализуется через chi RoutePattern. Важно: RoutePattern
+// заполняется chi только ПОСЛЕ того, как отработает handler,
+// поэтому метрики записываются после next.ServeHTTP.
 func HTTPMetricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		metrics.HTTPRequestsInFlight.Inc()
@@ -25,8 +26,9 @@ func HTTPMetricsMiddleware(next http.Handler) http.Handler {
 		rw := &metricsResponseWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rw, r)
 
-		duration := time.Since(start).Seconds()
+		// RoutePattern доступен только после выполнения handler'а.
 		path := normalizedPath(r)
+		duration := time.Since(start).Seconds()
 
 		metrics.HTTPRequestsTotal.
 			WithLabelValues(r.Method, path, strconv.Itoa(rw.status)).
