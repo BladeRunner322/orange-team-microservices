@@ -28,15 +28,17 @@ type App struct {
 
 // New создаёт экземпляр App, собирает все зависимости.
 func New(cfg config.Config, log *logger.Logger) (*App, error) {
+	ctx := context.Background()
+
 	// 1. gRPC-клиент к Auth Service
-	authClient, err := clients.NewAuthClient(cfg.AuthGRPCAddr)
+	authClient, err := clients.NewAuthClient(ctx, cfg.AuthGRPCAddr)
 	if err != nil {
 		return nil, fmt.Errorf("create auth client: %w", err)
 	}
 	log.Info("auth gRPC client created", "addr", cfg.AuthGRPCAddr)
 
 	// 2. Redis-клиент для rate limiting
-	redisClient, err := redis.NewClient(context.Background(), redis.Config{
+	redisClient, err := redis.NewClient(ctx, redis.Config{
 		Addr:     cfg.RedisAddr,
 		Password: cfg.RedisPassword,
 		DB:       cfg.RedisDB,

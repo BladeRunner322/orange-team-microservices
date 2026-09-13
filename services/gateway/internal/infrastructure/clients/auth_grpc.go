@@ -2,12 +2,13 @@ package clients
 
 import (
 	"context"
-	"crypto/tls"
+	"fmt"
+
+	"google.golang.org/grpc"
 
 	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/auth"
+	grpcclient "github.com/BladeRunner322/orange-team-microservices/pkg/grpc/client"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/application/ports"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 type AuthClient struct {
@@ -15,15 +16,20 @@ type AuthClient struct {
 	client auth.AuthServiceClient
 }
 
-func NewAuthClient(addr string) (*AuthClient, error) {
-	// TLS с самоподписанными сертификатами (пропускаем проверку)
-	creds := credentials.NewTLS(&tls.Config{
-		InsecureSkipVerify: true,
+// NewAuthClient создаёт gRPC-клиент к Auth Service.
+//
+// Использует общий pkg/grpc/client — единый TLS-режим (TLSModeInsecure,
+// так как Auth использует self-signed сертификат) и автоматическое
+// прокидывание user_id в metadata (для будущих вызовов).
+func NewAuthClient(ctx context.Context, addr string) (*AuthClient, error) {
+	conn, err := grpcclient.New(ctx, grpcclient.Config{
+		Target:  addr,
+		TLSMode: grpcclient.TLSModeInsecure,
 	})
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create auth grpc client: %w", err)
 	}
+
 	return &AuthClient{
 		conn:   conn,
 		client: auth.NewAuthServiceClient(conn),
