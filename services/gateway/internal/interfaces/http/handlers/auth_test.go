@@ -15,35 +15,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type mockAuthClient struct {
-	registerFunc func(ctx context.Context, email, password, fullName string) (*auth.RegisterResponse, error)
-	loginFunc    func(ctx context.Context, email, password string) (*auth.LoginResponse, error)
-	validateFunc func(ctx context.Context, token string) (string, error)
-}
-
-func (m *mockAuthClient) Register(ctx context.Context, email, password, fullName string) (*auth.RegisterResponse, error) {
-	if m.registerFunc != nil {
-		return m.registerFunc(ctx, email, password, fullName)
-	}
-	return &auth.RegisterResponse{Id: "test-id", Email: email, FullName: fullName}, nil
-}
-
-func (m *mockAuthClient) Login(ctx context.Context, email, password string) (*auth.LoginResponse, error) {
-	if m.loginFunc != nil {
-		return m.loginFunc(ctx, email, password)
-	}
-	return &auth.LoginResponse{AccessToken: "test-token", TokenType: "Bearer"}, nil
-}
-
-func (m *mockAuthClient) ValidateToken(ctx context.Context, token string) (string, error) {
-	if m.validateFunc != nil {
-		return m.validateFunc(ctx, token)
-	}
-	return "user-id", nil
-}
-
-func (m *mockAuthClient) Close() {}
-
 func TestRegisterHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		mock := &mockAuthClient{

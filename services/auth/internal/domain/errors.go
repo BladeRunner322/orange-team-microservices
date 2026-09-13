@@ -11,4 +11,5 @@ var (
 	ErrInvalidPasswordHash = errors.New("invalid password hash")
 	ErrWeakPassword        = errors.New("password must be at least 8 characters long")
 	ErrInvalidToken        = errors.New("invalid token")
+	ErrInvalidRefreshToken = errors.New("invalid refresh token")
 )

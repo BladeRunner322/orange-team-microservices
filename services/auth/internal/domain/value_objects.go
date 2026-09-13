@@ -1,6 +1,9 @@
 package domain
 
 import (
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -62,3 +65,36 @@ func NewPassword(raw string) (Password, error) {
 }
 
 func (p Password) String() string { return string(p) }
+
+// RefreshToken — value object для refresh-токена.
+type RefreshToken string
+
+const (
+	// refreshTokenLength — длина случайной строки (в байтах до base64).
+	refreshTokenLength = 32
+)
+
+// NewRefreshToken валидирует существующий refresh-токен (пришедший от клиента).
+func NewRefreshToken(raw string) (RefreshToken, error) {
+	if raw == "" {
+		return "", ErrInvalidRefreshToken
+	}
+	// базовая проверка длины (base64 от 32 байт ≈ 44 символа)
+	if len(raw) < 40 {
+		return "", ErrInvalidRefreshToken
+	}
+	return RefreshToken(raw), nil
+}
+
+// GenerateRefreshToken создаёт новый случайный refresh-токен.
+func GenerateRefreshToken() (RefreshToken, error) {
+	b := make([]byte, refreshTokenLength)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate refresh token: %w", err)
+	}
+	return RefreshToken(base64.RawURLEncoding.EncodeToString(b)), nil
+}
+
+func (t RefreshToken) String() string {
+	return string(t)
+}

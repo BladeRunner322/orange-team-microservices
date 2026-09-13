@@ -46,6 +46,12 @@ tasks:
     cmds:
       - go test -tags=integration -v ./...
 
+  test-all:
+    desc: Run unit and integration tests
+    cmds:
+      - task: test
+      - task: test-integration
+
   # ============================================================
   #  AUTH SERVICE – ЛОКАЛЬНЫЙ ЗАПУСК
   # ============================================================
@@ -117,6 +123,30 @@ tasks:
     desc: Open psql console for Auth database
     cmds:
       - docker compose exec postgres-auth psql -U ${POSTGRES_USER} -d ${POSTGRES_DB}
+
+  # ============================================================
+  #  AUTH SERVICE – REDIS
+  # ============================================================
+
+  auth:redis-up:
+    desc: Start Redis for Auth service
+    cmds:
+      - docker compose up -d redis-auth
+
+  auth:redis-down:
+    desc: Stop Redis for Auth service
+    cmds:
+      - docker compose down redis-auth
+
+  auth:redis-logs:
+    desc: Show Redis logs for Auth
+    cmds:
+      - docker compose logs -f redis-auth
+
+  auth:redis-cli:
+    desc: Open redis-cli
+    cmds:
+      - docker compose exec redis-auth redis-cli
 
   # ============================================================
   #  AUTH SERVICE – МИГРАЦИИ
@@ -197,7 +227,7 @@ tasks:
     desc: Start all services (app + monitoring + logging)
     cmds:
       - docker compose up -d --build
-      - echo "✅ All services started! (postgres-auth, migrate-auth, auth, gateway, prometheus, grafana, loki, promtail)"
+      - echo "✅ All services started! (postgres-auth, redis-auth, migrate-auth, auth, gateway, prometheus, grafana, loki, promtail)"
 
   docker-down:
     desc: Stop all services
