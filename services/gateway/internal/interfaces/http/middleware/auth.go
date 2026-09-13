@@ -11,7 +11,10 @@ import (
 
 type contextKey string
 
-const UserIDKey contextKey = "user_id"
+const (
+	UserIDKey contextKey = "user_id"
+	RoleKey   contextKey = "role"
+)
 
 func AuthMiddleware(authClient ports.AuthClientInterface) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -28,13 +31,14 @@ func AuthMiddleware(authClient ports.AuthClientInterface) func(http.Handler) htt
 			}
 			token := parts[1]
 
-			userID, err := authClient.ValidateToken(r.Context(), token)
-			if err != nil || userID == "" {
+			info, err := authClient.ValidateToken(r.Context(), token)
+			if err != nil || info.UserID == "" {
 				httputil.SendError(w, http.StatusUnauthorized, "invalid or expired token")
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), UserIDKey, userID)
+			ctx := context.WithValue(r.Context(), UserIDKey, info.UserID)
+			ctx = context.WithValue(ctx, RoleKey, info.Role)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -43,4 +47,9 @@ func AuthMiddleware(authClient ports.AuthClientInterface) func(http.Handler) htt
 func GetUserID(ctx context.Context) (string, bool) {
 	userID, ok := ctx.Value(UserIDKey).(string)
 	return userID, ok
+}
+
+func GetRole(ctx context.Context) (string, bool) {
+	role, ok := ctx.Value(RoleKey).(string)
+	return role, ok
 }

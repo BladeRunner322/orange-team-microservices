@@ -62,7 +62,6 @@ tasks:
     cmds:
       - env GRPC_PORT=:50061 POSTGRES_HOST=localhost ENABLE_TLS=true TLS_CERT_FILE=./certs/server.crt TLS_KEY_FILE=./certs/server.key HTTP_PORT=:8090 go run services/auth/cmd/main.go
 
-
   # ============================================================
   #  AUTH SERVICE – DOCKER
   # ============================================================
@@ -122,7 +121,7 @@ tasks:
   auth:postgres-psql:
     desc: Open psql console for Auth database
     cmds:
-      - docker compose exec postgres-auth psql -U ${POSTGRES_USER} -d ${POSTGRES_DB}
+      - docker compose exec postgres-auth sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 
   # ============================================================
   #  AUTH SERVICE – REDIS
@@ -146,7 +145,7 @@ tasks:
   auth:redis-cli:
     desc: Open redis-cli
     cmds:
-      - docker compose exec redis-auth redis-cli
+      - docker compose exec redis-auth sh -c 'redis-cli -a "$REDIS_PASSWORD"'
 
   # ============================================================
   #  AUTH SERVICE – МИГРАЦИИ
@@ -155,22 +154,22 @@ tasks:
   auth:migrate-create:
     desc: Create a new migration for Auth
     cmds:
-      - docker compose run --rm migrate-auth create -ext sql -dir /migrations -seq {{.CLI_ARGS}}
+      - docker compose run --rm --entrypoint migrate migrate-auth create -ext sql -dir /migrations -seq {{.CLI_ARGS}}
 
   auth:migrate-up:
     desc: Apply all pending migrations for Auth
     cmds:
-      - docker compose run --rm migrate-auth -path /migrations -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-auth:5432/${POSTGRES_DB}?sslmode=disable" up
+      - docker compose run --rm --entrypoint sh migrate-auth -c 'migrate -path /migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres-auth:5432/$POSTGRES_DB?sslmode=disable" up'
 
   auth:migrate-down:
     desc: Rollback the last migration for Auth
     cmds:
-      - docker compose run --rm migrate-auth -path /migrations -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-auth:5432/${POSTGRES_DB}?sslmode=disable" down {{.CLI_ARGS}}
+      - docker compose run --rm --entrypoint sh migrate-auth -c 'migrate -path /migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres-auth:5432/$POSTGRES_DB?sslmode=disable" down {{.CLI_ARGS}}'
 
   auth:migrate-version:
     desc: Show current migration version for Auth
     cmds:
-      - docker compose run --rm migrate-auth -path /migrations -database "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-auth:5432/${POSTGRES_DB}?sslmode=disable" version
+      - docker compose run --rm --entrypoint sh migrate-auth -c 'migrate -path /migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres-auth:5432/$POSTGRES_DB?sslmode=disable" version'
 
   # ============================================================
   #  GATEWAY SERVICE – ЛОКАЛЬНЫЙ ЗАПУСК

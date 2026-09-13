@@ -4,12 +4,13 @@ import (
 	"context"
 
 	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/auth"
+	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/application/ports"
 )
 
 type mockAuthClient struct {
 	registerFunc     func(ctx context.Context, email, password, fullName string) (*auth.RegisterResponse, error)
 	loginFunc        func(ctx context.Context, email, password string) (*auth.LoginResponse, error)
-	validateFunc     func(ctx context.Context, token string) (string, error)
+	validateFunc     func(ctx context.Context, token string) (ports.UserInfo, error)
 	refreshTokenFunc func(ctx context.Context, refreshToken string) (*auth.RefreshTokenResponse, error)
 	logoutFunc       func(ctx context.Context, refreshToken string) error
 }
@@ -28,11 +29,11 @@ func (m *mockAuthClient) Login(ctx context.Context, email, password string) (*au
 	return &auth.LoginResponse{AccessToken: "test-token", TokenType: "Bearer"}, nil
 }
 
-func (m *mockAuthClient) ValidateToken(ctx context.Context, token string) (string, error) {
+func (m *mockAuthClient) ValidateToken(ctx context.Context, token string) (ports.UserInfo, error) {
 	if m.validateFunc != nil {
 		return m.validateFunc(ctx, token)
 	}
-	return "user-id", nil
+	return ports.UserInfo{UserID: "user-id", Role: "user"}, nil
 }
 
 func (m *mockAuthClient) RefreshToken(ctx context.Context, refreshToken string) (*auth.RefreshTokenResponse, error) {

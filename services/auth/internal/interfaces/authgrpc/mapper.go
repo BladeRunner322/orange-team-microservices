@@ -2,6 +2,7 @@ package authgrpc
 
 import (
 	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/auth"
+	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/application/ports"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/domain"
 )
 
@@ -43,10 +44,11 @@ func ToProtoLoginResponse(accessToken, refreshToken string) *auth.LoginResponse 
 }
 
 // ToProtoValidateTokenResponse преобразует результат валидации в pb.ValidateTokenResponse.
-func ToProtoValidateTokenResponse(userID string, valid bool) *auth.ValidateTokenResponse {
+func ToProtoValidateTokenResponse(info ports.UserInfo, valid bool) *auth.ValidateTokenResponse {
 	return &auth.ValidateTokenResponse{
-		UserId: userID,
+		UserId: info.UserID,
 		Valid:  valid,
+		Role:   info.Role,
 	}
 }
 

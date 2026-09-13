@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 
 	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/auth"
+	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/application/ports"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -29,15 +30,18 @@ func NewAuthClient(addr string) (*AuthClient, error) {
 	}, nil
 }
 
-func (c *AuthClient) ValidateToken(ctx context.Context, token string) (string, error) {
+func (c *AuthClient) ValidateToken(ctx context.Context, token string) (ports.UserInfo, error) {
 	resp, err := c.client.ValidateToken(ctx, &auth.ValidateTokenRequest{Token: token})
 	if err != nil {
-		return "", err
+		return ports.UserInfo{}, err
 	}
 	if !resp.Valid {
-		return "", nil
+		return ports.UserInfo{}, nil
 	}
-	return resp.UserId, nil
+	return ports.UserInfo{
+		UserID: resp.UserId,
+		Role:   resp.Role,
+	}, nil
 }
 
 func (c *AuthClient) Register(ctx context.Context, email, password, fullName string) (*auth.RegisterResponse, error) {

@@ -98,3 +98,22 @@ func GenerateRefreshToken() (RefreshToken, error) {
 func (t RefreshToken) String() string {
 	return string(t)
 }
+
+// Role — роль пользователя для RBAC.
+type Role string
+
+const (
+	RoleUser  Role = "user"
+	RoleAdmin Role = "admin"
+)
+
+func NewRole(raw string) (Role, error) {
+	switch Role(raw) {
+	case RoleUser, RoleAdmin:
+		return Role(raw), nil
+	default:
+		return "", ErrInvalidRole
+	}
+}
+
+func (r Role) String() string { return string(r) }

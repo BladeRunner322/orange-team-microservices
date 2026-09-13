@@ -301,6 +301,7 @@ type ValidateTokenResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	Valid         bool                   `protobuf:"varint,2,opt,name=valid,proto3" json:"valid,omitempty"`
+	Role          string                 `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -347,6 +348,13 @@ func (x *ValidateTokenResponse) GetValid() bool {
 		return x.Valid
 	}
 	return false
+}
+
+func (x *ValidateTokenResponse) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
 }
 
 type RefreshTokenRequest struct {
@@ -555,10 +563,11 @@ const file_auth_auth_proto_rawDesc = "" +
 	"token_type\x18\x02 \x01(\tR\ttokenType\x12#\n" +
 	"\rrefresh_token\x18\x03 \x01(\tR\frefreshToken\",\n" +
 	"\x14ValidateTokenRequest\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token\"F\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\"Z\n" +
 	"\x15ValidateTokenResponse\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
-	"\x05valid\x18\x02 \x01(\bR\x05valid\":\n" +
+	"\x05valid\x18\x02 \x01(\bR\x05valid\x12\x12\n" +
+	"\x04role\x18\x03 \x01(\tR\x04role\":\n" +
 	"\x13RefreshTokenRequest\x12#\n" +
 	"\rrefresh_token\x18\x01 \x01(\tR\frefreshToken\"}\n" +
 	"\x14RefreshTokenResponse\x12!\n" +

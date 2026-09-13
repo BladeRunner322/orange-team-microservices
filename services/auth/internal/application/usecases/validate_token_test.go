@@ -14,13 +14,14 @@ func TestValidateToken_Execute(t *testing.T) {
 	log := logger.NewTestLogger()
 
 	t.Run("валидный токен", func(t *testing.T) {
-		tokenManager := mockTokenManager{validateErr: nil}
+		tokenManager := mockTokenManager{validateErr: nil, role: "admin"}
 		uc := NewValidateToken(tokenManager, log)
 
-		userID, err := uc.Execute(context.Background(), "valid-token")
+		info, err := uc.Execute(context.Background(), "valid-token")
 
 		assert.NoError(t, err)
-		assert.Equal(t, "user-id", userID)
+		assert.Equal(t, "user-id", info.UserID)
+		assert.Equal(t, "admin", info.Role)
 	})
 
 	t.Run("невалидный токен", func(t *testing.T) {

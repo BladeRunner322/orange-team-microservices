@@ -11,6 +11,7 @@ type User struct {
 	email        Email
 	passwordHash PasswordHash
 	fullName     FullName
+	role         Role
 	createdAt    time.Time
 	updatedAt    *time.Time
 }
@@ -22,6 +23,7 @@ func NewUser(email Email, passwordHash PasswordHash, fullName FullName) User {
 		email:        email,
 		passwordHash: passwordHash,
 		fullName:     fullName,
+		role:         RoleUser,
 		createdAt:    time.Now().UTC(),
 		updatedAt:    nil,
 	}
@@ -33,6 +35,7 @@ func RestoreUser(
 	email Email,
 	passwordHash PasswordHash,
 	fullName FullName,
+	role Role,
 	createdAt time.Time,
 	updatedAt *time.Time,
 ) User {
@@ -41,6 +44,7 @@ func RestoreUser(
 		email:        email,
 		passwordHash: passwordHash,
 		fullName:     fullName,
+		role:         role,
 		createdAt:    createdAt,
 		updatedAt:    updatedAt,
 	}
@@ -51,5 +55,6 @@ func (u User) ID() uuid.UUID              { return u.id }
 func (u User) Email() Email               { return u.email }
 func (u User) PasswordHash() PasswordHash { return u.passwordHash }
 func (u User) FullName() FullName         { return u.fullName }
+func (u User) Role() Role                 { return u.role }
 func (u User) CreatedAt() time.Time       { return u.createdAt }
 func (u User) UpdatedAt() *time.Time      { return u.updatedAt }

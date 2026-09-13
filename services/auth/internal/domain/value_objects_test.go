@@ -151,3 +151,30 @@ func TestGenerateRefreshToken(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+func TestNewRole(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{"valid user", "user", false},
+		{"valid admin", "admin", false},
+		{"empty", "", true},
+		{"unknown role", "superadmin", true},
+		{"wrong case", "Admin", true},
+		{"whitespace", " user", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			role, err := NewRole(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.ErrorIs(t, err, ErrInvalidRole)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.input, role.String())
+		})
+	}
+}
