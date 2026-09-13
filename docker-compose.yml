@@ -1,5 +1,4 @@
 services:
-
   # ============================================================
   #  AUTH SERVICE – POSTGRES
   # ============================================================
@@ -7,14 +6,34 @@ services:
     image: postgres:18.6-bookworm
     container_name: auth-postgres
     env_file:
-      - .env
+      - ./services/auth/.env
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
       - pgdata:/var/lib/postgresql
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  #  AUTH SERVICE – REDIS (refresh tokens)
+  # ============================================================
+  redis-auth:
+    image: redis:7-alpine
+    container_name: auth-redis
+    env_file:
+      - ./services/auth/.env
+    ports:
+      - "${REDIS_AUTH_PORT}:6379"
+    volumes:
+      - redisdata-auth:/data
+    command: sh -c 'redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -28,9 +47,9 @@ services:
     volumes:
       - ./services/auth/migrations:/migrations
     env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-auth:5432/${POSTGRES_DB}?sslmode=disable
+      - ./services/auth/.env
+    entrypoint: sh
+    command: -c 'migrate -path /migrations -database "postgres://$$POSTGRES_USER:$$POSTGRES_PASSWORD@postgres-auth:5432/$$POSTGRES_DB?sslmode=disable" up'
     depends_on:
       postgres-auth:
         condition: service_healthy
@@ -47,17 +66,18 @@ services:
     volumes:
       - ./certs:/app/certs:ro
     env_file:
-      - .env
+      - ./services/auth/.env
     ports:
-      - "50051:50051"        # gRPC (внешний)
-      - "8080:8080"          # health / metrics
+      - "${AUTH_GRPC_PORT}:50051"
+      - "${AUTH_HTTP_PORT}:8080"
     environment:
-      - HTTP_PORT=:8080
       - POSTGRES_HOST=postgres-auth
       - TLS_CERT_FILE=/app/certs/server.crt
       - TLS_KEY_FILE=/app/certs/server.key
     depends_on:
       postgres-auth:
+        condition: service_healthy
+      redis-auth:
         condition: service_healthy
       migrate-auth:
         condition: service_completed_successfully
@@ -70,26 +90,27 @@ services:
     restart: unless-stopped
 
   # ============================================================
-  #  AUTH SERVICE – REDIS (refresh tokens)
+  #  GATEWAY SERVICE – REDIS (rate limiting)
   # ============================================================
-  redis-auth:
+  redis-gateway:
     image: redis:7-alpine
-    container_name: auth-redis
+    container_name: gateway-redis
     env_file:
-      - .env
+      - ./services/gateway/.env
     ports:
-      - "${REDIS_PORT}:6379"
+      - "${REDIS_GATEWAY_PORT}:6379"
     volumes:
-      - redisdata:/data
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+      - redisdata-gateway:/data
+    command: sh -c 'redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"'
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping"]
       interval: 5s
       timeout: 5s
       retries: 5
+
   # ============================================================
-  #  API GATEWAY – HTTP → gRPC
+  #  GATEWAY SERVICE – HTTP
   # ============================================================
   gateway:
     build:
@@ -97,16 +118,14 @@ services:
       dockerfile: services/gateway/Dockerfile
     container_name: gateway-service
     env_file:
-      - .env
+      - ./services/gateway/.env
     ports:
-      - "8081:8081"
-    environment:
-      - GATEWAY_HTTP_PORT=${GATEWAY_HTTP_PORT}
-      - AUTH_GRPC_ADDR=${AUTH_GRPC_ADDR}
-      - GATEWAY_TIMEOUT=${GATEWAY_TIMEOUT}
+      - "${GATEWAY_HTTP_PORT}:8081"
     depends_on:
       auth:
         condition: service_started
+      redis-gateway:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
       interval: 10s
@@ -122,7 +141,7 @@ services:
     image: prom/prometheus:latest
     container_name: auth-prometheus
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_PORT}:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     restart: unless-stopped
@@ -131,7 +150,7 @@ services:
     image: grafana/grafana:latest
     container_name: auth-grafana
     ports:
-      - "3000:3000"
+      - "${GRAFANA_PORT}:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
     volumes:
@@ -145,7 +164,7 @@ services:
     image: grafana/loki:latest
     container_name: auth-loki
     ports:
-      - "3100:3100"
+      - "${LOKI_PORT}:3100"
     restart: unless-stopped
 
   promtail:
@@ -162,5 +181,6 @@ services:
 
 volumes:
   pgdata:
+  redisdata-auth:
+  redisdata-gateway:
   grafana-storage:
-  redisdata:
