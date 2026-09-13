@@ -69,6 +69,46 @@ func (p *PgxPool) Exec(ctx context.Context, sql string, args ...any) (CommandTag
 	return pgxCommandTag{tag}, nil
 }
 
+// BeginTx открывает транзакцию.
+func (p *PgxPool) BeginTx(ctx context.Context) (Tx, error) {
+	tx, err := p.Pool.Begin(ctx)
+	if err != nil {
+		return nil, mapErrors(err)
+	}
+	return NewTx(tx), nil
+}
+
+// WithTx выполняет функцию fn в транзакции.
+//
+// Если fn возвращает ошибку — транзакция откатывается и ошибка возвращается наверх.
+// Если fn вернула nil — транзакция коммитится.
+func (p *PgxPool) WithTx(ctx context.Context, fn func(Tx) error) error {
+	tx, err := p.BeginTx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+
+	// В случае паники — откатываем, чтобы не оставить транзакцию открытой.
+	defer func() {
+		if r := recover(); r != nil {
+			_ = tx.Rollback(ctx)
+			panic(r)
+		}
+	}()
+
+	if err := fn(tx); err != nil {
+		if rbErr := tx.Rollback(ctx); rbErr != nil {
+			return fmt.Errorf("rollback tx after error '%w': %w", err, rbErr)
+		}
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
+	}
+	return nil
+}
+
 // OpTimeout возвращает таймаут операций.
 func (p *PgxPool) OpTimeout() time.Duration {
 	return p.opTimeout

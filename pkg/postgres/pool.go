@@ -10,8 +10,19 @@ type Pool interface {
 	Query(ctx context.Context, sql string, args ...any) (Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) Row
 	Exec(ctx context.Context, sql string, args ...any) (CommandTag, error)
+	BeginTx(ctx context.Context) (Tx, error)
+	WithTx(ctx context.Context, fn func(Tx) error) error
 	Close()
 	OpTimeout() time.Duration
+}
+
+// Tx — интерфейс транзакции.
+type Tx interface {
+	Query(ctx context.Context, sql string, args ...any) (Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) Row
+	Exec(ctx context.Context, sql string, args ...any) (CommandTag, error)
+	Commit(ctx context.Context) error
+	Rollback(ctx context.Context) error
 }
 
 // Rows — интерфейс для работы со строками результата запроса.
