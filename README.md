@@ -21,6 +21,8 @@
 - [Сервисы](#сервисы)
   - [Auth (аутентификация)](#auth-аутентификация)
   - [Gateway (API Gateway)](#gateway-api-gateway)
+  - [Refresh tokens flow](#refresh-tokens-flow)
+  - [Rate Limiting flow](#rate-limiting-flow)
 - [CI/CD и деплой](#cicd-и-деплой)
 - [Мониторинг и логирование](#мониторинг-и-логирование)
 - [Тестирование](#тестирование)
@@ -71,19 +73,37 @@ cd orange-team-microservices
 ```
 2. Настройте переменные окружения
 
-В корне проекта лежит шаблон `.env.example` со всеми переменными. Скопируйте его в `.env` и заполните секреты:
+В проекте **три файла `.env`** — по одному на каждый контекст:
+
+- **Корневой `.env`** — порты для `docker-compose` и Grafana.
+- **`services/auth/.env`** — переменные Auth Service.
+- **`services/gateway/.env`** — переменные Gateway Service.
+
+У каждого есть шаблон `.env.example`. Скопируйте все три:
+
 ```bash
 cp .env.example .env
+cp services/auth/.env.example services/auth/.env
+cp services/gateway/.env.example services/gateway/.env
 ```
 
-Обязательно укажите:
+Затем заполните секреты в каждом из них.
 
-- `JWT_SECRET` — секретный ключ для JWT (минимум 32 байта)
-- `POSTGRES_PASSWORD` — пароль для БД
+**В корневом `.env`:**
+
+- `GRAFANA_PASSWORD` — пароль администратора Grafana (по умолчанию `admin`)
+
+**В `services/auth/.env`:**
+
+- `JWT_SECRET` — секретный ключ для JWT (минимум 32 байта). Сгенерировать: `openssl rand -hex 32`
+- `POSTGRES_PASSWORD` — пароль для PostgreSQL
 - `REDIS_PASSWORD` — пароль для Redis (refresh-токены)
-- `GRAFANA_PASSWORD` — пароль администратора Grafana
 
-> ⚠️ Файл `.env` добавлен в `.gitignore` и **не коммитится** в репозиторий. Секреты хранятся только локально.
+**В `services/gateway/.env`:**
+
+- `REDIS_PASSWORD` — пароль для Redis (rate limiting, можно тот же или отдельный)
+
+> ⚠️ Все три `.env` добавлены в `.gitignore` и **не коммитятся** в репозиторий. Секреты хранятся только локально.
 
 3. Сгенерируйте TLS-сертификаты для разработки
 
@@ -101,24 +121,20 @@ openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.cr
 ```
 
 4. Запустите всё окружение (PostgreSQL + Redis + миграции + сервисы)
+
 ```bash
 task docker-up
 ```
 
 Это поднимет:
 
-- PostgreSQL (порт 5432)
-
-- Redis (порт 6379) — для refresh-токенов
-
+- PostgreSQL (порт 5432) — для Auth Service
+- Redis Auth (порт 6379) — для refresh-токенов
+- Redis Gateway (порт 6380) — для rate limiting
 - Миграции (создание таблиц)
-
 - Auth-сервис (gRPC, порт 50051)
-
 - Gateway-сервис (HTTP, порт 8081)
-
 - Мониторинг (Prometheus, Grafana, Loki, Promtail)
-
 
 5. Проверьте, что сервисы работают
 
@@ -196,8 +212,9 @@ orange-team-microservices/
 │   │   └── workouts.proto
 │   ├── leaderboard/
 │   │   └── leaderboard.proto
-│   └── postman/                      # коллекция Postman для тестирования HTTP API
-│       └── gateway_collection.json
+│   └── postman/                      # коллекции Postman
+│       ├── gateway_collection.json
+│       └── rate_limit_collection.json
 │
 ├── internal/
 │   └── gen/                          # сгенерированный код из proto
@@ -215,7 +232,8 @@ orange-team-microservices/
 │   ├── logger/                       # структурированное логирование (slog)
 │   ├── metrics/                      # метрики Prometheus
 │   ├── postgres/                     # пул соединений pgx, конфиг, адаптеры, ошибки
-│   └── redis/                        # клиент Redis (refresh tokens), конфиг
+│   ├── ratelimit/                    # Token Bucket на Redis (rate limiting)
+│   └── redis/                        # клиент Redis (refresh tokens, rate limiting)
 │
 ├── services/
 │   ├── gateway/                      # ✅ ГОТОВ — API Gateway (HTTP → gRPC прокси)
@@ -230,8 +248,9 @@ orange-team-microservices/
 │   │   │   └── interfaces/
 │   │   │       └── http/             # HTTP-слой
 │   │   │           ├── handlers/     # хендлеры (auth, user, token, health, proxy)
-│   │   │           ├── middleware/   # аутентификация, логирование, request_id
+│   │   │           ├── middleware/   # аутентификация, rate limit, логирование, request_id
 │   │   │           └── httputil/     # утилиты (SendJSON, SendError, GrpcErrorToHTTP)
+│   │   ├── .env.example              # шаблон переменных Gateway Service
 │   │   └── Dockerfile
 │   │
 │   ├── auth/                         # ✅ ГОТОВ — Auth Service (регистрация, логин, валидация JWT)
@@ -252,6 +271,7 @@ orange-team-microservices/
 │   │   │       └── http/
 │   │   │           └── health/       # HTTP-эндпоинты /health и /metrics
 │   │   ├── migrations/               # SQL-миграции для auth_db
+│   │   ├── .env.example              # шаблон переменных Auth Service
 │   │   └── Dockerfile
 │   │
 │   ├── users/                        # НОВЫЙ
@@ -264,6 +284,7 @@ orange-team-microservices/
 │   │   │   ├── infrastructure/
 │   │   │   └── interfaces/
 │   │   ├── migrations/               # users_db
+│   │   ├── .env.example
 │   │   └── Dockerfile
 │   │
 │   ├── exercises/                    # НОВЫЙ
@@ -278,7 +299,7 @@ orange-team-microservices/
 │   └── leaderboard/                  # НОВЫЙ
 │       └── ... (аналогично)
 │
-├── .env.example                      # шаблон переменных окружения
+├── .env.example                      # шаблон корневого .env (порты, Grafana)
 ├── .dockerignore                     # исключения для Docker-контекста
 ├── .gitignore                        # исключения для Git
 ├── .github/                          # GitHub Actions
@@ -425,9 +446,10 @@ orange-team-microservices/
 │  │  postgres-leader   (порт 5437)  → leaderboard_db             │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                     │
-│  🔷 Redis (для refresh-токенов):                                    │
+│  🔷 Redis Контейнеры:                                               │
 │  ┌──────────────────────────────────────────────────────────────┐   │
-│  │  redis-auth        (порт 6379)  → refresh tokens             │   │
+│  │  redis-auth        (порт 6379)  → refresh-токены (Auth)      │   │
+│  │  redis-gateway     (порт 6380)  → rate limiting (Gateway)    │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                     │
 │  🔷 Мониторинг и логирование:                                       │
@@ -451,13 +473,15 @@ orange-team-microservices/
 ```
 
 ## Сводная таблица портов
+
 | Сервис | Назначение | Протокол | Внутри контейнера (Docker) | Хост (Docker) | Локальная разработка | Примечание |
 |--------|------------|----------|----------------------------|---------------|----------------------|------------|
 | **Auth** | gRPC | gRPC | `50051` | `50051` | `50061` | Смещение +10 |
 | **Auth** | Health / Metrics | HTTP | `8080` | `8080` | `8090` | Смещение +10, переопределяется в `docker-compose.yml` |
 | **Gateway** | HTTP API | HTTP | `8081` | `8081` | `8091` | Смещение +10 |
-| **PostgreSQL** | База данных | TCP | `5432` | `5432` | — | Используется через Docker, проброс на хост |
-| **Redis** | Refresh-токены | TCP | `6379` | `6379` | — | Используется через Docker, проброс на хост |
+| **PostgreSQL (Auth)** | База данных | TCP | `5432` | `5432` | — | Используется через Docker, проброс на хост |
+| **Redis Auth** | Refresh-токены | TCP | `6379` | `6379` | — | Только для Auth Service |
+| **Redis Gateway** | Rate limiting | TCP | `6379` | `6380` | — | Только для Gateway Service |
 | **Prometheus** | Метрики | HTTP | `9090` | `9090` | — | Только в Docker |
 | **Grafana** | Визуализация | HTTP | `3000` | `3000` | — | Только в Docker |
 | **Loki** | Логи | HTTP | `3100` | `3100` | — | Только в Docker |
@@ -466,11 +490,12 @@ orange-team-microservices/
 
 - **Docker** — используются стандартные порты:  
   `50051` (Auth gRPC), `8080` (Auth HTTP), `8081` (Gateway HTTP).  
-  Redis и PostgreSQL пробрасываются на стандартные порты (`6379`, `5432`) без смещения.
+  PostgreSQL пробрасывается на стандартный порт `5432`.  
+  Redis: `redis-auth` → `6379`, `redis-gateway` → `6380` (разные порты на хосте, чтобы не конфликтовать).
 
 - **Локальная разработка** — порты приложений сдвинуты на **+10**:  
   `50061`, `8090`, `8091` — чтобы не конфликтовать с запущенными Docker-контейнерами.  
-  Redis и PostgreSQL для локальной разработки используются из Docker через проброс на `localhost`.
+  PostgreSQL и оба Redis для локальной разработки используются из Docker через проброс на `localhost` (`5432`, `6379`, `6380`).
 
 - **Gateway** внутри Docker слушает на `8081` и пробрасывается на хост на `8081` — это сделано намеренно, чтобы не конфликтовать с Auth на `8080`.
 
@@ -601,7 +626,7 @@ curl http://localhost:8090/health
 
 ### Gateway (API Gateway)
 
-- Назначение: HTTP → gRPC прокси. Единая точка входа для клиентов, централизованная проверка JWT через Auth.
+- Назначение: HTTP → gRPC прокси. Единая точка входа для клиентов, централизованная проверка JWT через Auth Service и rate limiting.
 
 - Протокол: HTTP (REST)
 
@@ -609,7 +634,15 @@ curl http://localhost:8090/health
 
 - БД: нет (Gateway не хранит данные)
 
-- Зависимости: требует запущенного Auth Service для валидации токенов.
+- Зависимости: требует запущенного Auth Service для валидации токенов и Redis (свой инстанс) для rate limiting.
+
+- Rate limiting: Token Bucket на Redis. Лимиты:
+  - `/login` — 5 попыток в минуту
+  - `/register` — 3 попытки в минуту
+  - `/refresh` — 20 попыток в минуту
+  - защищённые маршруты — 60 запросов в минуту
+  
+  При превышении — `429 Too Many Requests` с заголовком `Retry-After: <секунды>`.
 
 - Команды:
 
@@ -727,6 +760,77 @@ user:<userID>:tokens     → SET of tokens       (обновляется при 
 
 Второй ключ нужен для **revoke all** — когда потребуется разлогинить пользователя из всех сессий (например, при смене пароля). Метод `DeleteAllForUser` уже реализован в репозитории, но пока не вызывается из use case.
 
+### Rate Limiting flow
+
+Gateway защищает публичные эндпоинты от брутфорса и абуза с помощью **rate limiting**. Реализация — **Token Bucket на Redis** с атомарным Lua-скриптом.
+
+#### Что такое Token Bucket
+
+Абстрактное «ведро» с токенами:
+
+- У каждого клиента есть **своё ведро** (определяется ключом).
+- В ведре максимум `Burst` токенов.
+- За период `Interval` восстанавливается `Rate` токенов (плавно).
+- Каждый запрос **списывает 1 токен**.
+- Если токенов нет — запрос отклоняется с `429`.
+
+#### Лимиты по эндпоинтам
+
+| Эндпоинт | Rate | Burst | Interval |
+|----------|------|-------|----------|
+| `POST /login` | 5 | 5 | 1 минута |
+| `POST /register` | 3 | 3 | 1 минута |
+| `POST /refresh` | 20 | 20 | 1 минута |
+| Защищённые маршруты | 60 | 60 | 1 минута |
+
+#### Ключи для лимитов
+
+Чтобы лимит был «умным», ключ формируется по-разному для разных сценариев:
+
+| Эндпоинт | Ключ в Redis | Почему |
+|----------|--------------|--------|
+| `POST /login` | `rl:login:<ip>:<email>` | Защищаем конкретный аккаунт от брутфорса с конкретного IP |
+| `POST /register` | `rl:register:<ip>:<email>` | Не даём спамить регистрациями с одного IP |
+| `POST /refresh` | `rl:refresh:<ip>` | Ограничиваем по IP |
+| Защищённые | `rl:api:<user_id>` | Ограничиваем конкретного пользователя |
+
+**Email** извлекается из тела запроса — middleware читает body и **восстанавливает его** обратно, чтобы handler тоже мог его прочитать.
+
+#### Что возвращаем при превышении
+
+```
+HTTP/1.1 429 Too Many Requests
+Retry-After: 11
+Content-Type: application/json
+
+{"error":"rate limit exceeded"}
+```
+
+`Retry-After` — стандартный HTTP-заголовок: через сколько секунд восстановится 1 токен.
+
+#### Почему Lua, а не просто Redis-команды
+
+Операция «прочитать токены → пополнить → списать 1 → записать обратно» должна быть **атомарной**. Если делать её через несколько команд `GET`/`SET` — при параллельных запросах возникнет **race condition** (двое одновременно прочитают `tokens = 1` и оба спишут).
+
+Lua-скрипт в Redis выполняется **как единое целое** — Redis не отвлекается на другие команды, пока скрипт не закончится. Это гарантирует корректность при любом количестве инстансов Gateway.
+
+#### Хранение в Redis
+
+Ключи в Redis (`redis-gateway`, отдельный от `redis-auth`):
+
+```
+rl:login:<ip>:<email>      → { tokens, last_refill }   (TTL ≈ Interval + 1s)
+rl:register:<ip>:<email>   → { tokens, last_refill }
+rl:refresh:<ip>            → { tokens, last_refill }
+rl:api:<user_id>           → { tokens, last_refill }
+```
+
+TTL устанавливается автоматически: если клиент больше не приходит — ключ удаляется, Redis не забивается.
+
+#### Fail-open
+
+Если Redis **недоступен** — middleware **пропускает запрос** и логирует ошибку. Это сделано намеренно: лучше пропустить запрос, чем уронить весь сервис, если Redis упадёт. Такой подход называется **fail-open**.
+
 ## CI/CD и деплой
 
 Проект использует **GitHub Actions** для автоматической проверки, сборки и деплоя сервисов.
@@ -788,21 +892,36 @@ curl http://<SERVER_HOST>:8080/health # Auth
 
 ### Обновление `.env` на сервере
 
-Файл `.env` **не хранится в git** (добавлен в `.gitignore`) и **не подтягивается** при `git pull` на сервере. Это значит, что при добавлении новых переменных окружения (например, `REDIS_ADDR`, `REDIS_PASSWORD`, `ACCESS_TOKEN_TTL`, `REFRESH_TOKEN_TTL`) их нужно **обновить вручную** перед деплоем.
+В проекте **три файла `.env`**, и **ни один из них не хранится в git** (все добавлены в `.gitignore`). Они **не подтягиваются** при `git pull` на сервере. Это значит, что при добавлении новых переменных окружения (например, `REDIS_ADDR`, `REDIS_PASSWORD`, `RATE_LIMIT_ENABLED`) их нужно **обновить вручную** в соответствующих файлах на сервере перед деплоем.
+
+Структура `.env` на сервере:
+
+```
+/root/projects/orange-team-microservices/
+├── .env                          # корневой (порты, Grafana)
+└── services/
+    ├── auth/.env                 # Auth Service
+    └── gateway/.env              # Gateway Service
+```
 
 Порядок действий при добавлении новых переменных:
 
-1. На **локальной машине** обнови `.env.example` (шаблон) и закоммить в репозиторий.
-2. Подключись к серверу и обнови `/root/projects/orange-team-microservices/.env`:
+1. На **локальной машине** обнови соответствующий `.env.example` (шаблон) и закоммить в репозиторий.
+2. Подключись к серверу:
    ```bash
    ssh root@<SERVER_HOST>
    cd /root/projects/orange-team-microservices
-   nano .env
    ```
-3. Добавь новые переменные, сохрани (`Ctrl+O`, Enter, `Ctrl+X`).
-4. После этого — вливай PR в `main`. CD задеплоит сервисы, и они корректно подхватят новые переменные.
+3. Обнови нужные `.env` файлы через `nano`:
+   ```bash
+   nano .env                          # если меняются порты или Grafana
+   nano services/auth/.env            # если меняются переменные Auth
+   nano services/gateway/.env         # если меняются переменные Gateway
+   ```
+4. Сохрани (`Ctrl+O`, Enter, `Ctrl+X`).
+5. После этого — вливай PR в `main`. CD задеплоит сервисы, и они корректно подхватят новые переменные.
 
-> ⚠️ Если забыть обновить `.env` на сервере, Auth/Gateway упадут при старте с ошибкой вида `envconfig: required env var REDIS_ADDR not set`.
+> ⚠️ Если забыть обновить хотя бы один из `.env` на сервере, соответствующий сервис упадёт при старте с ошибкой вида `envconfig: required env var REDIS_ADDR not set`.
 
 ## Мониторинг и логирование
 
@@ -954,6 +1073,29 @@ task test-cover
 | `password` | Пароль по умолчанию |
 | `fullName` | Полное имя пользователя |
 
+#### Rate Limiting коллекция
+
+Отдельная коллекция для проверки rate limiting:
+
+- **Расположение:** `api/postman/rate_limit_collection.json`
+- **Покрытие:** 9 проверок (5 успешных попыток, 6-я → 429, Retry-After, 7-я → 429)
+- **Автоматизация:** pre-request скрипт генерирует уникальный email, чтобы каждый запуск имел своё ведро
+
+**Что покрыто:**
+
+- 5 попыток `/login` — все `401` (пароль неверный, но запрос проходит)
+- 6-я попытка — `429 Too Many Requests` с заголовком `Retry-After`
+- 7-я попытка сразу — снова `429` (ведро пустое)
+
+**Как использовать:**
+
+1. Импортируй файл `api/postman/rate_limit_collection.json` в Postman.
+2. Убедись, что переменная `base_url` = `http://localhost:8081` (Docker) или `http://localhost:8091` (локально).
+3. Запусти коллекцию через **Run collection** с **Delay = 0 ms** — важно, чтобы запросы шли подряд без задержек.
+4. Должно быть `totalPass: 9`, `totalFail: 0`.
+
+> ⚠️ Коллекция рассчитана на пустое ведро. Если запустить её дважды подряд — второй раз начнётся с уже исчерпанного ведра. Pre-request генерирует уникальный email, поэтому повторный запуск сработает корректно.
+
 ## Управление миграциями
 
 > 💡 При запуске `task docker-up` миграции применяются **автоматически** (сервис `migrate-auth` в `docker-compose.yml`). Ручные команды ниже нужны только для случаев, когда миграции запускаются отдельно (например, локальная разработка или откат).
@@ -993,25 +1135,36 @@ task <service-name>:migrate-version
 
 ## Переменные окружения
 
-Все переменные хранятся в едином файле `.env` в корне проекта (шаблон — `.env.example`).
+В проекте **три файла `.env`** — по одному на каждый контекст:
 
-### Обязательные
+- **Корневой `.env`** — порты для `docker-compose` и Grafana.
+- **`services/auth/.env`** — переменные Auth Service.
+- **`services/gateway/.env`** — переменные Gateway Service.
 
-| Переменная | Назначение |
-|------------|------------|
-| `JWT_SECRET` | Секрет для подписи JWT (минимум 32 байта) |
-| `POSTGRES_USER` | Имя пользователя БД |
-| `POSTGRES_PASSWORD` | Пароль для PostgreSQL |
-| `POSTGRES_DB` | Имя базы данных Auth Service |
-| `GRAFANA_PASSWORD` | Пароль администратора Grafana |
-| `REDIS_PASSWORD` | Пароль для Redis (refresh-токены) |
+У каждого есть шаблон `.env.example` (в той же папке). Реальные `.env` в `.gitignore` и **не коммитятся**.
 
-### Auth Service
+### Корневой `.env`
+
+| Переменная | Значение по умолчанию | Назначение |
+|------------|----------------------|------------|
+| `POSTGRES_PORT` | `5432` | Порт PostgreSQL на хосте |
+| `REDIS_AUTH_PORT` | `6379` | Порт Redis (Auth) на хосте |
+| `REDIS_GATEWAY_PORT` | `6380` | Порт Redis (Gateway) на хосте |
+| `AUTH_GRPC_PORT` | `50051` | Порт gRPC Auth на хосте |
+| `AUTH_HTTP_PORT` | `8080` | Порт HTTP Auth (health/metrics) на хосте |
+| `GATEWAY_HTTP_PORT` | `8081` | Порт HTTP Gateway на хосте |
+| `PROMETHEUS_PORT` | `9090` | Порт Prometheus на хосте |
+| `GRAFANA_PORT` | `3000` | Порт Grafana на хосте |
+| `GRAFANA_PASSWORD` | `admin` | Пароль администратора Grafana |
+| `LOKI_PORT` | `3100` | Порт Loki на хосте |
+
+### `services/auth/.env`
 
 | Переменная | Значение по умолчанию | Назначение |
 |------------|----------------------|------------|
 | `GRPC_PORT` | `:50051` | Порт gRPC-сервера (внутри контейнера) |
 | `HTTP_PORT` | `:8080` | Порт HTTP-сервера для /health и /metrics (внутри контейнера) |
+| `JWT_SECRET` | — | Секрет для подписи JWT (минимум 32 байта) |
 | `JWT_ISSUER` | `auth-service` | Издатель токена |
 | `JWT_AUDIENCE` | `orange-team` | Аудитория токена |
 | `ACCESS_TOKEN_TTL` | `15m` | Время жизни access-токена |
@@ -1019,6 +1172,9 @@ task <service-name>:migrate-version
 | `ENABLE_REFLECTION` | `true` | gRPC reflection (для grpcurl). В проде — `false` |
 | `POSTGRES_HOST` | `postgres-auth` | Хост PostgreSQL внутри Docker-сети |
 | `POSTGRES_PORT` | `5432` | Порт PostgreSQL |
+| `POSTGRES_USER` | `test` | Пользователь БД |
+| `POSTGRES_PASSWORD` | — | Пароль БД |
+| `POSTGRES_DB` | `auth_db` | Имя базы данных |
 | `POSTGRES_TIMEOUT` | `30s` | Таймаут операций с БД |
 | `REDIS_ADDR` | `redis-auth:6379` | Адрес Redis внутри Docker-сети |
 | `REDIS_PASSWORD` | — | Пароль Redis (для локали можно простой, для прода — `openssl rand -hex 32`) |
@@ -1027,15 +1183,33 @@ task <service-name>:migrate-version
 | `TLS_CERT_FILE` | `/app/certs/server.crt` | Путь к сертификату (внутри контейнера) |
 | `TLS_KEY_FILE` | `/app/certs/server.key` | Путь к приватному ключу |
 
-### Gateway Service
+### `services/gateway/.env`
 
 | Переменная | Значение по умолчанию | Назначение |
 |------------|----------------------|------------|
 | `GATEWAY_HTTP_PORT` | `:8081` | HTTP-порт Gateway (внутри контейнера) |
 | `AUTH_GRPC_ADDR` | `auth-service:50051` | Адрес Auth Service для gRPC-вызовов |
 | `GATEWAY_TIMEOUT` | `10s` | Таймаут gRPC-запросов к Auth |
+| `REDIS_ADDR` | `redis-gateway:6379` | Адрес Redis (свой инстанс) внутри Docker-сети |
+| `REDIS_PASSWORD` | — | Пароль Redis (для локали можно простой, для прода — `openssl rand -hex 32`) |
+| `REDIS_DB` | `0` | Номер логической БД Redis |
+| `RATE_LIMIT_ENABLED` | `true` | Включить rate limiting |
+| `RATE_LIMIT_LOGIN_RATE` | `5` | Токенов в минуту для `/login` |
+| `RATE_LIMIT_LOGIN_BURST` | `5` | Вместимость ведра для `/login` |
+| `RATE_LIMIT_LOGIN_INTERVAL` | `1m` | Период восстановления |
+| `RATE_LIMIT_REGISTER_RATE` | `3` | Токенов в минуту для `/register` |
+| `RATE_LIMIT_REGISTER_BURST` | `3` | Вместимость ведра |
+| `RATE_LIMIT_REGISTER_INTERVAL` | `1m` | Период восстановления |
+| `RATE_LIMIT_REFRESH_RATE` | `20` | Токенов в минуту для `/refresh` |
+| `RATE_LIMIT_REFRESH_BURST` | `20` | Вместимость ведра |
+| `RATE_LIMIT_REFRESH_INTERVAL` | `1m` | Период восстановления |
+| `RATE_LIMIT_DEFAULT_RATE` | `60` | Токенов в минуту для защищённых |
+| `RATE_LIMIT_DEFAULT_BURST` | `60` | Вместимость ведра |
+| `RATE_LIMIT_DEFAULT_INTERVAL` | `1m` | Период восстановления |
 
-### Общие
+### Общие настройки
+
+Логгер применяется ко всем сервисам, но переменные задаются в каждом `.env` одинаково:
 
 | Переменная | Значение по умолчанию | Назначение |
 |------------|----------------------|------------|
@@ -1043,4 +1217,4 @@ task <service-name>:migrate-version
 | `LOGGER_FORMAT` | `json` | Формат логов (`text` или `json`) |
 | `LOGGER_FOLDER` | `logs` | Папка для файлов логов |
 
-> ⚠️ Реальный `.env` **не коммитится** в репозиторий (добавлен в `.gitignore`). Для запуска скопируйте `.env.example` в `.env` и заполните секреты.
+> ⚠️ Реальные `.env` **не коммитятся** в репозиторий (добавлены в `.gitignore`). Для запуска скопируйте `.env.example` в `.env` в каждой из трёх папок и заполните секреты.
