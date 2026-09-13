@@ -24,7 +24,7 @@ COPY --from=builder /gateway /app/gateway
 
 ENV TZ=UTC
 
-# Gateway слушает только HTTP (порт 8080)
-EXPOSE 8080
+# Gateway слушает только HTTP (порт 8081)
+EXPOSE 8081
 
 CMD ["/app/gateway"]

@@ -123,7 +123,7 @@ services:
       - "${GATEWAY_HTTP_PORT}:8081"
     depends_on:
       auth:
-        condition: service_started
+        condition: service_healthy
       redis-gateway:
         condition: service_healthy
     healthcheck:
@@ -144,6 +144,9 @@ services:
       - "${PROMETHEUS_PORT}:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      auth:
+        condition: service_healthy
     restart: unless-stopped
 
   grafana:

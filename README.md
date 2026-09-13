@@ -23,6 +23,7 @@
   - [Gateway (API Gateway)](#gateway-api-gateway)
   - [Refresh tokens flow](#refresh-tokens-flow)
   - [Rate Limiting flow](#rate-limiting-flow)
+  - [RBAC flow](#rbac-flow)
 - [CI/CD и деплой](#cicd-и-деплой)
 - [Мониторинг и логирование](#мониторинг-и-логирование)
 - [Тестирование](#тестирование)
@@ -248,7 +249,7 @@ orange-team-microservices/
 │   │   │   └── interfaces/
 │   │   │       └── http/             # HTTP-слой
 │   │   │           ├── handlers/     # хендлеры (auth, user, token, health, proxy)
-│   │   │           ├── middleware/   # аутентификация, rate limit, логирование, request_id
+│   │   │           ├── middleware/   # аутентификация, RBAC, rate limit, логирование, request_id
 │   │   │           └── httputil/     # утилиты (SendJSON, SendError, GrpcErrorToHTTP)
 │   │   ├── .env.example              # шаблон переменных Gateway Service
 │   │   └── Dockerfile
@@ -327,6 +328,48 @@ orange-team-microservices/
 └── README.md
 ```
 ## Полная архитектура микросервисного приложения
+
+### Что реализовано сейчас
+
+Актуально на текущий момент работают два сервиса: **Auth** и **Gateway**. Остальные — в плане.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          КЛИЕНТЫ (Внешние)                                  │
+│                    Браузер / Мобильное приложение                           │
+└────────────────────────────────┬────────────────────────────────────────────┘
+                                 │ HTTP (REST API)
+                                 ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         API GATEWAY  (✅ ГОТОВ)                            │
+│                    (HTTP → gRPC прокси)                                    │
+│                                                                            │
+│  • Принимает HTTP-запросы от клиентов                                      │
+│  • Проверяет JWT через Auth.ValidateToken                                  │
+│  • RBAC: читает role из токена, RequireRole("admin") на POST /exercises    │
+│  • Rate limiting (Token Bucket на Redis)                                   │
+│  • Проксирует публичные запросы в Auth (register/login/refresh/logout)     │
+│  • Защищённые маршруты бизнес-сервисов — пока заглушки 501                 │
+│  • Логирует запросы, собирает метрики                                      │
+└──────────────┬─────────────────────────────────────────────────────────────┘
+               │ gRPC
+               ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│                       AUTH SERVICE  (✅ ГОТОВ)                             │
+│                                                                            │
+│  gRPC-методы:                                                              │
+│  • Register, Login, ValidateToken, RefreshToken, Logout                    │
+│                                                                            │
+│  • JWT (HS256) с claims: user_id, role (user|admin)                        │
+│  • Refresh-токены в Redis с rotation                                       │
+│  • RBAC: роль хранится в auth.users, кладётся в токен при логине/refresh   │
+│  • БД: auth_db (PostgreSQL) + Redis (refresh)                              │
+│  • Порт: :50051                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### План (ещё не реализовано)
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          КЛИЕНТЫ (Внешние)                                  │
@@ -431,6 +474,17 @@ orange-team-microservices/
 ```
 
 ## Инфраструктурные компоненты
+
+### Что реализовано сейчас
+
+- **PostgreSQL:** `postgres-auth` (порт 5432) → `auth_db`
+- **Redis:** `redis-auth` (порт 6379) — refresh-токены; `redis-gateway` (порт 6380) — rate limiting
+- **Миграции:** `migrate-auth` → для `auth_db`
+- **Мониторинг:** Prometheus (9090), Grafana (3000)
+- **Логи:** Loki (3100), Promtail (9080)
+
+### План (после реализации остальных сервисов)
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    ИНФРАСТРУКТУРА (Docker Compose)                  │
@@ -573,6 +627,8 @@ task vendor
 
 - БД: PostgreSQL (схема auth, таблица users) + Redis (refresh-токены с TTL)
 
+- JWT (HS256) с claims: `user_id`, `role` (`user` | `admin`)
+
 - Команды:
 
   | Команда | Назначение |
@@ -679,19 +735,33 @@ curl http://localhost:8091/health
 
 #### Маршруты
 
-| Метод | Путь | Назначение | Требует токен |
-|-------|------|------------|----------------|
-| POST | `/register` | Регистрация (прокси в Auth) | ❌ |
-| POST | `/login` | Логин (прокси в Auth), возвращает access + refresh | ❌ |
-| POST | `/refresh` | Обновление пары токенов по refresh (rotation) | ❌ |
-| POST | `/logout` | Отзыв refresh-токена | ❌ |
-| GET | `/users/me` | Профиль пользователя (пока заглушка) | ✅ |
-| PATCH | `/users/me` | Обновление профиля (заглушка) | ✅ |
-| DELETE | `/users/me` | Удаление профиля (заглушка) | ✅ |
-| GET | `/exercises` | Список упражнений (заглушка) | ✅ |
-| GET | `/habits` | Привычки (заглушка) | ✅ |
-| GET | `/workouts` | Тренировки (заглушка) | ✅ |
-| GET | `/leaderboard/daily` | Лидерборд (заглушка) | ✅ |
+| Метод | Путь | Назначение | Требует токен | Роль |
+|-------|------|------------|----------------|------|
+| POST | `/register` | Регистрация | ❌ | — |
+| POST | `/login` | Логин (access + refresh) | ❌ | — |
+| POST | `/refresh` | Обновление пары токенов (rotation) | ❌ | — |
+| POST | `/logout` | Отзыв refresh-токена | ❌ | — |
+| GET | `/users/me` | Профиль пользователя (заглушка) | ✅ | — |
+| PATCH | `/users/me` | Обновление профиля (заглушка) | ✅ | — |
+| DELETE | `/users/me` | Удаление профиля (заглушка) | ✅ | — |
+| GET | `/exercises` | Список упражнений (заглушка) | ✅ | — |
+| POST | `/exercises` | Создать упражнение (заглушка) | ✅ | **admin** |
+| GET | `/habits` | Список привычек (заглушка) | ✅ | — |
+| POST | `/habits` | Создать привычку (заглушка) | ✅ | — |
+| POST | `/habits/{habitId}/complete` | Отметить выполнение (заглушка) | ✅ | — |
+| DELETE | `/habits/{habitId}` | Удалить привычку (заглушка) | ✅ | — |
+| GET | `/workouts` | Список тренировок (заглушка) | ✅ | — |
+| POST | `/workouts` | Создать тренировку (заглушка) | ✅ | — |
+| GET | `/workouts/{workoutId}` | Тренировка по ID (заглушка) | ✅ | — |
+| PATCH | `/workouts/{workoutId}` | Обновить тренировку (заглушка) | ✅ | — |
+| DELETE | `/workouts/{workoutId}` | Удалить тренировку (заглушка) | ✅ | — |
+| POST | `/workouts/{workoutId}/exercises` | Добавить упражнение в тренировку (заглушка) | ✅ | — |
+| GET | `/workouts/{workoutId}/exercises` | Упражнения тренировки (заглушка) | ✅ | — |
+| PATCH | `/workouts/{workoutId}/exercises/{exerciseId}` | Обновить упражнение (заглушка) | ✅ | — |
+| DELETE | `/workouts/{workoutId}/exercises/{exerciseId}` | Удалить упражнение (заглушка) | ✅ | — |
+| GET | `/leaderboard/daily` | Дневной лидерборд (заглушка) | ✅ | — |
+| GET | `/leaderboard/weekly` | Недельный лидерборд (заглушка) | ✅ | — |
+| GET | `/leaderboard/monthly` | Месячный лидерборд (заглушка) | ✅ | — |
 
 > **Защищённые маршруты** требуют заголовок `Authorization: Bearer <access_token>`, который валидируется через Auth Service.  
 > **`/refresh` и `/logout`** принимают `refresh_token` в теле запроса (не требуют access-токен, потому что access мог истечь).
@@ -830,6 +900,83 @@ TTL устанавливается автоматически: если клие
 #### Fail-open
 
 Если Redis **недоступен** — middleware **пропускает запрос** и логирует ошибку. Это сделано намеренно: лучше пропустить запрос, чем уронить весь сервис, если Redis упадёт. Такой подход называется **fail-open**.
+
+### RBAC flow
+
+Auth кладёт роль пользователя в JWT при логине и refresh. Gateway читает роль из уже провалидированного токена и применяет middleware `RequireRole`.
+
+#### Что такое роль
+
+- Хранится в `auth.users.role` — значения `user` (по умолчанию) и `admin`.
+- Валидируется CHECK-констрейнтом на уровне БД.
+- Кладётся в JWT claim `role` (помимо `user_id`).
+
+#### Почему роль в токене, а не в БД
+
+- Gateway не ходит в БД на каждый запрос — быстрее.
+- Auth не зависит от других сервисов при логине — устойчивее.
+- Любой downstream-сервис может локально проверить роль по JWT.
+- Это стандартный подход в проде (Auth0, Keycloak, Google IAP).
+
+#### Проверка прав
+
+Gateway применяет middleware `RequireRole("admin")` на админских маршрутах.
+
+| Маршрут | Требует роль |
+|---------|--------------|
+| `POST /exercises` | `admin` |
+
+Если роль не подходит — Gateway возвращает `403 Forbidden` **без** проксирования вниз.
+
+Остальные защищённые маршруты требуют просто валидный JWT — роль любая.
+
+#### Смена роли
+
+Роль применяется:
+
+1. **Сразу** при следующем логине.
+2. **При следующем refresh** — `RefreshToken.Execute` перечитывает пользователя из БД и берёт актуальную роль.
+3. **Максимум через 15 минут** — TTL access-токена (после этого клиент всё равно пойдёт за новым).
+
+Это осознанный компромисс: не ходим в БД на каждый запрос, но роль не «застревает» надолго.
+
+#### Пример
+
+```bash
+# 1. Логин — получаем access-токен с role=user
+curl -X POST http://localhost:8081/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"password123"}'
+
+# 2. Пробуем создать упражнение (admin-only)
+curl -X POST http://localhost:8081/exercises \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+# → 403 Forbidden {"error":"forbidden"}
+
+# 3. Меняем роль в БД (вручную, для теста)
+# docker compose exec postgres-auth psql -U test -d auth_db
+#   UPDATE auth.users SET role='admin' WHERE email='user@example.com';
+
+# 4. Перелогиниваемся — получаем новый токен с role=admin
+curl -X POST http://localhost:8081/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"password123"}'
+
+# 5. Повторяем запрос
+curl -X POST http://localhost:8081/exercises \
+  -H "Authorization: Bearer <новый_access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+# → 501 Not Implemented (RBAC пропустил, дошло до заглушки)
+```
+
+#### Что дальше
+
+- В проде подпись JWT стоит заменить с HS256 на **RS256** + JWKS, чтобы не раздавать общий секрет по сервисам.
+- Роль `admin` назначается вручную через БД (отдельной ручки смены роли пока нет).
+- Когда появится больше ролей — расширить `RequireRole("admin", "moderator", ...)`.
 
 ## CI/CD и деплой
 
