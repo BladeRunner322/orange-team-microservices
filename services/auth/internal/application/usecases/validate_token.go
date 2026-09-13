@@ -16,13 +16,13 @@ func NewValidateToken(tokenManager ports.TokenManager, log *logger.Logger) *Vali
 	return &Validate{tokenManager: tokenManager, logger: log}
 }
 
-func (uc *Validate) Execute(ctx context.Context, token string) (string, error) {
+func (uc *Validate) Execute(ctx context.Context, token string) (ports.UserInfo, error) {
 	log := uc.logger.With("operation", "ValidateToken")
-	userID, err := uc.tokenManager.Validate(ctx, token)
+	info, err := uc.tokenManager.Validate(ctx, token)
 	if err != nil {
 		log.Warn("invalid token", "error", err)
-		return "", err
+		return ports.UserInfo{}, err
 	}
-	log.Info("token validated successfully", "user_id", userID)
-	return userID, nil
+	log.Info("token validated successfully", "user_id", info.UserID)
+	return info, nil
 }

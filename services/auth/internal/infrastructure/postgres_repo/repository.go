@@ -24,14 +24,15 @@ func NewRepository(pool postgres.Pool) *Repository {
 func (r *Repository) Save(ctx context.Context, user domain.User) error {
 	m := DomainToUserModel(user)
 	query := `
-		INSERT INTO auth.users (id, email, password_hash, full_name, created_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO auth.users (id, email, password_hash, full_name, role, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 	_, err := r.pool.Exec(ctx, query,
 		m.ID,
 		m.Email,
 		m.PasswordHash,
 		m.FullName,
+		m.Role,
 		m.CreatedAt,
 	)
 	if err != nil {
@@ -43,12 +44,13 @@ func (r *Repository) Save(ctx context.Context, user domain.User) error {
 // FindByEmail ищет пользователя по email.
 func (r *Repository) FindByEmail(ctx context.Context, email domain.Email) (domain.User, error) {
 	query := `
-		SELECT id, email, password_hash, full_name, created_at, updated_at
+		SELECT id, email, password_hash, full_name, role, created_at, updated_at
 		FROM auth.users WHERE email = $1
 	`
 	var m UserModel
 	row := r.pool.QueryRow(ctx, query, email.String())
-	err := row.Scan(&m.ID, &m.Email, &m.PasswordHash, &m.FullName, &m.CreatedAt, &m.UpdatedAt)
+	err := row.Scan(&m.ID, &m.Email, &m.PasswordHash, &m.FullName, &m.Role, &m.CreatedAt, &m.UpdatedAt)
+
 	if errors.Is(err, postgres.ErrNoRows) {
 		return domain.User{}, domain.ErrUserNotFound
 	}
@@ -61,12 +63,12 @@ func (r *Repository) FindByEmail(ctx context.Context, email domain.Email) (domai
 // FindByID ищет пользователя по ID.
 func (r *Repository) FindByID(ctx context.Context, id uuid.UUID) (domain.User, error) {
 	query := `
-		SELECT id, email, password_hash, full_name, created_at, updated_at
+		SELECT id, email, password_hash, full_name, role, created_at, updated_at
 		FROM auth.users WHERE id = $1
 	`
 	var m UserModel
 	row := r.pool.QueryRow(ctx, query, id)
-	err := row.Scan(&m.ID, &m.Email, &m.PasswordHash, &m.FullName, &m.CreatedAt, &m.UpdatedAt)
+	err := row.Scan(&m.ID, &m.Email, &m.PasswordHash, &m.FullName, &m.Role, &m.CreatedAt, &m.UpdatedAt)
 	if errors.Is(err, postgres.ErrNoRows) {
 		return domain.User{}, domain.ErrUserNotFound
 	}

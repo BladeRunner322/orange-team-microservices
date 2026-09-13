@@ -65,7 +65,7 @@ func (uc *Login) Execute(ctx context.Context, emailStr, password string) (LoginR
 	}
 
 	// Генерируем access token
-	accessToken, err := uc.tokenManager.Generate(ctx, user.ID().String())
+	accessToken, err := uc.tokenManager.Generate(ctx, user.ID().String(), user.Role().String())
 	if err != nil {
 		log.Error("failed to generate access token", "error", err)
 		return LoginResult{}, fmt.Errorf("generate access token: %w", err)

@@ -18,8 +18,12 @@ func UserModelToDomain(m UserModel) (domain.User, error) {
 	if err != nil {
 		return domain.User{}, err
 	}
+	role, err := domain.NewRole(m.Role)
+	if err != nil {
+		return domain.User{}, err
+	}
 	// Используем специальный конструктор для восстановления
-	return domain.RestoreUser(m.ID, email, passHash, fullName, m.CreatedAt, m.UpdatedAt), nil
+	return domain.RestoreUser(m.ID, email, passHash, fullName, role, m.CreatedAt, m.UpdatedAt), nil
 }
 
 // DomainToUserModel преобразует доменную сущность в модель БД.
@@ -29,6 +33,7 @@ func DomainToUserModel(user domain.User) UserModel {
 		Email:        user.Email().String(),
 		PasswordHash: user.PasswordHash().String(),
 		FullName:     user.FullName().String(),
+		Role:         user.Role().String(),
 		CreatedAt:    user.CreatedAt(),
 		UpdatedAt:    user.UpdatedAt(),
 	}

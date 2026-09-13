@@ -12,6 +12,7 @@ type UserModel struct {
 	Email        string
 	PasswordHash string
 	FullName     string
+	Role         string
 	CreatedAt    time.Time
 	UpdatedAt    *time.Time
 }

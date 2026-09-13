@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/application/ports"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/domain"
 	"github.com/google/uuid"
 )
@@ -54,23 +55,28 @@ func (m *mockRepository) FindByID(ctx context.Context, id uuid.UUID) (domain.Use
 type mockTokenManager struct {
 	generateErr error
 	validateErr error
+	role        string
 }
 
-func (m mockTokenManager) Generate(ctx context.Context, userID string) (string, error) {
+func (m mockTokenManager) Generate(ctx context.Context, userID string, role string) (string, error) {
 	if m.generateErr != nil {
 		return "", m.generateErr
 	}
 	return "test-token", nil
 }
 
-func (m mockTokenManager) Validate(ctx context.Context, token string) (string, error) {
+func (m mockTokenManager) Validate(ctx context.Context, token string) (ports.UserInfo, error) {
 	if m.validateErr != nil {
-		return "", m.validateErr
+		return ports.UserInfo{}, m.validateErr
 	}
 	if token == "" {
-		return "", errors.New("empty token")
+		return ports.UserInfo{}, errors.New("empty token")
 	}
-	return "user-id", nil
+	role := m.role
+	if role == "" {
+		role = "user"
+	}
+	return ports.UserInfo{UserID: "user-id", Role: role}, nil
 }
 
 // mockRefreshTokenRepository реализует ports.RefreshTokenRepository.

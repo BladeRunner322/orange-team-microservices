@@ -72,11 +72,11 @@ func (s *Server) Login(ctx context.Context, req *auth.LoginRequest) (*auth.Login
 
 func (s *Server) ValidateToken(ctx context.Context, req *auth.ValidateTokenRequest) (*auth.ValidateTokenResponse, error) {
 	token := ToDomainValidateTokenParams(req)
-	userID, err := s.validateTokenUC.Execute(ctx, token)
+	info, err := s.validateTokenUC.Execute(ctx, token)
 	if err != nil {
 		return &auth.ValidateTokenResponse{Valid: false}, nil
 	}
-	return ToProtoValidateTokenResponse(userID, true), nil
+	return ToProtoValidateTokenResponse(info, true), nil
 }
 
 func (s *Server) RefreshToken(

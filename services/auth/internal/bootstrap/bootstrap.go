@@ -84,7 +84,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	registerUC := usecases.NewRegister(repo, log)
 	loginUC := usecases.NewLogin(repo, tokenManager, refreshRepo, cfg.RefreshTokenTTL, log)
 	validateUC := usecases.NewValidateToken(tokenManager, log)
-	refreshUC := usecases.NewRefreshToken(refreshRepo, tokenManager, cfg.RefreshTokenTTL, log)
+	refreshUC := usecases.NewRefreshToken(refreshRepo, repo, tokenManager, cfg.RefreshTokenTTL, log)
 	logoutUC := usecases.NewLogout(refreshRepo, log)
 	log.Info("use cases initialized")
 

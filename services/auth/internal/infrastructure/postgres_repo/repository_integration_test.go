@@ -56,6 +56,7 @@ func TestRepository_Integration(t *testing.T) {
 			email TEXT UNIQUE NOT NULL,
 			password_hash TEXT NOT NULL,
 			full_name TEXT NOT NULL,
+			role VARCHAR(16) NOT NULL DEFAULT 'user',
 			created_at TIMESTAMPTZ NOT NULL,
 			updated_at TIMESTAMPTZ
 		);
@@ -79,12 +80,13 @@ func runRepositoryTests(t *testing.T, db *sql.DB) {
 
 		// Вставляем в БД
 		_, err := db.ExecContext(ctx,
-			`INSERT INTO auth.users (id, email, password_hash, full_name, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6)`,
+			`INSERT INTO auth.users (id, email, password_hash, full_name, role, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 			user.ID(),
 			user.Email().String(),
 			user.PasswordHash().String(),
 			user.FullName().String(),
+			user.Role().String(),
 			user.CreatedAt(),
 			nil,
 		)
@@ -93,7 +95,7 @@ func runRepositoryTests(t *testing.T, db *sql.DB) {
 		// Ищем по email
 		var userModel UserModel
 		row := db.QueryRowContext(ctx,
-			`SELECT id, email, password_hash, full_name, created_at, updated_at
+			`SELECT id, email, password_hash, full_name, role, created_at, updated_at
 			FROM auth.users WHERE email = $1`,
 			email.String(),
 		)
@@ -102,6 +104,7 @@ func runRepositoryTests(t *testing.T, db *sql.DB) {
 			&userModel.Email,
 			&userModel.PasswordHash,
 			&userModel.FullName,
+			&userModel.Role,
 			&userModel.CreatedAt,
 			&userModel.UpdatedAt,
 		)
@@ -114,12 +117,13 @@ func runRepositoryTests(t *testing.T, db *sql.DB) {
 		assert.Equal(t, user.ID(), found.ID())
 		assert.Equal(t, user.Email().String(), found.Email().String())
 		assert.Equal(t, user.FullName().String(), found.FullName().String())
+		assert.Equal(t, user.Role(), found.Role())
 	})
 
 	t.Run("FindByEmail not found", func(t *testing.T) {
 		var userModel UserModel
 		row := db.QueryRowContext(ctx,
-			`SELECT id, email, password_hash, full_name, created_at, updated_at
+			`SELECT id, email, password_hash, full_name, role, created_at, updated_at
 			FROM auth.users WHERE email = $1`,
 			"nonexistent@example.com",
 		)
@@ -128,6 +132,7 @@ func runRepositoryTests(t *testing.T, db *sql.DB) {
 			&userModel.Email,
 			&userModel.PasswordHash,
 			&userModel.FullName,
+			&userModel.Role,
 			&userModel.CreatedAt,
 			&userModel.UpdatedAt,
 		)
@@ -141,12 +146,13 @@ func runRepositoryTests(t *testing.T, db *sql.DB) {
 		user1 := domain.NewUser(email, passHash, fullName)
 
 		_, err := db.ExecContext(ctx,
-			`INSERT INTO auth.users (id, email, password_hash, full_name, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6)`,
+			`INSERT INTO auth.users (id, email, password_hash, full_name, role, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 			user1.ID(),
 			user1.Email().String(),
 			user1.PasswordHash().String(),
 			user1.FullName().String(),
+			user1.Role().String(),
 			user1.CreatedAt(),
 			nil,
 		)
@@ -155,15 +161,45 @@ func runRepositoryTests(t *testing.T, db *sql.DB) {
 		// Вставляем второго с тем же email
 		user2 := domain.NewUser(email, passHash, fullName)
 		_, err = db.ExecContext(ctx,
-			`INSERT INTO auth.users (id, email, password_hash, full_name, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6)`,
+			`INSERT INTO auth.users (id, email, password_hash, full_name, role, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 			user2.ID(),
 			user2.Email().String(),
 			user2.PasswordHash().String(),
 			user2.FullName().String(),
+			user2.Role().String(),
 			user2.CreatedAt(),
 			nil,
 		)
 		assert.Error(t, err) // уникальность нарушена
+	})
+
+	t.Run("New user has role user by default", func(t *testing.T) {
+		email, _ := domain.NewEmail("role-test@example.com")
+		passHash, _ := domain.NewPasswordHash("$2a$10$dummyhash")
+		fullName, _ := domain.NewFullName("Role Test")
+		user := domain.NewUser(email, passHash, fullName)
+
+		_, err := db.ExecContext(ctx,
+			`INSERT INTO auth.users (id, email, password_hash, full_name, role, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			user.ID(),
+			user.Email().String(),
+			user.PasswordHash().String(),
+			user.FullName().String(),
+			user.Role().String(),
+			user.CreatedAt(),
+			nil,
+		)
+		require.NoError(t, err)
+
+		var role string
+		row := db.QueryRowContext(ctx,
+			`SELECT role FROM auth.users WHERE email = $1`,
+			email.String(),
+		)
+		err = row.Scan(&role)
+		require.NoError(t, err)
+		assert.Equal(t, "user", role)
 	})
 }

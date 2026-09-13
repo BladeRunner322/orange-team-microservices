@@ -55,7 +55,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	r.Use(middleware.LoggerMiddleware(log))
 	r.Use(chimid.Recoverer)
 
-	// 5. Rate limit middleware для публичных маршрутов (login, register, refresh)
+	// 5. Публичные маршруты (rate limit по IP/email)
 	rateLimitPublic := middleware.RateLimitMiddleware(limiter, cfg.RateLimit, log)
 
 	r.Group(func(r chi.Router) {
@@ -68,7 +68,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Post("/logout", handlers.LogoutHandler(authClient))
 	})
 
-	// 6. Защищённые маршруты
+	// 6. Защищённые маршруты (обычные пользователи, без RBAC)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(authClient))
 		r.Use(middleware.RateLimitMiddleware(limiter, cfg.RateLimit, log))
@@ -78,9 +78,8 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Patch("/users/me", handlers.ProxyHandler)
 		r.Delete("/users/me", handlers.ProxyHandler)
 
-		// Exercises
+		// Exercises (только чтение — всем авторизованным)
 		r.Get("/exercises", handlers.ProxyHandler)
-		r.Post("/exercises", handlers.ProxyHandler)
 
 		// Habits
 		r.Get("/habits", handlers.ProxyHandler)
@@ -105,7 +104,17 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Get("/leaderboard/monthly", handlers.ProxyHandler)
 	})
 
-	// 7. HTTP-сервер
+	// 7. Admin-only маршруты (RBAC: role == admin)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.AuthMiddleware(authClient))
+		r.Use(middleware.RateLimitMiddleware(limiter, cfg.RateLimit, log))
+		r.Use(middleware.RequireRole("admin"))
+
+		// Exercises (создание — только admin)
+		r.Post("/exercises", handlers.ProxyHandler)
+	})
+
+	// 8. HTTP-сервер
 	httpSrv := &http.Server{
 		Addr:         cfg.HTTPPort,
 		Handler:      r,
