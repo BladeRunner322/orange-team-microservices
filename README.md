@@ -36,28 +36,28 @@
 - **grpcurl** (для тестирования gRPC)
 
 ### Установка Task
-```
+```bash
 go install github.com/go-task/task/v3/cmd/task@latest
 ```
 ### Установка grpcurl
 
 **Через Go:**
-```
+```bash
 go install github.com/fullstorydev/grpcurl/cmd/grpcurl@latest
 ```
 
 **Через Homebrew (macOS):**
-```
+```bash
 brew install grpcurl
 ```
 
 **Через snap (Ubuntu):**
-```
+```bash
 sudo snap install grpcurl
 ```
 
 **Бинарник с GitHub:**
-```
+```bash
 https://github.com/fullstorydev/grpcurl/releases
 ```
 
@@ -65,14 +65,14 @@ https://github.com/fullstorydev/grpcurl/releases
 ## Быстрый старт
 
 1. Склонируйте репозиторий
-```
+```bash
 git clone https://github.com/BladeRunner322/orange-team-microservices
 cd orange-team-microservices
 ```
 2. Настройте переменные окружения
 
 В корне проекта лежит шаблон `.env.example` со всеми переменными. Скопируйте его в `.env` и заполните секреты:
-```
+```bash
 cp .env.example .env
 ```
 
@@ -80,6 +80,7 @@ cp .env.example .env
 
 - `JWT_SECRET` — секретный ключ для JWT (минимум 32 байта)
 - `POSTGRES_PASSWORD` — пароль для БД
+- `REDIS_PASSWORD` — пароль для Redis (refresh-токены)
 - `GRAFANA_PASSWORD` — пароль администратора Grafana
 
 > ⚠️ Файл `.env` добавлен в `.gitignore` и **не коммитится** в репозиторий. Секреты хранятся только локально.
@@ -89,24 +90,26 @@ cp .env.example .env
 Auth Service использует gRPC с TLS. Для локальной разработки создайте самоподписанный сертификат одним из способов:
 
 **Через Taskfile (рекомендуется):**
-```
+```bash
 task gen-certs
 ```
 
 **Вручную через openssl:**
-```
+```bash
 mkdir -p certs
 openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.crt -days 365 -nodes -subj "/CN=localhost"
 ```
 
-4. Запустите всё окружение (PostgreSQL + миграции + сервисы)
-```
+4. Запустите всё окружение (PostgreSQL + Redis + миграции + сервисы)
+```bash
 task docker-up
 ```
 
 Это поднимет:
 
 - PostgreSQL (порт 5432)
+
+- Redis (порт 6379) — для refresh-токенов
 
 - Миграции (создание таблиц)
 
@@ -120,20 +123,20 @@ task docker-up
 5. Проверьте, что сервисы работают
 
 **Auth (gRPC):**
-```
+```bash
 grpcurl -insecure localhost:50051 list
 ```
 
 
 Ожидаемый ответ Auth:
-```
+```bash
 auth.AuthService
 grpc.reflection.v1.ServerReflection
 grpc.reflection.v1alpha.ServerReflection
 ```
 
 **Gateway (HTTP):**
-```
+```bash
 curl http://localhost:8081/health
 ```
 
@@ -142,20 +145,40 @@ curl http://localhost:8081/health
 6. Протестируйте регистрацию и логин
 
 **Через gRPC (напрямую в Auth):**
-```
+```bash
 grpcurl -insecure -d '{"email":"test@example.com","password":"password123","full_name":"Test User"}' localhost:50051 auth.AuthService/Register
 ```
-```
+```bash
 grpcurl -insecure -d '{"email":"test@example.com","password":"password123"}' localhost:50051 auth.AuthService/Login
 ```
 
 **Через Gateway (HTTP):**
-```
+```bash
 curl -X POST http://localhost:8081/register -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123","full_name":"Test User"}'
 ```
-```
+```bash
 curl -X POST http://localhost:8081/login -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}'
 ```
+
+7. Протестируйте обновление токена и logout
+
+После логина ты получил `refresh_token`. Используй его для обновления пары токенов.
+
+**Refresh (rotation):**
+
+```bash
+curl -X POST http://localhost:8081/refresh -H "Content-Type: application/json" -d '{"refresh_token": "<refresh_token_из_логина>"}'
+```
+
+Ожидаемый ответ: новая пара `access_token` + `refresh_token`. Старый refresh становится невалидным.
+
+**Logout:**
+
+```bash
+curl -X POST http://localhost:8081/logout -H "Content-Type: application/json" -d '{"refresh_token": "<refresh_token>"}'
+```
+
+Ожидаемый ответ: `{"status":"logged out"}`. После этого refresh-токен недействителен.
 
 ## Структура проекта
 ```
@@ -191,7 +214,8 @@ orange-team-microservices/
 │   │   └── interceptors/             # gRPC-интерсепторы (логирование, метрики, recovery)
 │   ├── logger/                       # структурированное логирование (slog)
 │   ├── metrics/                      # метрики Prometheus
-│   └── postgres/                     # пул соединений pgx, конфиг, адаптеры, ошибки
+│   ├── postgres/                     # пул соединений pgx, конфиг, адаптеры, ошибки
+│   └── redis/                        # клиент Redis (refresh tokens), конфиг
 │
 ├── services/
 │   ├── gateway/                      # ✅ ГОТОВ — API Gateway (HTTP → gRPC прокси)
@@ -205,7 +229,7 @@ orange-team-microservices/
 │   │   │   │   └── clients/          # реализация gRPC-клиента Auth
 │   │   │   └── interfaces/
 │   │   │       └── http/             # HTTP-слой
-│   │   │           ├── handlers/     # хендлеры (/register, /login, /users/me, /health)
+│   │   │           ├── handlers/     # хендлеры (auth, user, token, health, proxy)
 │   │   │           ├── middleware/   # аутентификация, логирование, request_id
 │   │   │           └── httputil/     # утилиты (SendJSON, SendError, GrpcErrorToHTTP)
 │   │   └── Dockerfile
@@ -217,11 +241,12 @@ orange-team-microservices/
 │   │   │   ├── bootstrap/            # сборка зависимостей приложения
 │   │   │   ├── domain/               # сущности, value objects, ошибки
 │   │   │   ├── application/
-│   │   │   │   ├── ports/            # интерфейсы (Repository, TokenManager)
-│   │   │   │   └── usecases/         # бизнес-логика (Register, Login, ValidateToken)
+│   │   │   │   ├── ports/            # интерфейсы (Repository, TokenManager, RefreshTokenRepository)
+│   │   │   │   └── usecases/         # бизнес-логика (Register, Login, ValidateToken, RefreshToken, Logout)
 │   │   │   ├── infrastructure/
 │   │   │   │   ├── jwt/              # JWT-менеджер (генерация и валидация токенов)
-│   │   │   │   └── postgres_repo/    # реализация репозитория для PostgreSQL
+│   │   │   │   ├── postgres_repo/    # реализация репозитория для PostgreSQL
+│   │   │   │   └── redis_repo/       # реализация RefreshTokenRepository на Redis
 │   │   │   └── interfaces/
 │   │   │       ├── authgrpc/         # gRPC-сервер (обработчики AuthService)
 │   │   │       └── http/
@@ -294,7 +319,8 @@ orange-team-microservices/
 │                                                                            │
 │  📋 Функции:                                                               │
 │  • Принимает HTTP-запросы от клиентов                                      │
-│  • Для публичных эндпоинтов (/register, /login) → проксирует в Auth        │
+│  • Для публичных эндпоинтов (/register, /login, /refresh, /logout)         │
+│    → проксирует в Auth                                                     │
 │  • Для защищённых эндпоинтов:                                              │
 │    1. Вызывает Auth.ValidateToken() → получает user_id                     │
 │    2. Добавляет user_id в gRPC-метаданные                                  │
@@ -306,6 +332,8 @@ orange-team-microservices/
 │  🔀 Маршруты:                                                              │
 │  POST   /register               → Auth.Register                            │
 │  POST   /login                  → Auth.Login                               │
+│  POST   /refresh                → Auth.RefreshToken                        │
+│  POST   /logout                 → Auth.Logout                              │
 │  GET    /users/me               → Users.GetUser                            │
 │  PATCH  /users/me               → Users.PatchUser                          │
 │  DELETE /users/me               → Users.DeleteUser                         │
@@ -339,10 +367,12 @@ orange-team-microservices/
 │  • Register          │ │  • GetUser       │ │  • GetExercises   │
 │  • Login             │ │  • PatchUser     │ │  • CreateExercise │
 │  • ValidateToken     │ │  • DeleteUser    │ │                   │
+│  • RefreshToken      │ │                  │ │                   │
+│  • Logout            │ │                  │ │                   │
 │                      │ │                  │ │                   │
-│  БД: PostgreSQL      │ │  БД: PostgreSQL  │ │  БД: PostgreSQL   │
-│  └── auth_db         │ │  └── users_db    │ │  └── exercises_db │
-│      └── users       │ │      └── users   │ │      └── exercises│
+│  БД: auth_db + Redis │ │  БД: users_db    │ │  БД: exercises_db │
+│  (PG users, Redis    │ │                  │ │                   │
+│   refresh tokens)    │ │                  │ │                   │
 │                      │ │                  │ │                   │
 │  Порт: :50051        │ │  Порт: :50052    │ │  Порт: :50053     │
 └──────────────────────┘ └──────────────────┘ └───────────────────┘
@@ -395,6 +425,11 @@ orange-team-microservices/
 │  │  postgres-leader   (порт 5437)  → leaderboard_db             │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                     │
+│  🔷 Redis (для refresh-токенов):                                    │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  redis-auth        (порт 6379)  → refresh tokens             │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                     │
 │  🔷 Мониторинг и логирование:                                       │
 │  ┌──────────────────────────────────────────────────────────────┐   │
 │  │  Prometheus (порт 9090)  → сбор метрик                       │   │
@@ -422,6 +457,7 @@ orange-team-microservices/
 | **Auth** | Health / Metrics | HTTP | `8080` | `8080` | `8090` | Смещение +10, переопределяется в `docker-compose.yml` |
 | **Gateway** | HTTP API | HTTP | `8081` | `8081` | `8091` | Смещение +10 |
 | **PostgreSQL** | База данных | TCP | `5432` | `5432` | — | Используется через Docker, проброс на хост |
+| **Redis** | Refresh-токены | TCP | `6379` | `6379` | — | Используется через Docker, проброс на хост |
 | **Prometheus** | Метрики | HTTP | `9090` | `9090` | — | Только в Docker |
 | **Grafana** | Визуализация | HTTP | `3000` | `3000` | — | Только в Docker |
 | **Loki** | Логи | HTTP | `3100` | `3100` | — | Только в Docker |
@@ -429,10 +465,12 @@ orange-team-microservices/
 ### Логика смещения портов
 
 - **Docker** — используются стандартные порты:  
-  `50051` (Auth gRPC), `8080` (Auth HTTP), `8081` (Gateway HTTP).
+  `50051` (Auth gRPC), `8080` (Auth HTTP), `8081` (Gateway HTTP).  
+  Redis и PostgreSQL пробрасываются на стандартные порты (`6379`, `5432`) без смещения.
 
-- **Локальная разработка** — все порты сдвинуты на **+10**:  
-  `50061`, `8090`, `8091` — чтобы не конфликтовать с запущенными Docker-контейнерами.
+- **Локальная разработка** — порты приложений сдвинуты на **+10**:  
+  `50061`, `8090`, `8091` — чтобы не конфликтовать с запущенными Docker-контейнерами.  
+  Redis и PostgreSQL для локальной разработки используются из Docker через проброс на `localhost`.
 
 - **Gateway** внутри Docker слушает на `8081` и пробрасывается на хост на `8081` — это сделано намеренно, чтобы не конфликтовать с Auth на `8080`.
 
@@ -443,7 +481,7 @@ orange-team-microservices/
 Для разработки можно запускать сервисы локально. Порты сдвинуты на **+10** относительно Docker, чтобы не конфликтовать с контейнерами (подробнее — в разделе «Сводная таблица портов»).
 
 **Auth Service:**
-```
+```bash
 task auth:run
 ```
 
@@ -451,7 +489,7 @@ task auth:run
 - HTTP (health/metrics): `localhost:8090`
 
 **Gateway Service (требует запущенного Auth):**
-```
+```bash
 task gateway:run
 ```
 
@@ -459,6 +497,7 @@ task gateway:run
 
 **Требования для локального запуска:**
 - PostgreSQL запущен через Docker: `task auth:postgres-up`
+- Redis запущен через Docker: `task auth:redis-up`
 - Миграции применены: `task auth:migrate-up`
 - TLS-сертификаты созданы: `task gen-certs`
 
@@ -485,13 +524,13 @@ task gateway:run
 
 Если вы добавили новую зависимость в `go.mod`, обновите `vendor`:
 
-```
+```bash
 go mod vendor
 ```
 
 или
  
-```
+```bash
 task vendor
 ```
 
@@ -499,40 +538,44 @@ task vendor
 
 ### Auth (аутентификация)
 
-- Назначение: регистрация, логин, валидация JWT.
+- Назначение: регистрация, логин, валидация JWT, refresh-токены (с rotation), logout.
 
 - Протокол: gRPC
 
+- gRPC-методы: `Register`, `Login`, `ValidateToken`, `RefreshToken`, `Logout`
+
 - Порт: 50051
 
-- БД: PostgreSQL (схема auth, таблица users)
+- БД: PostgreSQL (схема auth, таблица users) + Redis (refresh-токены с TTL)
 
 - Команды:
 
-  - Запуск локально:
-    ```
-    task auth:run
-    ```
-  - Сборка Docker-образа:
-    ```
-    task auth:build
-    ```
-  - Пересборка без кеша (с обновлением vendor):
-    ```
-    task auth:rebuild
-    ```
-  - Запуск в Docker Compose:
-    ```
-    task auth:up
-    ```
-  - Перезапуск (пересборка + запуск):
-    ```
-    task auth:restart
-    ```
-  - Просмотр логов:
-    ```
-    task auth:logs
-    ```
+  | Команда | Назначение |
+  |---------|------------|
+  | `task auth:run` | Запуск локально (gRPC `50061`, HTTP `8090`) |
+  | `task auth:build` | Сборка Docker-образа |
+  | `task auth:rebuild` | Пересборка без кеша (с обновлением vendor) |
+  | `task auth:up` | Запуск в Docker Compose |
+  | `task auth:restart` | Перезапуск (rebuild + up) |
+  | `task auth:logs` | Просмотр логов Auth |
+
+- Команды для PostgreSQL:
+
+  | Команда | Назначение |
+  |---------|------------|
+  | `task auth:postgres-up` | Запуск PostgreSQL |
+  | `task auth:postgres-down` | Остановка PostgreSQL |
+  | `task auth:postgres-logs` | Просмотр логов PostgreSQL |
+  | `task auth:postgres-psql` | Консоль psql |
+
+- Команды для Redis:
+
+  | Команда | Назначение |
+  |---------|------------|
+  | `task auth:redis-up` | Запуск Redis |
+  | `task auth:redis-down` | Остановка Redis |
+  | `task auth:redis-logs` | Просмотр логов Redis |
+  | `task auth:redis-cli` | Консоль redis-cli |
 
 #### Healthcheck
 
@@ -545,12 +588,12 @@ Auth-сервис предоставляет HTTP-эндпоинт для про
 Проверка:
 
 **Docker:**
-```
+```bash
 curl http://localhost:8080/health
 ```
 
 **Локально (после `task auth:run`):**
-```
+```bash
 curl http://localhost:8090/health
 ```
 
@@ -570,30 +613,14 @@ curl http://localhost:8090/health
 
 - Команды:
 
-  - Запуск локально (требует запущенного `task auth:run`):
-    ```
-    task gateway:run
-    ```
-  - Сборка Docker-образа:
-    ```
-    task gateway:build
-    ```
-  - Пересборка без кеша (с обновлением vendor):
-    ```
-    task gateway:rebuild
-    ```
-  - Запуск в Docker Compose:
-    ```
-    task gateway:up
-    ```
-  - Перезапуск (пересборка + запуск):
-    ```
-    task gateway:restart
-    ```
-  - Просмотр логов:
-    ```
-    task gateway:logs
-    ```
+  | Команда | Назначение |
+  |---------|------------|
+  | `task gateway:run` | Запуск локально (HTTP `8091`, требует запущенного Auth) |
+  | `task gateway:build` | Сборка Docker-образа |
+  | `task gateway:rebuild` | Пересборка без кеша (с обновлением vendor) |
+  | `task gateway:up` | Запуск в Docker Compose |
+  | `task gateway:restart` | Перезапуск (rebuild + up) |
+  | `task gateway:logs` | Просмотр логов Gateway |
 
 #### Healthcheck
 
@@ -606,12 +633,12 @@ Gateway предоставляет HTTP-эндпоинт для проверки
 Проверка:
 
 **Docker:**
-```
+```bash
 curl http://localhost:8081/health
 ```
 
 **Локально (после `task gateway:run`):**
-```
+```bash
 curl http://localhost:8091/health
 ```
 
@@ -619,19 +646,86 @@ curl http://localhost:8091/health
 
 #### Маршруты
 
-| Метод | Путь | Назначение |
-|-------|------|------------|
-| POST | `/register` | Регистрация (прокси в Auth) |
-| POST | `/login` | Логин (прокси в Auth) |
-| GET | `/users/me` | Профиль пользователя (пока заглушка) |
-| PATCH | `/users/me` | Обновление профиля (заглушка) |
-| DELETE | `/users/me` | Удаление профиля (заглушка) |
-| GET | `/exercises` | Список упражнений (заглушка) |
-| GET | `/habits` | Привычки (заглушка) |
-| GET | `/workouts` | Тренировки (заглушка) |
-| GET | `/leaderboard/daily` | Лидерборд (заглушка) |
+| Метод | Путь | Назначение | Требует токен |
+|-------|------|------------|----------------|
+| POST | `/register` | Регистрация (прокси в Auth) | ❌ |
+| POST | `/login` | Логин (прокси в Auth), возвращает access + refresh | ❌ |
+| POST | `/refresh` | Обновление пары токенов по refresh (rotation) | ❌ |
+| POST | `/logout` | Отзыв refresh-токена | ❌ |
+| GET | `/users/me` | Профиль пользователя (пока заглушка) | ✅ |
+| PATCH | `/users/me` | Обновление профиля (заглушка) | ✅ |
+| DELETE | `/users/me` | Удаление профиля (заглушка) | ✅ |
+| GET | `/exercises` | Список упражнений (заглушка) | ✅ |
+| GET | `/habits` | Привычки (заглушка) | ✅ |
+| GET | `/workouts` | Тренировки (заглушка) | ✅ |
+| GET | `/leaderboard/daily` | Лидерборд (заглушка) | ✅ |
 
-> Все защищённые маршруты требуют заголовок `Authorization: Bearer <token>`, который валидируется через Auth Service.
+> **Защищённые маршруты** требуют заголовок `Authorization: Bearer <access_token>`, который валидируется через Auth Service.  
+> **`/refresh` и `/logout`** принимают `refresh_token` в теле запроса (не требуют access-токен, потому что access мог истечь).
+
+**Пример `/refresh`:**
+
+```bash
+curl -X POST http://localhost:8081/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token": "<refresh_token>"}'
+```
+
+**Пример `/logout`:**
+
+```bash
+curl -X POST http://localhost:8081/logout \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token": "<refresh_token>"}'
+```
+
+### Refresh tokens flow
+
+Auth Service выдаёт **пару токенов** при логине:
+
+- **Access token** (JWT, TTL 15 минут) — используется для защищённых запросов.
+- **Refresh token** (случайная строка, TTL 30 дней) — хранится в Redis, используется только для обновления пары.
+
+#### Зачем два токена
+
+Короткий access-токен уменьшает окно атаки: если его украдут, злоумышленник сможет пользоваться им максимум 15 минут. Refresh-токен живёт дольше, но используется редко и всегда **ротируется** (см. ниже).
+
+#### Rotation (ротация)
+
+Каждый раз, когда клиент вызывает `/refresh`, происходит **rotation**:
+
+1. Клиент отправляет старый `refresh_token`.
+2. Auth проверяет, что токен есть в Redis.
+3. **Старый refresh удаляется** из Redis.
+4. Генерируется **новая пара**: новый access + новый refresh.
+5. Новый refresh сохраняется в Redis с TTL 30 дней.
+6. Клиент получает новую пару.
+
+Если кто-то попробует использовать **старый** refresh повторно (например, злоумышленник, который украл его ранее) — Auth вернёт `401`, потому что токена уже нет в Redis.
+
+#### Logout
+
+`/logout` удаляет refresh-токен из Redis. Access-токен **не отзывается** — он сам истечёт через 15 минут. Это компромисс: мы не храним blacklist для access-токенов (это дорого), а полагаемся на короткий TTL.
+
+#### Когда что использовать
+
+| Сценарий | Что вызывает клиент |
+|----------|---------------------|
+| Первый вход | `POST /login` |
+| Истёк access, нужен новый | `POST /refresh` |
+| Пользователь нажал «Выйти» | `POST /logout` |
+| Обычный защищённый запрос | Заголовок `Authorization: Bearer <access_token>` |
+
+#### Хранение refresh-токенов в Redis
+
+Ключи в Redis:
+
+```
+refresh:<token>          → userID              (TTL = 30 дней)
+user:<userID>:tokens     → SET of tokens       (обновляется при каждой ротации)
+```
+
+Второй ключ нужен для **revoke all** — когда потребуется разлогинить пользователя из всех сессий (например, при смене пароля). Метод `DeleteAllForUser` уже реализован в репозитории, но пока не вызывается из use case.
 
 ## CI/CD и деплой
 
@@ -683,14 +777,32 @@ curl http://localhost:8091/health
 ### Проверка после деплоя
 
 После успешного CD проверь на сервере:
-```
+```bash
 curl http://<SERVER_HOST>:8081/health # Gateway
 ```
-```
+```bash
 curl http://<SERVER_HOST>:8080/health # Auth
 ```
 
 Оба должны вернуть `{"status":"ok"}`.
+
+### Обновление `.env` на сервере
+
+Файл `.env` **не хранится в git** (добавлен в `.gitignore`) и **не подтягивается** при `git pull` на сервере. Это значит, что при добавлении новых переменных окружения (например, `REDIS_ADDR`, `REDIS_PASSWORD`, `ACCESS_TOKEN_TTL`, `REFRESH_TOKEN_TTL`) их нужно **обновить вручную** перед деплоем.
+
+Порядок действий при добавлении новых переменных:
+
+1. На **локальной машине** обнови `.env.example` (шаблон) и закоммить в репозиторий.
+2. Подключись к серверу и обнови `/root/projects/orange-team-microservices/.env`:
+   ```bash
+   ssh root@<SERVER_HOST>
+   cd /root/projects/orange-team-microservices
+   nano .env
+   ```
+3. Добавь новые переменные, сохрани (`Ctrl+O`, Enter, `Ctrl+X`).
+4. После этого — вливай PR в `main`. CD задеплоит сервисы, и они корректно подхватят новые переменные.
+
+> ⚠️ Если забыть обновить `.env` на сервере, Auth/Gateway упадут при старте с ошибкой вида `envconfig: required env var REDIS_ADDR not set`.
 
 ## Мониторинг и логирование
 
@@ -710,12 +822,12 @@ curl http://<SERVER_HOST>:8080/health # Auth
 Проверка:
 
 **Docker:**
-```
+```bash
 curl http://localhost:8080/metrics
 ```
 
 **Локально:**
-```
+```bash
 curl http://localhost:8090/metrics
 ```
 
@@ -759,7 +871,7 @@ Grafana доступна по адресу: `http://localhost:3000`
 
 Все команды доступны через Taskfile:
 
-```
+```bash
 task docker-up        # поднимает всё (приложение + мониторинг + логи)
 task monitoring-up    # только Prometheus + Grafana
 task logging-up       # только Loki + Promtail
@@ -768,34 +880,39 @@ task logging-up       # только Loki + Promtail
 ### Проверка работы
 
 **Метрики (Docker):**
-```
+```bash
 curl http://localhost:8080/metrics
 ```
 
 **Метрики (локально после `task auth:run`):**
-```
+```bash
 curl http://localhost:8090/metrics
 ```
 
 **Loki готов:**
-```
+```bash
 curl http://localhost:3100/ready
 ```
 
 ## Тестирование
 
 ### Юнит-тесты
-```
+```bash
 task test
 ```
 
 ### Интеграционные тесты (с Testcontainers)
-```
+```bash
 task test-integration
 ```
 
-### Покрытие
+### Все тесты (юнит + интеграционные)
+```bash
+task test-all
 ```
+
+### Покрытие
+```bash
 task test-cover
 ```
 
@@ -806,8 +923,18 @@ task test-cover
 Для тестирования HTTP API Gateway через Postman подготовлена готовая коллекция:
 
 - **Расположение:** `api/postman/gateway_collection.json`
-- **Покрытие:** 30+ тестов (health, register, login, protected endpoints, error cases)
-- **Автоматизация:** pre-request скрипт генерирует уникальный email, тест после login сохраняет `access_token` в переменную
+- **Покрытие:** 47 проверок (34 запроса: health, register, login, refresh, logout, protected endpoints, error cases)
+- **Автоматизация:** pre-request скрипт генерирует уникальный email, тест после login сохраняет `access_token` и `refresh_token` в переменные
+
+**Что покрыто:**
+
+- Healthcheck
+- Регистрация (успех, дубликат, невалидный email, слабый пароль)
+- Логин (успех, неверные учётные данные)
+- Обновление токенов через `/refresh` (успех, невалидный refresh)
+- Logout и проверка, что refresh после logout не работает
+- Защищённые эндпоинты (с токеном, без токена, с невалидным токеном)
+- Заглушки для будущих сервисов (Users, Exercises, Habits, Workouts, Leaderboard)
 
 **Как использовать:**
 
@@ -820,7 +947,8 @@ task test-cover
 | Переменная | Назначение |
 |------------|------------|
 | `base_url` | Адрес Gateway |
-| `accessToken` | JWT-токен (заполняется автоматически после login) |
+| `accessToken` | JWT access-токен (заполняется после login и обновляется при refresh) |
+| `refreshToken` | Refresh-токен (заполняется после login, обновляется при refresh, удаляется при logout) |
 | `userId` | ID пользователя (заполняется после register) |
 | `email` | Уникальный email (генерируется pre-request скриптом) |
 | `password` | Пароль по умолчанию |
@@ -833,33 +961,33 @@ task test-cover
 > ⚠️ Миграции **не создают базу данных** — они только создают таблицы и схему внутри существующей БД. Если база `auth_db` отсутствует, `task auth:migrate-up` упадёт с ошибкой `database "auth_db" does not exist`.
 
 Для создания БД вручную:
-```
+```bash
 docker exec -it auth-postgres psql -U test -c "CREATE DATABASE auth_db;"
 ```
 
 Или просто удали volume и подними заново — `task docker-up` создаст БД автоматически из переменной `POSTGRES_DB` в `.env`:
-```
+```bash
 task docker-down-v
 task docker-up
 ```
 
 ### Создать новую миграцию
-```
+```bash
 task <service-name>:migrate-create -- create_users_table
 ```
 
 ### Применить миграции
-```
+```bash
 task <service-name>:migrate-up
 ```
 
 ### Откатить последнюю
-```
+```bash
 task <service-name>:migrate-down -- 1
 ```
 
 ### Показать текущую версию
-```
+```bash
 task <service-name>:migrate-version
 ```
 
@@ -876,6 +1004,7 @@ task <service-name>:migrate-version
 | `POSTGRES_PASSWORD` | Пароль для PostgreSQL |
 | `POSTGRES_DB` | Имя базы данных Auth Service |
 | `GRAFANA_PASSWORD` | Пароль администратора Grafana |
+| `REDIS_PASSWORD` | Пароль для Redis (refresh-токены) |
 
 ### Auth Service
 
@@ -885,11 +1014,15 @@ task <service-name>:migrate-version
 | `HTTP_PORT` | `:8080` | Порт HTTP-сервера для /health и /metrics (внутри контейнера) |
 | `JWT_ISSUER` | `auth-service` | Издатель токена |
 | `JWT_AUDIENCE` | `orange-team` | Аудитория токена |
-| `JWT_EXPIRATION` | `24h` | Время жизни токена |
+| `ACCESS_TOKEN_TTL` | `15m` | Время жизни access-токена |
+| `REFRESH_TOKEN_TTL` | `720h` | Время жизни refresh-токена (30 дней) |
 | `ENABLE_REFLECTION` | `true` | gRPC reflection (для grpcurl). В проде — `false` |
 | `POSTGRES_HOST` | `postgres-auth` | Хост PostgreSQL внутри Docker-сети |
 | `POSTGRES_PORT` | `5432` | Порт PostgreSQL |
 | `POSTGRES_TIMEOUT` | `30s` | Таймаут операций с БД |
+| `REDIS_ADDR` | `redis-auth:6379` | Адрес Redis внутри Docker-сети |
+| `REDIS_PASSWORD` | — | Пароль Redis (для локали можно простой, для прода — `openssl rand -hex 32`) |
+| `REDIS_DB` | `0` | Номер логической БД Redis |
 | `ENABLE_TLS` | `true` | Использовать TLS для gRPC |
 | `TLS_CERT_FILE` | `/app/certs/server.crt` | Путь к сертификату (внутри контейнера) |
 | `TLS_KEY_FILE` | `/app/certs/server.key` | Путь к приватному ключу |
