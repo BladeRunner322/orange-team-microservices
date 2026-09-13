@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -19,6 +20,8 @@ func TestLogin_Execute(t *testing.T) {
 
 	t.Run("успешный вход", func(t *testing.T) {
 		repo := newMockRepository()
+		refreshRepo := newMockRefreshTokenRepository()
+
 		email, _ := domain.NewEmail("test@example.com")
 		fullName, _ := domain.NewFullName("Test User")
 		password := "password123"
@@ -27,16 +30,18 @@ func TestLogin_Execute(t *testing.T) {
 		user := domain.NewUser(email, passHash, fullName)
 		_ = repo.Save(context.Background(), user)
 
-		uc := NewLogin(repo, tokenManager, log)
-		token, err := uc.Execute(context.Background(), "test@example.com", "password123")
+		uc := NewLogin(repo, tokenManager, refreshRepo, time.Hour, log)
+		result, err := uc.Execute(context.Background(), "test@example.com", "password123")
 
 		require.NoError(t, err)
-		assert.Equal(t, "test-token", token)
+		assert.Equal(t, "test-token", result.AccessToken)
+		assert.NotEmpty(t, result.RefreshToken)
 	})
 
 	t.Run("неверные учётные данные — пользователь не найден", func(t *testing.T) {
 		repo := newMockRepository()
-		uc := NewLogin(repo, tokenManager, log)
+		refreshRepo := newMockRefreshTokenRepository()
+		uc := NewLogin(repo, tokenManager, refreshRepo, time.Hour, log)
 
 		_, err := uc.Execute(context.Background(), "unknown@example.com", "password123")
 
@@ -46,6 +51,8 @@ func TestLogin_Execute(t *testing.T) {
 
 	t.Run("неверный пароль", func(t *testing.T) {
 		repo := newMockRepository()
+		refreshRepo := newMockRefreshTokenRepository()
+
 		email, _ := domain.NewEmail("test@example.com")
 		fullName, _ := domain.NewFullName("Test User")
 		hash, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
@@ -53,7 +60,7 @@ func TestLogin_Execute(t *testing.T) {
 		user := domain.NewUser(email, passHash, fullName)
 		_ = repo.Save(context.Background(), user)
 
-		uc := NewLogin(repo, tokenManager, log)
+		uc := NewLogin(repo, tokenManager, refreshRepo, time.Hour, log)
 		_, err := uc.Execute(context.Background(), "test@example.com", "wrongpass")
 
 		assert.Error(t, err)

@@ -8,16 +8,20 @@ import (
 )
 
 type Config struct {
-	GRPCPort         string        `envconfig:"GRPC_PORT" default:":50051"`
-	JWTSecret        string        `envconfig:"JWT_SECRET" required:"true"`
-	JWTIssuer        string        `envconfig:"JWT_ISSUER" default:"auth-service"`
-	JWTAudience      string        `envconfig:"JWT_AUDIENCE" default:"orange-team"`
-	JWTExpiration    time.Duration `envconfig:"JWT_EXPIRATION" default:"24h"`
-	EnableReflection bool          `envconfig:"ENABLE_REFLECTION" default:"false"`
-	EnableTLS        bool          `envconfig:"ENABLE_TLS" default:"false"`
-	TLSCertFile      string        `envconfig:"TLS_CERT_FILE" default:""`
-	TLSKeyFile       string        `envconfig:"TLS_KEY_FILE" default:""`
-	HTTPPort         string        `envconfig:"HTTP_PORT" default:":8080"`
+	GRPCPort string `envconfig:"GRPC_PORT" default:":50051"`
+	HTTPPort string `envconfig:"HTTP_PORT" default:":8080"`
+
+	JWTSecret   string `envconfig:"JWT_SECRET" required:"true"`
+	JWTIssuer   string `envconfig:"JWT_ISSUER" default:"auth-service"`
+	JWTAudience string `envconfig:"JWT_AUDIENCE" default:"orange-team"`
+
+	AccessTokenTTL  time.Duration `envconfig:"ACCESS_TOKEN_TTL" default:"15m"`
+	RefreshTokenTTL time.Duration `envconfig:"REFRESH_TOKEN_TTL" default:"720h"`
+
+	EnableReflection bool   `envconfig:"ENABLE_REFLECTION" default:"false"`
+	EnableTLS        bool   `envconfig:"ENABLE_TLS" default:"false"`
+	TLSCertFile      string `envconfig:"TLS_CERT_FILE" default:""`
+	TLSKeyFile       string `envconfig:"TLS_KEY_FILE" default:""`
 }
 
 func Load() (Config, error) {

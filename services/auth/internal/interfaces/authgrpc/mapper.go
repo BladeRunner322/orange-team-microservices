@@ -34,10 +34,11 @@ func ToProtoRegisterResponse(user domain.User) *auth.RegisterResponse {
 }
 
 // ToProtoLoginResponse преобразует токен в pb.LoginResponse.
-func ToProtoLoginResponse(token string) *auth.LoginResponse {
+func ToProtoLoginResponse(accessToken, refreshToken string) *auth.LoginResponse {
 	return &auth.LoginResponse{
-		AccessToken: token,
-		TokenType:   "Bearer",
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		TokenType:    "Bearer",
 	}
 }
 
@@ -46,5 +47,14 @@ func ToProtoValidateTokenResponse(userID string, valid bool) *auth.ValidateToken
 	return &auth.ValidateTokenResponse{
 		UserId: userID,
 		Valid:  valid,
+	}
+}
+
+// ToProtoRefreshTokenResponse преобразует новую пару токенов в pb.RefreshTokenResponse.
+func ToProtoRefreshTokenResponse(accessToken, refreshToken string) *auth.RefreshTokenResponse {
+	return &auth.RefreshTokenResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		TokenType:    "Bearer",
 	}
 }

@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/domain"
 	"github.com/google/uuid"
@@ -70,4 +71,65 @@ func (m mockTokenManager) Validate(ctx context.Context, token string) (string, e
 		return "", errors.New("empty token")
 	}
 	return "user-id", nil
+}
+
+// mockRefreshTokenRepository реализует ports.RefreshTokenRepository.
+type mockRefreshTokenRepository struct {
+	tokens map[string]string // token → userID
+
+	saveErr      error
+	getErr       error
+	deleteErr    error
+	deleteAllErr error
+}
+
+func newMockRefreshTokenRepository() *mockRefreshTokenRepository {
+	return &mockRefreshTokenRepository{tokens: make(map[string]string)}
+}
+
+func (m *mockRefreshTokenRepository) Save(
+	ctx context.Context,
+	token domain.RefreshToken,
+	userID string,
+	ttl time.Duration,
+) error {
+	if m.saveErr != nil {
+		return m.saveErr
+	}
+	m.tokens[token.String()] = userID
+	return nil
+}
+
+func (m *mockRefreshTokenRepository) GetUserID(
+	ctx context.Context,
+	token domain.RefreshToken,
+) (string, error) {
+	if m.getErr != nil {
+		return "", m.getErr
+	}
+	userID, ok := m.tokens[token.String()]
+	if !ok {
+		return "", domain.ErrInvalidRefreshToken
+	}
+	return userID, nil
+}
+
+func (m *mockRefreshTokenRepository) Delete(ctx context.Context, token domain.RefreshToken) error {
+	if m.deleteErr != nil {
+		return m.deleteErr
+	}
+	delete(m.tokens, token.String())
+	return nil
+}
+
+func (m *mockRefreshTokenRepository) DeleteAllForUser(ctx context.Context, userID string) error {
+	if m.deleteAllErr != nil {
+		return m.deleteAllErr
+	}
+	for tok, uid := range m.tokens {
+		if uid == userID {
+			delete(m.tokens, tok)
+		}
+	}
+	return nil
 }

@@ -41,6 +41,8 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	r.Get("/health", handlers.HealthHandler)
 	r.Post("/register", handlers.RegisterHandler(authClient))
 	r.Post("/login", handlers.LoginHandler(authClient))
+	r.Post("/refresh", handlers.RefreshHandler(authClient))
+	r.Post("/logout", handlers.LogoutHandler(authClient))
 
 	// 4. Защищённые маршруты (требуют валидный JWT)
 	r.Group(func(r chi.Router) {

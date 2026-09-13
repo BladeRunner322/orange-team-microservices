@@ -105,3 +105,49 @@ func TestNewPassword(t *testing.T) {
 		})
 	}
 }
+
+func TestNewRefreshToken(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{"valid", "abcdefghijklmnopqrstuvwxyz0123456789ABCD", false},
+		{"empty", "", true},
+		{"too short", "short", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewRefreshToken(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.ErrorIs(t, err, ErrInvalidRefreshToken)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestGenerateRefreshToken(t *testing.T) {
+	t.Run("unique tokens", func(t *testing.T) {
+		t1, err := GenerateRefreshToken()
+		assert.NoError(t, err)
+		t2, err := GenerateRefreshToken()
+		assert.NoError(t, err)
+		assert.NotEqual(t, t1.String(), t2.String(), "tokens should be unique")
+	})
+
+	t.Run("valid length", func(t *testing.T) {
+		tok, err := GenerateRefreshToken()
+		assert.NoError(t, err)
+		assert.GreaterOrEqual(t, len(tok.String()), 40)
+	})
+
+	t.Run("passes validation", func(t *testing.T) {
+		tok, err := GenerateRefreshToken()
+		assert.NoError(t, err)
+		_, err = NewRefreshToken(tok.String())
+		assert.NoError(t, err)
+	})
+}

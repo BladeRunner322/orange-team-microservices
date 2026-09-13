@@ -12,10 +12,12 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/metrics"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/redis"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/config"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/application/usecases"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/infrastructure/jwt"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/infrastructure/postgres_repo"
+	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/infrastructure/redis_repo"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/interfaces/authgrpc"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/interfaces/http/health"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -26,12 +28,13 @@ import (
 
 // App — структура, объединяющая все компоненты приложения.
 type App struct {
-	grpcServer *grpc.Server
-	listener   net.Listener
-	logger     *logger.Logger
-	config     config.Config
-	pool       *postgres.PgxPool
-	httpServer *http.Server
+	grpcServer  *grpc.Server
+	listener    net.Listener
+	logger      *logger.Logger
+	config      config.Config
+	pool        *postgres.PgxPool
+	redisClient *redis.Client
+	httpServer  *http.Server
 }
 
 // New — сборка всех зависимостей и запуск компонентов.
@@ -49,9 +52,20 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	log.Info("postgres connection pool created")
 
 	// ============================================================
+	// 1.1. ПОДКЛЮЧЕНИЕ К REDIS (refresh tokens)
+	// ============================================================
+	redisCfg := redis.MustLoad()
+	redisClient, err := redis.NewClient(ctx, redisCfg)
+	if err != nil {
+		return nil, fmt.Errorf("connect to redis: %w", err)
+	}
+	log.Info("redis client created", "addr", redisCfg.Addr)
+
+	// ============================================================
 	// 2. РЕПОЗИТОРИЙ (реализация для auth)
 	// ============================================================
 	repo := postgres_repo.NewRepository(pool)
+	refreshRepo := redis_repo.NewRepository(redisClient)
 
 	// ============================================================
 	// 3. JWT-МЕНЕДЖЕР
@@ -60,7 +74,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		cfg.JWTSecret,
 		cfg.JWTIssuer,
 		cfg.JWTAudience,
-		cfg.JWTExpiration,
+		cfg.AccessTokenTTL,
 	)
 	log.Info("jwt manager initialized")
 
@@ -68,8 +82,10 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	// 4. USE CASES
 	// ============================================================
 	registerUC := usecases.NewRegister(repo, log)
-	loginUC := usecases.NewLogin(repo, tokenManager, log)
+	loginUC := usecases.NewLogin(repo, tokenManager, refreshRepo, cfg.RefreshTokenTTL, log)
 	validateUC := usecases.NewValidateToken(tokenManager, log)
+	refreshUC := usecases.NewRefreshToken(refreshRepo, tokenManager, cfg.RefreshTokenTTL, log)
+	logoutUC := usecases.NewLogout(refreshRepo, log)
 	log.Info("use cases initialized")
 
 	// ============================================================
@@ -113,7 +129,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	s := grpc.NewServer(grpcOpts...)
 
 	// Регистрация gRPC-сервиса
-	auth.RegisterAuthServiceServer(s, authgrpc.NewServer(registerUC, loginUC, validateUC))
+	auth.RegisterAuthServiceServer(s, authgrpc.NewServer(registerUC, loginUC, validateUC, refreshUC, logoutUC))
 
 	// Режим разработки — включаем reflection для grpcurl
 	if cfg.EnableReflection {
@@ -156,12 +172,13 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	// 9. СБОРКА APP
 	// ============================================================
 	return &App{
-		grpcServer: s,
-		listener:   lis,
-		logger:     log,
-		config:     cfg,
-		pool:       pool,
-		httpServer: httpSrv,
+		grpcServer:  s,
+		listener:    lis,
+		logger:      log,
+		config:      cfg,
+		pool:        pool,
+		redisClient: redisClient,
+		httpServer:  httpSrv,
 	}, nil
 }
 
@@ -197,14 +214,18 @@ func (a *App) Close() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// 1. Закрываем HTTP-сервер (healthcheck + metrics)
 	if a.httpServer != nil {
 		if err := a.httpServer.Shutdown(ctx); err != nil {
 			a.logger.Error("HTTP server shutdown error", "error", err)
 		}
 	}
 
-	// 2. Закрываем пул соединений с БД
+	if a.redisClient != nil {
+		if err := a.redisClient.Close(); err != nil {
+			a.logger.Error("redis close error", "error", err)
+		}
+	}
+
 	if a.pool != nil {
 		a.pool.Close()
 	}

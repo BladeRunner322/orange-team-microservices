@@ -57,6 +57,21 @@ func (c *AuthClient) Login(ctx context.Context, email, password string) (*auth.L
 	return c.client.Login(ctx, req)
 }
 
+func (c *AuthClient) RefreshToken(ctx context.Context, refreshToken string) (*auth.RefreshTokenResponse, error) {
+	req := &auth.RefreshTokenRequest{
+		RefreshToken: refreshToken,
+	}
+	return c.client.RefreshToken(ctx, req)
+}
+
+func (c *AuthClient) Logout(ctx context.Context, refreshToken string) error {
+	req := &auth.LogoutRequest{
+		RefreshToken: refreshToken,
+	}
+	_, err := c.client.Logout(ctx, req)
+	return err
+}
+
 func (c *AuthClient) Close() {
 	if c.conn != nil {
 		c.conn.Close()

@@ -70,6 +70,25 @@ services:
     restart: unless-stopped
 
   # ============================================================
+  #  AUTH SERVICE – REDIS (refresh tokens)
+  # ============================================================
+  redis-auth:
+    image: redis:7-alpine
+    container_name: auth-redis
+    env_file:
+      - .env
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redisdata:/data
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  # ============================================================
   #  API GATEWAY – HTTP → gRPC
   # ============================================================
   gateway:
@@ -144,3 +163,4 @@ services:
 volumes:
   pgdata:
   grafana-storage:
+  redisdata:

@@ -17,17 +17,23 @@ type Server struct {
 	registerUC      *usecases.Register
 	loginUC         *usecases.Login
 	validateTokenUC *usecases.Validate
+	refreshTokenUC  *usecases.RefreshToken
+	logoutUC        *usecases.Logout
 }
 
 func NewServer(
 	registerUC *usecases.Register,
 	loginUC *usecases.Login,
 	validateTokenUC *usecases.Validate,
+	refreshTokenUC *usecases.RefreshToken,
+	logoutUC *usecases.Logout,
 ) *Server {
 	return &Server{
 		registerUC:      registerUC,
 		loginUC:         loginUC,
 		validateTokenUC: validateTokenUC,
+		refreshTokenUC:  refreshTokenUC,
+		logoutUC:        logoutUC,
 	}
 }
 
@@ -53,14 +59,15 @@ func (s *Server) Register(ctx context.Context, req *auth.RegisterRequest) (*auth
 
 func (s *Server) Login(ctx context.Context, req *auth.LoginRequest) (*auth.LoginResponse, error) {
 	email, password := ToDomainLoginParams(req)
-	token, err := s.loginUC.Execute(ctx, email, password)
+	result, err := s.loginUC.Execute(ctx, email, password)
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidCredentials) {
 			return nil, status.Error(codes.Unauthenticated, "invalid credentials")
 		}
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
-	return ToProtoLoginResponse(token), nil
+
+	return ToProtoLoginResponse(result.AccessToken, result.RefreshToken), nil
 }
 
 func (s *Server) ValidateToken(ctx context.Context, req *auth.ValidateTokenRequest) (*auth.ValidateTokenResponse, error) {
@@ -70,4 +77,32 @@ func (s *Server) ValidateToken(ctx context.Context, req *auth.ValidateTokenReque
 		return &auth.ValidateTokenResponse{Valid: false}, nil
 	}
 	return ToProtoValidateTokenResponse(userID, true), nil
+}
+
+func (s *Server) RefreshToken(
+	ctx context.Context,
+	req *auth.RefreshTokenRequest,
+) (*auth.RefreshTokenResponse, error) {
+	result, err := s.refreshTokenUC.Execute(ctx, req.RefreshToken)
+	if err != nil {
+		if errors.Is(err, domain.ErrInvalidRefreshToken) {
+			return nil, status.Error(codes.Unauthenticated, "invalid refresh token")
+		}
+		return nil, status.Error(codes.Internal, "internal server error")
+	}
+	return ToProtoRefreshTokenResponse(result.AccessToken, result.RefreshToken), nil
+}
+
+func (s *Server) Logout(
+	ctx context.Context,
+	req *auth.LogoutRequest,
+) (*auth.LogoutResponse, error) {
+	err := s.logoutUC.Execute(ctx, req.RefreshToken)
+	if err != nil {
+		if errors.Is(err, domain.ErrInvalidRefreshToken) {
+			return nil, status.Error(codes.InvalidArgument, "invalid refresh token")
+		}
+		return nil, status.Error(codes.Internal, "internal server error")
+	}
+	return &auth.LogoutResponse{}, nil
 }
