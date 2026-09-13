@@ -10,7 +10,6 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/auth"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/grpc/interceptors"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
-	"github.com/BladeRunner322/orange-team-microservices/pkg/metrics"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/redis"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/config"
@@ -91,8 +90,11 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	// ============================================================
 	// 5. МЕТРИКИ (PROMETHEUS)
 	// ============================================================
-	metrics.Register()
-	log.Info("metrics registered")
+	// gRPC-метрики (grpc_requests_total, grpc_request_duration_ms,
+	// grpc_requests_in_flight) регистрируются в promauto при импорте
+	// pkg/metrics. Пакет подтягивается транзитивно через pkg/grpc/interceptors
+	// (см. interceptors.MetricsInterceptor).
+	log.Info("metrics enabled")
 
 	// ============================================================
 	// 6. gRPC СЕРВЕР С ИНТЕРСЕПТОРАМИ
@@ -162,7 +164,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 
 	// Запускаем HTTP-сервер в горутине
 	go func() {
-		log.Info("HTTP server listening", "addr", cfg.HTTPPort, "endpoints", "/health, /ready, /metrics")
+		log.Info("HTTP server listening", "addr", cfg.HTTPPort, "endpoints", "/health, /metrics")
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Error("HTTP server failed", "error", err)
 		}

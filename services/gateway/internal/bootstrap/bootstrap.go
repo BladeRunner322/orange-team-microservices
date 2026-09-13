@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimid "github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/ratelimit"
@@ -51,11 +52,15 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	// 3. Rate limiter
 	limiter := ratelimit.NewLimiter(redisClient.Client)
 
+	// 3.1. Readiness handler (проверяет зависимости)
+	readinessHandler := handlers.NewReadinessHandler(redisClient)
+
 	// 4. Роутер
 	r := chi.NewRouter()
 	r.Use(middleware.RequestIDMiddleware)
 	r.Use(middleware.LoggerMiddleware(log))
 	r.Use(chimid.Recoverer)
+	r.Use(middleware.HTTPMetricsMiddleware)
 
 	// 5. Публичные маршруты (rate limit по IP/email)
 	rateLimitPublic := middleware.RateLimitMiddleware(limiter, cfg.RateLimit, log)
@@ -64,6 +69,9 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Use(rateLimitPublic)
 
 		r.Get("/health", handlers.HealthHandler)
+		r.Get("/ready", readinessHandler.Handle)
+		r.Handle("/metrics", promhttp.Handler())
+
 		r.Post("/register", handlers.RegisterHandler(authClient))
 		r.Post("/login", handlers.LoginHandler(authClient))
 		r.Post("/refresh", handlers.RefreshHandler(authClient))

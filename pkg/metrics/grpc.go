@@ -6,8 +6,8 @@ import (
 )
 
 var (
-	// RequestsTotal общее количество запросов по методу и статусу
-	RequestsTotal = promauto.NewCounterVec(
+	// GRPCRequestsTotal — общее количество gRPC-запросов по методу и статусу.
+	GRPCRequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "grpc_requests_total",
 			Help: "Total number of gRPC requests",
@@ -15,8 +15,8 @@ var (
 		[]string{"method", "status"},
 	)
 
-	// RequestDuration длительность запросов в миллисекундах
-	RequestDuration = promauto.NewHistogramVec(
+	// GRPCRequestDuration — длительность gRPC-запросов в миллисекундах.
+	GRPCRequestDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "grpc_request_duration_ms",
 			Help:    "Duration of gRPC requests in milliseconds",
@@ -25,16 +25,11 @@ var (
 		[]string{"method"},
 	)
 
-	// RequestsInFlight количество запросов в обработке
-	RequestsInFlight = promauto.NewGauge(
+	// GRPCRequestsInFlight — количество gRPC-запросов в обработке.
+	GRPCRequestsInFlight = promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "grpc_requests_in_flight",
 			Help: "Number of gRPC requests currently being processed",
 		},
 	)
 )
-
-// Register регистрирует все метрики (вызывается при старте)
-func Register() {
-	// Метрики уже зарегистрированы через promauto
-}

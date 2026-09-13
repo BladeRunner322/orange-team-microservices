@@ -231,7 +231,7 @@ orange-team-microservices/
 │   ├── grpc/
 │   │   └── interceptors/             # gRPC-интерсепторы (логирование, метрики, recovery)
 │   ├── logger/                       # структурированное логирование (slog)
-│   ├── metrics/                      # метрики Prometheus
+│   ├── metrics/                      # метрики Prometheus (grpc.go, http.go)
 │   ├── postgres/                     # пул соединений pgx, конфиг, адаптеры, ошибки
 │   ├── ratelimit/                    # Token Bucket на Redis (rate limiting)
 │   └── redis/                        # клиент Redis (refresh tokens, rate limiting)
@@ -711,27 +711,31 @@ curl http://localhost:8090/health
   | `task gateway:restart` | Перезапуск (rebuild + up) |
   | `task gateway:logs` | Просмотр логов Gateway |
 
-#### Healthcheck
+#### Healthcheck и readiness
 
-Gateway предоставляет HTTP-эндпоинт для проверки состояния:
+Gateway предоставляет три служебных HTTP-эндпоинта:
 
-- **Порт:** `8081` (Docker) / `8091` (локально)
-- **Эндпоинт:** `/health`
-- **Ответ:** `{"status":"ok","service":"gateway"}`
+| Эндпоинт | Назначение | Ответ |
+|----------|------------|-------|
+| `/health` | Liveness — процесс жив | `{"status":"ok","service":"gateway"}` |
+| `/ready` | Readiness — зависимости доступны (Redis) | `{"status":"ok","checks":{"redis":"ok"}}` или `503` |
+| `/metrics` | Prometheus-метрики | text/plain |
 
-Проверка:
+**Проверка:**
 
-**Docker:**
 ```bash
 curl http://localhost:8081/health
+curl http://localhost:8081/ready
+curl http://localhost:8081/metrics
 ```
 
-**Локально (после `task gateway:run`):**
-```bash
-curl http://localhost:8091/health
+Если Redis недоступен, `/ready` вернёт `503` с описанием:
+
+```json
+{"status":"not_ready","checks":{"redis":"fail: dial tcp ..."}}
 ```
 
-> 💡 Этот эндпоинт используется Docker healthcheck'ом — если он не отвечает, контейнер помечается как `unhealthy` и может быть перезапущен.
+> 💡 `/health` используется Docker healthcheck'ом. `/ready` — для внешнего балансировщика (не направлять трафик в инстанс, пока он не готов).
 
 #### Маршруты
 
@@ -1013,7 +1017,7 @@ curl -X POST http://localhost:8081/exercises \
    - Обновление кода (`git pull origin main`).
    - Логин в GHCR.
    - `docker compose pull auth gateway` — скачивание свежих образов.
-   - `docker compose up -d auth gateway` — перезапуск контейнеров.
+   - `docker compose up -d --no-build auth gateway` — перезапуск контейнеров из скачанных образов (без локальной сборки).
 
 ### Секреты GitHub Actions
 
@@ -1028,14 +1032,30 @@ curl -X POST http://localhost:8081/exercises \
 ### Проверка после деплоя
 
 После успешного CD проверь на сервере:
+
+**Health:**
+
 ```bash
-curl http://<SERVER_HOST>:8081/health # Gateway
-```
-```bash
-curl http://<SERVER_HOST>:8080/health # Auth
+curl http://<SERVER_HOST>:8081/health   # Gateway
+curl http://<SERVER_HOST>:8080/health   # Auth
 ```
 
-Оба должны вернуть `{"status":"ok"}`.
+Оба должны вернуть `{"status":"ok","service":"..."}`.
+
+**Ready:**
+
+```bash
+curl http://<SERVER_HOST>:8081/ready    # Gateway → проверка Redis
+```
+
+Должен вернуть `{"status":"ok","checks":{"redis":"ok"}}`.
+
+**Prometheus targets:**
+
+Открой `http://<SERVER_HOST>:9090` → **Status → Targets**. Оба job'а должны быть в статусе **UP**:
+
+- `auth` — target `auth:8080`
+- `gateway` — target `gateway:8081`
 
 ### Обновление `.env` на сервере
 
@@ -1080,24 +1100,38 @@ curl http://<SERVER_HOST>:8080/health # Auth
 
 ### Метрики (Prometheus)
 
-**Auth-сервис** предоставляет эндпоинт с метриками:
+Оба сервиса отдают метрики в формате Prometheus.
+
+**Auth-сервис:**
 
 - **Порт:** `8080` (Docker) / `8090` (локально)
 - **Эндпоинт:** `/metrics`
 
-Проверка:
+Метрики:
+- `grpc_requests_total` — количество gRPC-запросов (method, status)
+- `grpc_request_duration_ms` — длительность gRPC-запросов в мс
+- `grpc_requests_in_flight` — gRPC-запросы в обработке
 
-**Docker:**
+**Gateway:**
+
+- **Порт:** `8081` (Docker) / `8091` (локально)
+- **Эндпоинт:** `/metrics`
+
+Метрики:
+- `http_requests_total` — количество HTTP-запросов (method, path, status)
+- `http_request_duration_seconds` — длительность HTTP-запросов в секундах
+- `http_requests_in_flight` — HTTP-запросы в обработке
+
+Плюс транзитивно подтягиваются gRPC-метрики исходящих вызовов в Auth.
+
+**Путь нормализуется** через chi RoutePattern, чтобы `/workouts/123` и `/workouts/456` не создавали отдельные серии (защита от взрыва кардинальности).
+
+**Проверка:**
+
 ```bash
-curl http://localhost:8080/metrics
+curl http://localhost:8080/metrics   # Auth
+curl http://localhost:8081/metrics   # Gateway
 ```
-
-**Локально:**
-```bash
-curl http://localhost:8090/metrics
-```
-
-**Gateway** пока не отдаёт метрики через HTTP. В будущем планируется добавить `/metrics` эндпоинт с HTTP-метриками (количество запросов, длительность, статусы).
 
 ### Логи (Loki + Promtail)
 
@@ -1127,7 +1161,10 @@ Grafana доступна по адресу: `http://localhost:3000`
 Дашборд нужно создать вручную: **+ → Create dashboard** → добавить панели с запросами к Prometheus (метрики) и Loki (логи). Пример запросов:
 
 - `grpc_requests_total` — общее количество gRPC-запросов
-- `grpc_request_duration_ms_bucket` — длительность запросов
+- `grpc_request_duration_ms_bucket` — длительность gRPC-запросов
+- `http_requests_total` — общее количество HTTP-запросов Gateway
+- `http_request_duration_seconds_bucket` — длительность HTTP-запросов
+- `rate(http_requests_total[1m])` — RPS по эндпоинтам
 - `{service="auth"}` — логи Auth в Loki
 - `{service="gateway"}` — логи Gateway в Loki
 
