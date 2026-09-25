@@ -17,11 +17,11 @@
 
 В монолите профиль был необязательным — можно было зарегистрироваться и никогда не заполнить вес/рост. `personal_score_coefficient` в `CreateWorkout` возвращал `1`, если `weight_grams` или `height_cm` NULL:
 
-\`\`\`go
+```go
 if user.WeightGrams == nil || user.HeightCM == nil {
     return 1
 }
-\`\`\`
+```
 
 То есть пустой профиль не блокировал создание тренировок.
 

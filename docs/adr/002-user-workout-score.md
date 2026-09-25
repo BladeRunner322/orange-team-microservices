@@ -4,14 +4,14 @@
 
 В монолите поле `app.users.user_workout_score` — денормализация. Пересчитывалось при каждом изменении тренировки:
 
-\`\`\`sql
+```sql
 UPDATE app.users
 SET user_workout_score = (
     SELECT COALESCE(SUM(workout_score), 0)
     FROM app.workouts
     WHERE user_id = $1 AND status = 'completed'
 )
-\`\`\`
+```
 
 Триггеры пересчёта:
 
