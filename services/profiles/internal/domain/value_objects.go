@@ -2,6 +2,7 @@ package domain
 
 import (
 	"math"
+	"time"
 )
 
 // Sex — value object пола.
@@ -53,42 +54,59 @@ func (w Weight) Kilograms() float64 {
 	return float64(w) / 1000
 }
 
-// // BirthDate — value object даты рождения.
-// type BirthDate time.Time
+// BirthDate — value object даты рождения.
+type BirthDate time.Time
 
-// const (
-// 	MinBirthYear = 1900
-// )
+const (
+	MinBirthYear = 1900
+	MinAge       = 12
+)
 
-// func NewBirthDate(date time.Time) (BirthDate, error) {
-// 	// TODO: проверка "не раньше MinBirthYear"
-// 	// TODO: проверка "не позже time.Now()"
-// 	// TODO: return BirthDate(date), nil
-// }
+func NewBirthDate(date time.Time) (BirthDate, error) {
+	minDate := time.Date(MinBirthYear, 1, 1, 0, 0, 0, 0, time.UTC)
+	today := time.Now().UTC()
 
-// func (b BirthDate) Time() time.Time {
-// 	// TODO
-// }
+	if date.Before(minDate) || date.After(today) {
+		return BirthDate{}, ErrInvalidBirthDate
+	}
 
-// func (b BirthDate) String() string {
-// 	// TODO: формат YYYY-MM-DD
-// }
+	years := today.Year() - date.Year()
+	if today.Month() < date.Month() ||
+		(today.Month() == date.Month() && today.Day() < date.Day()) {
+		years--
+	}
 
-// // Height — value object роста.
-// type Height int
+	if years < MinAge {
+		return BirthDate{}, ErrInvalidBirthDate
+	}
 
-// // Границы
-// const (
-// 	MinHeightCM = 140
-// 	MaxHeightCM = 210
-// )
+	return BirthDate(date), nil
+}
 
-// func NewHeight(cm int) (Height, error) {
-// 	// TODO: проверка диапазона
-// 	// TODO: return Height(cm), nil
+func (b BirthDate) Time() time.Time {
+	return time.Time(b)
+}
 
-// }
+func (b BirthDate) String() string {
+	return b.Time().UTC().Format("2006-01-02")
+}
 
-// func (h Height) Centimeters() int {
-// 	// TODO
-// }
+// Height — value object роста.
+type Height int
+
+const (
+	MinHeightCM = 140
+	MaxHeightCM = 210
+)
+
+func NewHeight(cm int) (Height, error) {
+	if cm < MinHeightCM || cm > MaxHeightCM {
+		return 0, ErrInvalidHeight
+	}
+
+	return Height(cm), nil
+}
+
+func (h Height) Centimeters() int {
+	return int(h)
+}
