@@ -60,7 +60,7 @@ func (*GetMyProfileRequest) Descriptor() ([]byte, []int) {
 type PatchMyProfileRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Sex           *string                `protobuf:"bytes,1,opt,name=sex,proto3,oneof" json:"sex,omitempty"`
-	WeightGrams   *int32                 `protobuf:"varint,2,opt,name=weight_grams,json=weightGrams,proto3,oneof" json:"weight_grams,omitempty"`
+	WeightKg      *float64               `protobuf:"fixed64,2,opt,name=weight_kg,json=weightKg,proto3,oneof" json:"weight_kg,omitempty"`
 	BirthDate     *string                `protobuf:"bytes,3,opt,name=birth_date,json=birthDate,proto3,oneof" json:"birth_date,omitempty"`
 	HeightCm      *int32                 `protobuf:"varint,4,opt,name=height_cm,json=heightCm,proto3,oneof" json:"height_cm,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -104,9 +104,9 @@ func (x *PatchMyProfileRequest) GetSex() string {
 	return ""
 }
 
-func (x *PatchMyProfileRequest) GetWeightGrams() int32 {
-	if x != nil && x.WeightGrams != nil {
-		return *x.WeightGrams
+func (x *PatchMyProfileRequest) GetWeightKg() float64 {
+	if x != nil && x.WeightKg != nil {
+		return *x.WeightKg
 	}
 	return 0
 }
@@ -209,7 +209,7 @@ type UserProfile struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	UserId           string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	Sex              string                 `protobuf:"bytes,2,opt,name=sex,proto3" json:"sex,omitempty"`
-	WeightGrams      int32                  `protobuf:"varint,3,opt,name=weight_grams,json=weightGrams,proto3" json:"weight_grams,omitempty"`
+	WeightKg         float64                `protobuf:"fixed64,3,opt,name=weight_kg,json=weightKg,proto3" json:"weight_kg,omitempty"`
 	BirthDate        string                 `protobuf:"bytes,4,opt,name=birth_date,json=birthDate,proto3" json:"birth_date,omitempty"`
 	HeightCm         int32                  `protobuf:"varint,5,opt,name=height_cm,json=heightCm,proto3" json:"height_cm,omitempty"`
 	ProfileCompleted bool                   `protobuf:"varint,6,opt,name=profile_completed,json=profileCompleted,proto3" json:"profile_completed,omitempty"`
@@ -261,9 +261,9 @@ func (x *UserProfile) GetSex() string {
 	return ""
 }
 
-func (x *UserProfile) GetWeightGrams() int32 {
+func (x *UserProfile) GetWeightKg() float64 {
 	if x != nil {
-		return x.WeightGrams
+		return x.WeightKg
 	}
 	return 0
 }
@@ -330,25 +330,26 @@ var File_profiles_profiles_proto protoreflect.FileDescriptor
 const file_profiles_profiles_proto_rawDesc = "" +
 	"\n" +
 	"\x17profiles/profiles.proto\x12\bprofiles\"\x15\n" +
-	"\x13GetMyProfileRequest\"\xd2\x01\n" +
+	"\x13GetMyProfileRequest\"\xc9\x01\n" +
 	"\x15PatchMyProfileRequest\x12\x15\n" +
-	"\x03sex\x18\x01 \x01(\tH\x00R\x03sex\x88\x01\x01\x12&\n" +
-	"\fweight_grams\x18\x02 \x01(\x05H\x01R\vweightGrams\x88\x01\x01\x12\"\n" +
+	"\x03sex\x18\x01 \x01(\tH\x00R\x03sex\x88\x01\x01\x12 \n" +
+	"\tweight_kg\x18\x02 \x01(\x01H\x01R\bweightKg\x88\x01\x01\x12\"\n" +
 	"\n" +
 	"birth_date\x18\x03 \x01(\tH\x02R\tbirthDate\x88\x01\x01\x12 \n" +
 	"\theight_cm\x18\x04 \x01(\x05H\x03R\bheightCm\x88\x01\x01B\x06\n" +
-	"\x04_sexB\x0f\n" +
-	"\r_weight_gramsB\r\n" +
+	"\x04_sexB\f\n" +
+	"\n" +
+	"_weight_kgB\r\n" +
 	"\v_birth_dateB\f\n" +
 	"\n" +
 	"_height_cm\"\x18\n" +
 	"\x16DeleteMyProfileRequest\",\n" +
 	"\x11GetProfileRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"\xc4\x01\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\xbe\x01\n" +
 	"\vUserProfile\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x10\n" +
-	"\x03sex\x18\x02 \x01(\tR\x03sex\x12!\n" +
-	"\fweight_grams\x18\x03 \x01(\x05R\vweightGrams\x12\x1d\n" +
+	"\x03sex\x18\x02 \x01(\tR\x03sex\x12\x1b\n" +
+	"\tweight_kg\x18\x03 \x01(\x01R\bweightKg\x12\x1d\n" +
 	"\n" +
 	"birth_date\x18\x04 \x01(\tR\tbirthDate\x12\x1b\n" +
 	"\theight_cm\x18\x05 \x01(\x05R\bheightCm\x12+\n" +

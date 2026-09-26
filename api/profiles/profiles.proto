@@ -16,10 +16,10 @@ message GetMyProfileRequest {
 }
 
 message PatchMyProfileRequest {
-  optional string sex          = 1;
-  optional int32  weight_grams = 2;
-  optional string birth_date   = 3;
-  optional int32  height_cm    = 4;
+  optional string sex        = 1;
+  optional double weight_kg  = 2;
+  optional string birth_date = 3;
+  optional int32  height_cm  = 4;
 }
 
 message DeleteMyProfileRequest {
@@ -33,7 +33,7 @@ message GetProfileRequest {
 message UserProfile {
   string user_id           = 1;
   string sex               = 2;
-  int32  weight_grams      = 3;
+  double weight_kg         = 3;
   string birth_date        = 4;
   int32  height_cm         = 5;
   bool   profile_completed = 6;
