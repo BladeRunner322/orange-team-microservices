@@ -1,2 +1,0 @@
--- TODO: DROP TABLE users.profiles;
--- TODO: DROP SCHEMA users;

@@ -21,7 +21,7 @@ SET user_workout_score = (
 
 Транзакции вокруг этих операций **не было** — то есть в монолите уже существовал риск рассинхрона `workout_score` и `user_workout_score`.
 
-В микросервисах `workouts` и `users` — разные БД. Прямой `SELECT ... FROM workouts` из Users **невозможен**.
+В микросервисах `workouts` и `profiles` — разные БД. Прямой `SELECT ... FROM workouts` из Profiles **невозможен**.
 
 ## Решение
 
@@ -30,11 +30,11 @@ SET user_workout_score = (
 - **Источник истины:** таблица `workouts` (в Workouts-сервисе).
 - **Вычисление:** `SUM(workout_score) WHERE user_id = ? AND status = 'completed'`, считает Workouts по запросу.
 - **Как отдаётся клиенту:** `GET /users/me` в Gateway делает два **параллельных** gRPC-вызова:
-  - `Users.GetProfile(user_id)` → профиль
+  - `Profiles.GetProfile(user_id)` → профиль
   - `Workouts.GetUserScore(user_id)` → сумма очков
   - склеивает в один HTTP-ответ
 
-**Никаких событий `workout.completed` в Users.** Никаких distributed-транзакций.
+**Никаких событий `workout.completed` в Profiles.** Никаких distributed-транзакций.
 
 ## Последствия
 
@@ -48,12 +48,12 @@ SET user_workout_score = (
 
 **Минусы:**
 
-- `GET /users/me` делает 2 gRPC-вызова вместо одного. Latency = `max(t_users, t_workouts)`, а не сумма, так как параллельно.
+- `GET /users/me` делает 2 gRPC-вызова вместо одного. Latency = `max(t_profiles, t_workouts)`, а не сумма, так как параллельно.
 - `SUM(workout_score)` — полносканирующий запрос по `workouts`. Нужен индекс `(user_id, status)`.
 
 **Когда пересмотреть:**
 
-- Если `GET /users/me` станет горячим (десятки RPS на пользователя) — кэш в Redis на 30–60 секунд или event-driven кэш в Users.
+- Если `GET /users/me` станет горячим (десятки RPS на пользователя) — кэш в Redis на 30–60 секунд или event-driven кэш в Profiles.
 - Если пользователей станет очень много и SUM начнёт тормозить — материализованное представление или инкрементальное обновление через события.
 
 ## Связанные решения
