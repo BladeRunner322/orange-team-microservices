@@ -1,6 +1,10 @@
 package domain
 
-import "github.com/google/uuid"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Profile struct {
 	userID    uuid.UUID
@@ -8,6 +12,8 @@ type Profile struct {
 	weight    *Weight
 	birthDate *BirthDate
 	height    *Height
+	createdAt time.Time
+	updatedAt *time.Time
 }
 
 // NewProfile создаёт профиль с указанными полями.
@@ -18,6 +24,29 @@ func NewProfile(userID uuid.UUID, sex *Sex, weight *Weight, birthDate *BirthDate
 		weight:    weight,
 		birthDate: birthDate,
 		height:    height,
+		createdAt: time.Now().UTC(),
+		updatedAt: nil,
+	}
+}
+
+// RestoreProfile восстанавливает профиль из БД (для маппинга).
+func RestoreProfile(
+	userID uuid.UUID,
+	sex *Sex,
+	weight *Weight,
+	birthDate *BirthDate,
+	height *Height,
+	createdAt time.Time,
+	updatedAt *time.Time,
+) Profile {
+	return Profile{
+		userID:    userID,
+		sex:       sex,
+		weight:    weight,
+		birthDate: birthDate,
+		height:    height,
+		createdAt: createdAt,
+		updatedAt: updatedAt,
 	}
 }
 
@@ -37,3 +66,5 @@ func (p Profile) Sex() *Sex             { return p.sex }
 func (p Profile) Weight() *Weight       { return p.weight }
 func (p Profile) BirthDate() *BirthDate { return p.birthDate }
 func (p Profile) Height() *Height       { return p.height }
+func (p Profile) CreatedAt() time.Time  { return p.createdAt }
+func (p Profile) UpdatedAt() *time.Time { return p.updatedAt }
