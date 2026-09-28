@@ -1,4 +1,18 @@
-// Package postgres_repo — модель для маппинга с таблицей profiles.users.
 package postgres_repo
 
-// TODO: type ProfileModel struct — все поля таблицы
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// ProfileModel — модель для маппинга с таблицей profiles.users.
+type ProfileModel struct {
+	UserID      uuid.UUID
+	Sex         *string
+	WeightGrams *int
+	BirthDate   *time.Time
+	HeightCM    *int
+	CreatedAt   time.Time
+	UpdatedAt   *time.Time
+}
