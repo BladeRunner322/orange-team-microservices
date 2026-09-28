@@ -5,6 +5,7 @@ package postgres_repo
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -59,20 +60,18 @@ func TestRepository_Integration(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { pool.Close() })
 
-	// 4. Создаём схему и таблицу (аналог миграции 000001 + 000002)
-	_, err = pool.Exec(ctx, `
-		CREATE SCHEMA IF NOT EXISTS auth;
-		CREATE TABLE IF NOT EXISTS auth.users (
-			id UUID PRIMARY KEY,
-			email TEXT UNIQUE NOT NULL,
-			password_hash TEXT NOT NULL,
-			full_name TEXT NOT NULL,
-			role VARCHAR(16) NOT NULL DEFAULT 'user',
-			created_at TIMESTAMPTZ NOT NULL,
-			updated_at TIMESTAMPTZ
-		);
-	`)
-	require.NoError(t, err)
+	// 4. Применяем реальные миграции из файлов в порядке номеров.
+	// Это гарантирует, что тест проверяет ту же схему, что и прод.
+	migrationFiles := []string{
+		"../../../migrations/000001_create_users_table.up.sql",
+		"../../../migrations/000002_add_role.up.sql",
+	}
+	for _, path := range migrationFiles {
+		content, err := os.ReadFile(path)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, string(content))
+		require.NoError(t, err)
+	}
 
 	// 5. Создаём репозиторий поверх пула
 	repo := NewRepository(pool)
@@ -84,7 +83,7 @@ func TestRepository_Integration(t *testing.T) {
 func runRepositoryTests(t *testing.T, repo *Repository) {
 	ctx := context.Background()
 
-	// Хелпер: создаёт доменного пользователя с заданным email
+	// newUser создаёт доменного пользователя с заданным email.
 	newUser := func(email string) domain.User {
 		e, _ := domain.NewEmail(email)
 		passHash, _ := domain.NewPasswordHash("$2a$10$dummyhash")
@@ -127,13 +126,7 @@ func runRepositoryTests(t *testing.T, repo *Repository) {
 	})
 
 	t.Run("FindByID not found returns ErrUserNotFound", func(t *testing.T) {
-		// случайный UUID, которого точно нет
-		id := domain.User{}.ID() // нулевой UUID
-		_ = id
-
-		// используем uuid.New() из google/uuid — но чтобы не тащить импорт,
-		// сделаем проще: создадим пользователя, получим id, но не сохраним.
-		// Нет, лучше честный UUID, которого нет в БД:
+		// Пользователь создан в памяти, но не сохранён в БД.
 		u := newUser("ghost@example.com")
 
 		_, err := repo.FindByID(ctx, u.ID())
@@ -141,14 +134,12 @@ func runRepositoryTests(t *testing.T, repo *Repository) {
 		assert.ErrorIs(t, err, domain.ErrUserNotFound)
 	})
 
-	// ГЛАВНЫЙ ТЕСТ для race-фикса:
-	// Repository.Save должен возвращать domain.ErrEmailAlreadyExists,
-	// а не сырую ошибку postgres.ErrViolatesUnique.
 	t.Run("Save returns ErrEmailAlreadyExists on duplicate", func(t *testing.T) {
 		user1 := newUser("dup@example.com")
 		require.NoError(t, repo.Save(ctx, user1))
 
-		// Второй пользователь с тем же email
+		// Второй пользователь с тем же email — unique violation должен
+		// превратиться в доменную ошибку.
 		user2 := newUser("dup@example.com")
 		err := repo.Save(ctx, user2)
 
