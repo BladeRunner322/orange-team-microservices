@@ -9,4 +9,5 @@ var (
 	ErrInvalidWeight    = errors.New("invalid weight")
 	ErrInvalidHeight    = errors.New("invalid height")
 	ErrInvalidBirthDate = errors.New("invalid birth date")
+	ErrUnauthenticated  = errors.New("unauthenticated")
 )

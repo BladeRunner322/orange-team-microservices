@@ -60,6 +60,26 @@ func (p Profile) Completed() bool {
 	return p.sex != nil && p.weight != nil && p.birthDate != nil && p.height != nil
 }
 
+// ApplyPatch применяет патч: каждое поле с Set устанавливается, остальные не трогаются.
+func (p *Profile) ApplyPatch(patch ProfilePatch) {
+
+	if patch.Sex.Set {
+		p.sex = patch.Sex.Value
+	}
+
+	if patch.Weight.Set {
+		p.weight = patch.Weight.Value
+	}
+
+	if patch.BirthDate.Set {
+		p.birthDate = patch.BirthDate.Value
+	}
+
+	if patch.Height.Set {
+		p.height = patch.Height.Value
+	}
+}
+
 // Геттеры (публичные)
 func (p Profile) UserID() uuid.UUID     { return p.userID }
 func (p Profile) Sex() *Sex             { return p.sex }
