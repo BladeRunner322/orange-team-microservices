@@ -37,7 +37,10 @@ func NewServer(
 	}
 }
 
-func (s *Server) Register(ctx context.Context, req *auth.RegisterRequest) (*auth.RegisterResponse, error) {
+func (s *Server) Register(
+	ctx context.Context,
+	req *auth.RegisterRequest,
+) (*auth.RegisterResponse, error) {
 	email, password, fullName := ToDomainRegisterParams(req)
 	user, err := s.registerUC.Execute(ctx, email, password, fullName)
 	if err != nil {
@@ -57,7 +60,10 @@ func (s *Server) Register(ctx context.Context, req *auth.RegisterRequest) (*auth
 	return ToProtoRegisterResponse(user), nil
 }
 
-func (s *Server) Login(ctx context.Context, req *auth.LoginRequest) (*auth.LoginResponse, error) {
+func (s *Server) Login(
+	ctx context.Context,
+	req *auth.LoginRequest,
+) (*auth.LoginResponse, error) {
 	email, password := ToDomainLoginParams(req)
 	result, err := s.loginUC.Execute(ctx, email, password)
 	if err != nil {
@@ -70,7 +76,10 @@ func (s *Server) Login(ctx context.Context, req *auth.LoginRequest) (*auth.Login
 	return ToProtoLoginResponse(result.AccessToken, result.RefreshToken), nil
 }
 
-func (s *Server) ValidateToken(ctx context.Context, req *auth.ValidateTokenRequest) (*auth.ValidateTokenResponse, error) {
+func (s *Server) ValidateToken(
+	ctx context.Context,
+	req *auth.ValidateTokenRequest,
+) (*auth.ValidateTokenResponse, error) {
 	token := ToDomainValidateTokenParams(req)
 	info, err := s.validateTokenUC.Execute(ctx, token)
 	if err != nil {
