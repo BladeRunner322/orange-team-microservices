@@ -24,7 +24,7 @@ type RateLimitConfig struct {
 }
 
 type Config struct {
-	HTTPPort     string        `envconfig:"GATEWAY_HTTP_PORT" default:":8080"`
+	HTTPPort     string        `envconfig:"GATEWAY_HTTP_PORT" default:":8081"`
 	AuthGRPCAddr string        `envconfig:"AUTH_GRPC_ADDR" required:"true"`
 	Timeout      time.Duration `envconfig:"GATEWAY_TIMEOUT" default:"10s"`
 	EnableTLS    bool          `envconfig:"ENABLE_TLS" default:"false"`
