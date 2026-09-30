@@ -4,8 +4,8 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/domain"
 )
 
-// UserModelToDomain преобразует модель БД в доменную сущность.
-func UserModelToDomain(m UserModel) (domain.User, error) {
+// ModelToDomain преобразует модель БД в доменную сущность.
+func ModelToDomain(m UserModel) (domain.User, error) {
 	email, err := domain.NewEmail(m.Email)
 	if err != nil {
 		return domain.User{}, err
@@ -23,11 +23,19 @@ func UserModelToDomain(m UserModel) (domain.User, error) {
 		return domain.User{}, err
 	}
 	// Используем специальный конструктор для восстановления
-	return domain.RestoreUser(m.ID, email, passHash, fullName, role, m.CreatedAt, m.UpdatedAt), nil
+	return domain.RestoreUser(
+		m.ID,
+		email,
+		passHash,
+		fullName,
+		role,
+		m.CreatedAt,
+		m.UpdatedAt,
+	), nil
 }
 
-// DomainToUserModel преобразует доменную сущность в модель БД.
-func DomainToUserModel(user domain.User) UserModel {
+// DomainToModel преобразует доменную сущность в модель БД.
+func DomainToModel(user domain.User) UserModel {
 	return UserModel{
 		ID:           user.ID(),
 		Email:        user.Email().String(),

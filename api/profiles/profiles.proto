@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package profiles;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "internal/gen/api/profiles";
+
+service ProfilesService {
+  rpc GetMyProfile(GetMyProfileRequest) returns (UserProfile);
+  rpc GetProfile(GetProfileRequest) returns (UserProfile);
+  rpc PatchMyProfile(PatchMyProfileRequest) returns (UserProfile);
+  rpc DeleteMyProfile(DeleteMyProfileRequest) returns (DeleteMyProfileResponse);
+}
+
+message NullableString {
+  optional string value = 1;
+}
+
+message NullableDouble {
+  optional double value = 1;
+}
+
+message NullableInt32 {
+  optional int32 value = 1;
+}
+
+message GetMyProfileRequest {
+  // пусто
+}
+
+message GetProfileRequest {
+  string user_id = 1;
+}
+
+message PatchMyProfileRequest {
+  NullableString sex        = 1;
+  NullableDouble weight_kg  = 2;
+  NullableString birth_date = 3;
+  NullableInt32  height_cm  = 4;
+}
+
+message DeleteMyProfileRequest {
+  // пусто
+}
+
+message UserProfile {
+  string                    user_id           = 1;
+  string                    sex               = 2;
+  double                    weight_kg         = 3;
+  string                    birth_date        = 4;
+  int32                     height_cm         = 5;
+  bool                      profile_completed = 6;
+  google.protobuf.Timestamp created_at        = 7;
+  google.protobuf.Timestamp updated_at        = 8;
+}
+
+message DeleteMyProfileResponse {
+  // пусто
+}

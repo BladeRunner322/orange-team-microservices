@@ -4,28 +4,22 @@
 name: CI/CD
 
 # ============================================================
-#  ТРИГГЕРЫ — когда запускать
+#  ТРИГГЕРЫ
 # ============================================================
 on:
   pull_request:
-    branches: [ main ]          # при открытии/обновлении PR в main
+    branches: [ main ]
   push:
-    branches: [ main ]          # при пуше в main (вливание)
+    branches: [ main ]
 
-# ============================================================
-#  ПЕРЕМЕННЫЕ
-# ============================================================
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
-# ============================================================
-#  ЗАДАЧИ
-# ============================================================
 jobs:
 
   # ------------------------------------------------------------
-  #  JOB 1: CI — проверка кода (тесты, сборка)
+  #  JOB 1: CI
   # ------------------------------------------------------------
   ci:
     name: CI - Test & Build
@@ -61,13 +55,16 @@ jobs:
       - name: Build Gateway Service (smoke test)
         run: go build -v ./services/gateway/cmd/...
 
+      - name: Build Profiles Service (smoke test)
+        run: go build -v ./services/profiles/cmd/...
+
   # ------------------------------------------------------------
-  #  JOB 2: CD — сборка образа, пуш в реестр и деплой на сервер
+  #  JOB 2: CD
   # ------------------------------------------------------------
   cd:
     name: CD - Build, Push & Deploy
     runs-on: ubuntu-latest
-    needs: ci                     # ждём успешного CI
+    needs: ci
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     permissions:
@@ -88,7 +85,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Определяем, какие сервисы изменились (чтобы собирать только нужные)
+      # Определяем, какие сервисы изменились
       - name: Get changed services
         id: changed-services
         uses: tj-actions/changed-files@v44
@@ -96,11 +93,12 @@ jobs:
           files: |
             services/auth/**
             services/gateway/**
+            services/profiles/**
             pkg/**
             go.mod
             go.sum
 
-      # Сборка и пуш образа auth, если были изменения в auth или общих пакетах
+      # Build & push Auth
       - name: Build and push Auth image
         if: steps.changed-services.outputs.any_changed == 'true'
         uses: docker/build-push-action@v6
@@ -112,7 +110,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/auth:latest
             ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/auth:${{ github.sha }}
 
-      # Сборка и пуш образа gateway, если были изменения в gateway или общих пакетах
+      # Build & push Gateway
       - name: Build and push Gateway image
         if: steps.changed-services.outputs.any_changed == 'true'
         uses: docker/build-push-action@v6
@@ -124,9 +122,19 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/gateway:latest
             ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/gateway:${{ github.sha }}
 
-      # ------------------------------------------------------------
-      #  ДЕПЛОЙ НА СЕРВЕР ПО SSH (путь /root/projects/orange-team-microservices)
-      # ------------------------------------------------------------
+      # Build & push Profiles
+      - name: Build and push Profiles image
+        if: steps.changed-services.outputs.any_changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./services/profiles/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/profiles:latest
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/profiles:${{ github.sha }}
+
+      # Деплой на сервер
       - name: Deploy to production server
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -136,28 +144,21 @@ jobs:
           script: |
             set -e
 
-            # Папка, куда будет клонироваться проект (ты создал её в ~/projects)
             PROJECT_DIR="/root/projects/orange-team-microservices"
 
-            # Если папки нет — клонируем репозиторий
             if [ ! -d "$PROJECT_DIR" ]; then
               git clone https://github.com/${{ github.repository }} $PROJECT_DIR
             fi
 
             cd $PROJECT_DIR
-
-            # Обновляем код (чтобы подтянуть изменения в docker-compose и т.д.)
             git pull origin main
 
-            # Логинимся в GitHub Container Registry (чтобы скачать приватный образ)
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Скачиваем свежие образы auth и gateway из GHCR
             docker compose pull auth
             docker compose pull gateway
+            docker compose pull profiles
 
-            # Перезапускаем контейнеры из скачанных образов, БЕЗ локальной сборки
-            docker compose up -d --no-build auth gateway
+            docker compose up -d --no-build auth gateway profiles
 
-            # Удаляем старые неиспользуемые образы (экономия места)
             docker image prune -f
