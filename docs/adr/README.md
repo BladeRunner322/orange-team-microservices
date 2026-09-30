@@ -17,6 +17,7 @@
 - [ADR-003: Транзакции](003-transactions.md)
 - [ADR-004: Паттерны микросервисов](004-microservices-patterns.md)
 - [ADR-005: Распределение портов](005-port-allocation.md)
+- [ADR-006: Управление секретами](006-secrets-management.md)
 
 ## Как добавить
 
