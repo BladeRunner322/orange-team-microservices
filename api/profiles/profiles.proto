@@ -26,7 +26,11 @@ message NullableInt32 {
 }
 
 message GetMyProfileRequest {
-    // пусто
+  // пусто
+}
+
+message GetProfileRequest {
+  string user_id = 1;
 }
 
 message PatchMyProfileRequest {
@@ -37,11 +41,7 @@ message PatchMyProfileRequest {
 }
 
 message DeleteMyProfileRequest {
-    // пусто
-}
-
-message GetProfileRequest {
-  string user_id = 1;
+  // пусто
 }
 
 message UserProfile {
@@ -56,5 +56,5 @@ message UserProfile {
 }
 
 message DeleteMyProfileResponse {
-    // пусто
+  // пусто
 }

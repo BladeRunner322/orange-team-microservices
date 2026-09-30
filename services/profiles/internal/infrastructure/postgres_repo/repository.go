@@ -111,7 +111,6 @@ func (r *Repository) Update(ctx context.Context, profile domain.Profile) error {
 	}
 
 	return nil
-
 }
 
 // Delete удаляет профиль по user_id.

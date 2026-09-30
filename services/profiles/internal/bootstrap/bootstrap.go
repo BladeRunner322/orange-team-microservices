@@ -73,7 +73,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 			interceptors.MetricsInterceptor(),
 			// 4.2. Восстановление после паники
 			interceptors.RecoveryInterceptor(log),
-			// 4.3. Извлечение user_id и role из metadata и положение их в контекст
+			// 4.3. Извлечение user_id и role из metadata и помещение их в контекст
 			interceptors.UserIDServerInterceptor(),
 			// 4.4. Логирование запросов
 			interceptors.LoggingInterceptor(log),

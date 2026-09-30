@@ -28,7 +28,8 @@ func TestRepository_Integration(t *testing.T) {
 		tcpostgres.WithUsername("testuser"),
 		tcpostgres.WithPassword("testpass"),
 		testcontainers.WithWaitStrategy(
-			wait.ForListeningPort("5432/tcp").
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
 				WithStartupTimeout(30*time.Second),
 		),
 	)

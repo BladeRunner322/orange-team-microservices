@@ -59,10 +59,11 @@ type BirthDate time.Time
 
 const (
 	MinBirthYear = 1900
-	MinAge       = 12
+	MinUserAge   = 12
 )
 
 func NewBirthDate(date time.Time) (BirthDate, error) {
+	date = date.UTC()
 	minDate := time.Date(MinBirthYear, 1, 1, 0, 0, 0, 0, time.UTC)
 	today := time.Now().UTC()
 
@@ -76,7 +77,7 @@ func NewBirthDate(date time.Time) (BirthDate, error) {
 		years--
 	}
 
-	if years < MinAge {
+	if years < MinUserAge {
 		return BirthDate{}, ErrInvalidBirthDate
 	}
 

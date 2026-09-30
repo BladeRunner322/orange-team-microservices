@@ -87,7 +87,7 @@ func TestNewWeightFromKilograms(t *testing.T) {
 	t.Run("80.3 кг → округление до 80300 (Round)", func(t *testing.T) {
 		w, err := NewWeightFromKilograms(80.3)
 		require.NoError(t, err)
-		// без math.Round было бы 80299 из-за float-погрешности
+		// math.Round защищает от float-погрешности 80.3 * 1000
 		assert.Equal(t, 80_300, w.Grams())
 	})
 
@@ -182,7 +182,7 @@ func TestNewBirthDate(t *testing.T) {
 		assert.ErrorIs(t, err, ErrInvalidBirthDate)
 	})
 
-	t.Run("5 лет — меньше MinAge", func(t *testing.T) {
+	t.Run("5 лет — меньше MinUserAge", func(t *testing.T) {
 		fiveYearsAgo := time.Now().UTC().AddDate(-5, 0, 0)
 		_, err := NewBirthDate(fiveYearsAgo)
 		assert.ErrorIs(t, err, ErrInvalidBirthDate)
