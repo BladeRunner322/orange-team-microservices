@@ -15,6 +15,8 @@
 - [ADR-001: Профиль пользователя](001-profile.md)
 - [ADR-002: `user_workout_score`](002-user-workout-score.md)
 - [ADR-003: Транзакции](003-transactions.md)
+- [ADR-004: Паттерны микросервисов](004-microservices-patterns.md)
+- [ADR-005: Распределение портов](005-port-allocation.md)
 
 ## Как добавить
 
