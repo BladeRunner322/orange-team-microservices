@@ -114,7 +114,7 @@ func runRepositoryTests(t *testing.T, repo *Repository) {
 		assert.ErrorIs(t, err, domain.ErrProfileNotFound)
 	})
 
-	t.Run("Update обновляет поля", func(t *testing.T) {
+	t.Run("Update обновляет поля и возвращает свежий updated_at", func(t *testing.T) {
 		profile := newEmptyProfile()
 		require.NoError(t, repo.Upsert(ctx, profile))
 
@@ -137,7 +137,11 @@ func runRepositoryTests(t *testing.T, repo *Repository) {
 			profile.UpdatedAt(),
 		)
 
-		require.NoError(t, repo.Update(ctx, updated))
+		result, err := repo.Update(ctx, updated)
+		require.NoError(t, err)
+
+		// То, что вернул Update, содержит заполненный updated_at
+		require.NotNil(t, result.UpdatedAt(), "Update должен вернуть заполненный updated_at")
 
 		got, err := repo.GetByUserID(ctx, profile.UserID())
 		require.NoError(t, err)
@@ -151,12 +155,16 @@ func runRepositoryTests(t *testing.T, repo *Repository) {
 		assert.Equal(t, 180, got.Height().Centimeters())
 		require.NotNil(t, got.BirthDate())
 		assert.Equal(t, "1990-05-15", got.BirthDate().String())
+
+		// Дополнительно: updated_at из возврата совпадает с тем, что в БД
+		require.NotNil(t, got.UpdatedAt())
+		assert.Equal(t, *result.UpdatedAt(), *got.UpdatedAt())
 	})
 
 	t.Run("Update несуществующего — ErrProfileNotFound", func(t *testing.T) {
 		profile := newEmptyProfile()
 
-		err := repo.Update(ctx, profile)
+		_, err := repo.Update(ctx, profile)
 		assert.ErrorIs(t, err, domain.ErrProfileNotFound)
 	})
 

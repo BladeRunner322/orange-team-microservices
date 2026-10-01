@@ -75,8 +75,8 @@ func (r *Repository) Upsert(ctx context.Context, profile domain.Profile) error {
 	return nil
 }
 
-// Update обновляет все поля профиля и ставит updated_at.
-func (r *Repository) Update(ctx context.Context, profile domain.Profile) error {
+// Update обновляет все поля профиля и возвращает актуальный профиль из БД
+func (r *Repository) Update(ctx context.Context, profile domain.Profile) (domain.Profile, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
 
@@ -91,8 +91,10 @@ func (r *Repository) Update(ctx context.Context, profile domain.Profile) error {
 			height_cm = $5,
 			updated_at = NOW()
 		WHERE user_id = $1
+		RETURNING user_id, sex, weight_grams, birth_date, height_cm, created_at, updated_at
 	`
-	cmdTag, err := r.pool.Exec(
+	var updated ProfileModel
+	row := r.pool.QueryRow(
 		ctx,
 		query,
 		m.UserID,
@@ -101,16 +103,25 @@ func (r *Repository) Update(ctx context.Context, profile domain.Profile) error {
 		m.BirthDate,
 		m.HeightCM,
 	)
+	err := row.Scan(
+		&updated.UserID,
+		&updated.Sex,
+		&updated.WeightGrams,
+		&updated.BirthDate,
+		&updated.HeightCM,
+		&updated.CreatedAt,
+		&updated.UpdatedAt,
+	)
+
+	if errors.Is(err, postgres.ErrNoRows) {
+		return domain.Profile{}, domain.ErrProfileNotFound
+	}
 
 	if err != nil {
-		return fmt.Errorf("update profile: %w", err)
+		return domain.Profile{}, fmt.Errorf("update profile: %w", err)
 	}
 
-	if cmdTag.RowsAffected() == 0 {
-		return domain.ErrProfileNotFound
-	}
-
-	return nil
+	return ModelToDomain(updated)
 }
 
 // Delete удаляет профиль по user_id.

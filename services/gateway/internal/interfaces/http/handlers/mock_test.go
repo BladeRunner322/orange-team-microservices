@@ -4,9 +4,15 @@ import (
 	"context"
 
 	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/auth"
+	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/profiles"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/application/ports"
 )
 
+// ============================================================
+//
+//	mockAuthClient
+//
+// ============================================================
 type mockAuthClient struct {
 	registerFunc     func(ctx context.Context, email, password, fullName string) (*auth.RegisterResponse, error)
 	loginFunc        func(ctx context.Context, email, password string) (*auth.LoginResponse, error)
@@ -55,3 +61,43 @@ func (m *mockAuthClient) Logout(ctx context.Context, refreshToken string) error 
 }
 
 func (m *mockAuthClient) Close() {}
+
+// ============================================================
+//
+//	mockProfilesClient
+//
+// ============================================================
+type mockProfilesClient struct {
+	getMyProfileFunc    func(ctx context.Context) (*profiles.UserProfile, error)
+	patchMyProfileFunc  func(ctx context.Context, patch *profiles.PatchMyProfileRequest) (*profiles.UserProfile, error)
+	deleteMyProfileFunc func(ctx context.Context) error
+}
+
+func (m *mockProfilesClient) GetMyProfile(ctx context.Context) (*profiles.UserProfile, error) {
+	if m.getMyProfileFunc != nil {
+		return m.getMyProfileFunc(ctx)
+	}
+	return &profiles.UserProfile{
+		UserId:           "test-user-id",
+		ProfileCompleted: false,
+	}, nil
+}
+
+func (m *mockProfilesClient) PatchMyProfile(ctx context.Context, patch *profiles.PatchMyProfileRequest) (*profiles.UserProfile, error) {
+	if m.patchMyProfileFunc != nil {
+		return m.patchMyProfileFunc(ctx, patch)
+	}
+	return &profiles.UserProfile{
+		UserId:           "test-user-id",
+		ProfileCompleted: false,
+	}, nil
+}
+
+func (m *mockProfilesClient) DeleteMyProfile(ctx context.Context) error {
+	if m.deleteMyProfileFunc != nil {
+		return m.deleteMyProfileFunc(ctx)
+	}
+	return nil
+}
+
+func (m *mockProfilesClient) Close() {}

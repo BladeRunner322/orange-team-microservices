@@ -149,10 +149,13 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	log.Info("gRPC listener created", "addr", cfg.GRPCPort)
 
 	// ============================================================
-	// 8. HTTP СЕРВЕР (HEALTHCHECK + METRICS)
+	// 8. HTTP СЕРВЕР (HEALTHCHECK + METRICS + READINESS)
 	// ============================================================
+	readinessHandler := health.NewReadinessHandler(pool, redisClient)
+
 	healthMux := http.NewServeMux()
 	healthMux.HandleFunc("/health", health.Handler())
+	healthMux.HandleFunc("/ready", readinessHandler.Handle)
 	healthMux.Handle("/metrics", promhttp.Handler())
 
 	httpSrv := &http.Server{
@@ -164,7 +167,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 
 	// Запускаем HTTP-сервер в горутине
 	go func() {
-		log.Info("HTTP server listening", "addr", cfg.HTTPPort, "endpoints", "/health, /metrics")
+		log.Info("HTTP server listening", "addr", cfg.HTTPPort, "endpoints", "/health, /ready, /metrics")
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Error("HTTP server failed", "error", err)
 		}

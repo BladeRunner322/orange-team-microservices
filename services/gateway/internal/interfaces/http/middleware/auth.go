@@ -5,15 +5,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/BladeRunner322/orange-team-microservices/pkg/grpc/authctx"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/application/ports"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/httputil"
-)
-
-type contextKey string
-
-const (
-	UserIDKey contextKey = "user_id"
-	RoleKey   contextKey = "role"
 )
 
 func AuthMiddleware(authClient ports.AuthClientInterface) func(http.Handler) http.Handler {
@@ -37,19 +31,17 @@ func AuthMiddleware(authClient ports.AuthClientInterface) func(http.Handler) htt
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), UserIDKey, info.UserID)
-			ctx = context.WithValue(ctx, RoleKey, info.Role)
+			ctx := authctx.WithUserID(r.Context(), info.UserID)
+			ctx = authctx.WithRole(ctx, info.Role)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
 func GetUserID(ctx context.Context) (string, bool) {
-	userID, ok := ctx.Value(UserIDKey).(string)
-	return userID, ok
+	return authctx.UserIDFromContext(ctx)
 }
 
 func GetRole(ctx context.Context) (string, bool) {
-	role, ok := ctx.Value(RoleKey).(string)
-	return role, ok
+	return authctx.RoleFromContext(ctx)
 }
