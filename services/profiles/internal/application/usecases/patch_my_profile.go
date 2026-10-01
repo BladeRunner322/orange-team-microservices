@@ -44,7 +44,8 @@ func (uc *PatchMyProfile) Execute(ctx context.Context, patch domain.ProfilePatch
 
 	profile.ApplyPatch(patch)
 
-	if err := uc.repo.Update(ctx, profile); err != nil {
+	updated, err := uc.repo.Update(ctx, profile)
+	if err != nil {
 		if errors.Is(err, domain.ErrProfileNotFound) {
 			log.Warn("profile not found during update", "user_id", userID)
 			return domain.Profile{}, domain.ErrProfileNotFound
@@ -56,5 +57,5 @@ func (uc *PatchMyProfile) Execute(ctx context.Context, patch domain.ProfilePatch
 
 	log.Info("profile patched", "user_id", userID)
 
-	return profile, nil
+	return updated, nil
 }

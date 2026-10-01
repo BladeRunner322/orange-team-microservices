@@ -83,7 +83,7 @@ services:
       migrate-auth:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/ready"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -127,6 +127,8 @@ services:
       auth:
         condition: service_healthy
       redis-gateway:
+        condition: service_healthy
+      profiles:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
@@ -198,7 +200,7 @@ services:
       migrate-profiles:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/ready"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -219,6 +221,8 @@ services:
       auth:
         condition: service_healthy
       gateway:
+        condition: service_healthy
+      profiles:
         condition: service_healthy
     restart: unless-stopped
 

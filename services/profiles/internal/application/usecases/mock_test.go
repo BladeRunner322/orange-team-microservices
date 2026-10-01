@@ -45,18 +45,18 @@ func (m *mockRepository) Upsert(ctx context.Context, profile domain.Profile) err
 	return nil
 }
 
-func (m *mockRepository) Update(ctx context.Context, profile domain.Profile) error {
+func (m *mockRepository) Update(ctx context.Context, profile domain.Profile) (domain.Profile, error) {
 	if m.err != nil {
-		return m.err
+		return domain.Profile{}, m.err
 	}
 
 	if _, ok := m.profiles[profile.UserID()]; !ok {
-		return domain.ErrProfileNotFound
+		return domain.Profile{}, domain.ErrProfileNotFound
 	}
 
 	m.profiles[profile.UserID()] = profile
 
-	return nil
+	return profile, nil
 }
 
 func (m *mockRepository) Delete(ctx context.Context, userID uuid.UUID) error {

@@ -24,12 +24,13 @@ type RateLimitConfig struct {
 }
 
 type Config struct {
-	HTTPPort     string        `envconfig:"GATEWAY_HTTP_PORT" default:":8081"`
-	AuthGRPCAddr string        `envconfig:"AUTH_GRPC_ADDR" required:"true"`
-	Timeout      time.Duration `envconfig:"GATEWAY_TIMEOUT" default:"10s"`
-	EnableTLS    bool          `envconfig:"ENABLE_TLS" default:"false"`
-	TLSCertFile  string        `envconfig:"TLS_CERT_FILE" default:""`
-	TLSKeyFile   string        `envconfig:"TLS_KEY_FILE" default:""`
+	HTTPPort         string        `envconfig:"GATEWAY_HTTP_PORT" default:":8081"`
+	AuthGRPCAddr     string        `envconfig:"AUTH_GRPC_ADDR" required:"true"`
+	ProfilesGRPCAddr string        `envconfig:"PROFILES_GRPC_ADDR" required:"true"`
+	Timeout          time.Duration `envconfig:"GATEWAY_TIMEOUT" default:"10s"`
+	EnableTLS        bool          `envconfig:"ENABLE_TLS" default:"false"`
+	TLSCertFile      string        `envconfig:"TLS_CERT_FILE" default:""`
+	TLSKeyFile       string        `envconfig:"TLS_KEY_FILE" default:""`
 
 	// Redis для rate limiting
 	RedisAddr     string `envconfig:"REDIS_ADDR" required:"true"`

@@ -21,10 +21,11 @@ import (
 
 // App объединяет все компоненты Gateway.
 type App struct {
-	httpServer  *http.Server
-	logger      *logger.Logger
-	authClient  *clients.AuthClient
-	redisClient *redis.Client
+	httpServer     *http.Server
+	logger         *logger.Logger
+	authClient     *clients.AuthClient
+	profilesClient *clients.ProfilesClient
+	redisClient    *redis.Client
 }
 
 // New создаёт экземпляр App, собирает все зависимости.
@@ -38,7 +39,14 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	}
 	log.Info("auth gRPC client created", "addr", cfg.AuthGRPCAddr)
 
-	// 2. Redis-клиент для rate limiting
+	// 2. gRPC-клиент к Profiles Service
+	profilesClient, err := clients.NewProfilesClient(ctx, cfg.ProfilesGRPCAddr)
+	if err != nil {
+		return nil, fmt.Errorf("create profiles client: %w", err)
+	}
+	log.Info("profiles gRPC client created", "addr", cfg.ProfilesGRPCAddr)
+
+	// 3. Redis-клиент для rate limiting
 	redisClient, err := redis.NewClient(ctx, redis.Config{
 		Addr:     cfg.RedisAddr,
 		Password: cfg.RedisPassword,
@@ -49,20 +57,20 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	}
 	log.Info("redis client created", "addr", cfg.RedisAddr)
 
-	// 3. Rate limiter
+	// 4. Rate limiter
 	limiter := ratelimit.NewLimiter(redisClient.Client)
 
-	// 3.1. Readiness handler (проверяет зависимости)
+	// 4.1. Readiness handler (проверяет зависимости)
 	readinessHandler := handlers.NewReadinessHandler(redisClient)
 
-	// 4. Роутер
+	// 5. Роутер
 	r := chi.NewRouter()
 	r.Use(middleware.RequestIDMiddleware)
 	r.Use(middleware.LoggerMiddleware(log))
 	r.Use(chimid.Recoverer)
 	r.Use(middleware.HTTPMetricsMiddleware)
 
-	// 5. Публичные маршруты (rate limit по IP/email)
+	// 6. Публичные маршруты (rate limit по IP/email)
 	rateLimitPublic := middleware.RateLimitMiddleware(limiter, cfg.RateLimit, log)
 
 	r.Group(func(r chi.Router) {
@@ -78,15 +86,15 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Post("/logout", handlers.LogoutHandler(authClient))
 	})
 
-	// 6. Защищённые маршруты (обычные пользователи, без RBAC)
+	// 7. Защищённые маршруты (обычные пользователи, без RBAC)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(authClient))
 		r.Use(middleware.RateLimitMiddleware(limiter, cfg.RateLimit, log))
 
 		// Users
-		r.Get("/users/me", handlers.GetUserHandler)
-		r.Patch("/users/me", handlers.ProxyHandler)
-		r.Delete("/users/me", handlers.ProxyHandler)
+		r.Get("/users/me", handlers.GetUserHandler(profilesClient))
+		r.Patch("/users/me", handlers.PatchUserHandler(profilesClient))
+		r.Delete("/users/me", handlers.DeleteUserHandler(profilesClient))
 
 		// Exercises (только чтение — всем авторизованным)
 		r.Get("/exercises", handlers.ProxyHandler)
@@ -114,7 +122,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Get("/leaderboard/monthly", handlers.ProxyHandler)
 	})
 
-	// 7. Admin-only маршруты (RBAC: role == admin)
+	// 8. Admin-only маршруты (RBAC: role == admin)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(authClient))
 		r.Use(middleware.RateLimitMiddleware(limiter, cfg.RateLimit, log))
@@ -124,7 +132,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Post("/exercises", handlers.ProxyHandler)
 	})
 
-	// 8. HTTP-сервер
+	// 9. HTTP-сервер
 	httpSrv := &http.Server{
 		Addr:         cfg.HTTPPort,
 		Handler:      r,
@@ -135,10 +143,11 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	log.Info("HTTP server configured", "port", cfg.HTTPPort)
 
 	return &App{
-		httpServer:  httpSrv,
-		logger:      log,
-		authClient:  authClient,
-		redisClient: redisClient,
+		httpServer:     httpSrv,
+		logger:         log,
+		authClient:     authClient,
+		profilesClient: profilesClient,
+		redisClient:    redisClient,
 	}, nil
 }
 
@@ -160,6 +169,11 @@ func (a *App) Close() {
 	if a.authClient != nil {
 		a.authClient.Close()
 	}
+
+	if a.profilesClient != nil {
+		a.profilesClient.Close()
+	}
+
 	if a.redisClient != nil {
 		_ = a.redisClient.Close()
 	}
