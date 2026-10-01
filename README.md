@@ -106,6 +106,8 @@ cp services/profiles/.env.example services/profiles/.env
 
 **В `services/gateway/.env`:**
 
+- `AUTH_GRPC_ADDR` — адрес Auth Service (по умолчанию `auth-service:50051`)
+- `PROFILES_GRPC_ADDR` — адрес Profiles Service (по умолчанию `profiles-service:50052`)
 - `REDIS_PASSWORD` — пароль для Redis (rate limiting, можно тот же или отдельный)
 
 **В `services/profiles/.env`:**
@@ -613,13 +615,13 @@ orange-team-microservices/
 ### Логика смещения портов
 
 - **Docker** — используются стандартные порты:  
-  `50051` (Auth gRPC), `8080` (Auth HTTP), `8081` (Gateway HTTP).  
-  PostgreSQL пробрасывается на стандартный порт `5432`.  
+  `50051` (Auth gRPC), `8080` (Auth HTTP), `8081` (Gateway HTTP), `50052` (Profiles gRPC), `8082` (Profiles HTTP).  
+  PostgreSQL: `postgres-auth` → `5432`, `postgres-profiles` → `5433` (разные порты на хосте, чтобы не конфликтовать).  
   Redis: `redis-auth` → `6379`, `redis-gateway` → `6380` (разные порты на хосте, чтобы не конфликтовать).
 
 - **Локальная разработка** — порты приложений сдвинуты на **+10**:  
-  `50061`, `8090`, `8091` — чтобы не конфликтовать с запущенными Docker-контейнерами.  
-  PostgreSQL и оба Redis для локальной разработки используются из Docker через проброс на `localhost` (`5432`, `6379`, `6380`).
+  `50061`, `8090`, `8091`, `50062`, `8092` — чтобы не конфликтовать с запущенными Docker-контейнерами.  
+  PostgreSQL и оба Redis для локальной разработки используются из Docker через проброс на `localhost` (`5432`, `5433`, `6379`, `6380`).
 
 - **Gateway** внутри Docker слушает на `8081` и пробрасывается на хост на `8081` — это сделано намеренно, чтобы не конфликтовать с Auth на `8080`.
 
@@ -1407,8 +1409,9 @@ task test-cover
 Для тестирования HTTP API Gateway через Postman подготовлена готовая коллекция:
 
 - **Расположение:** `api/postman/gateway_collection.json`
-- **Покрытие:** 47 проверок (34 запроса: health, register, login, refresh, logout, protected endpoints, error cases)
-- **Автоматизация:** pre-request скрипт генерирует уникальный email, тест после login сохраняет `access_token` и `refresh_token` в переменные
+- **Покрытие:** 61 проверка (39 запросов, организованы в 6 папок)
+- **Структура:** Healthcheck, Auth (Register, Login/Refresh/Logout), Profiles (`/users/me`), Stubs, Errors
+- **Автоматизация:** pre-request скрипт генерирует уникальный email; `access_token`, `refresh_token`, `userId` сохраняются в collection variables. Environment не требуется — работает сразу после импорта.
 
 **Что покрыто:**
 
@@ -1417,7 +1420,9 @@ task test-cover
 - Логин (успех, неверные учётные данные)
 - Обновление токенов через `/refresh` (успех, невалидный refresh)
 - Logout и проверка, что refresh после logout не работает
+- `/users/me` — профиль пользователя: GET (lazy-create), PATCH (все поля, частичный патч, null-сброс, невалидное значение), DELETE, повторный GET
 - Защищённые эндпоинты (с токеном, без токена, с невалидным токеном)
+- RBAC: `POST /exercises` от non-admin → 403
 - Заглушки для будущих сервисов (Exercises, Habits, Workouts, Leaderboard)
 
 **Как использовать:**
@@ -1425,6 +1430,8 @@ task test-cover
 1. Импортируй файл `api/postman/gateway_collection.json` в Postman.
 2. Убедись, что переменная `base_url` = `http://localhost:8081` (Docker) или `http://localhost:8091` (локально).
 3. Запусти коллекцию через **Run collection** — все тесты должны пройти.
+
+> 💡 Environment не нужен — коллекция использует collection variables. Достаточно импортировать JSON и нажать **Run collection**.
 
 **Переменные коллекции:**
 
@@ -1463,7 +1470,7 @@ task test-cover
 
 ## Управление миграциями
 
-> 💡 При запуске `task docker-up` миграции применяются **автоматически** (сервис `migrate-auth` в `docker-compose.yml`). Ручные команды ниже нужны только для случаев, когда миграции запускаются отдельно (например, локальная разработка или откат).
+> 💡 При запуске `task docker-up` миграции применяются **автоматически** (сервисы `migrate-auth` и `migrate-profiles` в `docker-compose.yml`). Ручные команды ниже нужны только для случаев, когда миграции запускаются отдельно (например, локальная разработка или откат).
 
 > ⚠️ Миграции **не создают базу данных** — они только создают таблицы и схему внутри существующей БД. Если база `auth_db` (или `profiles_db`) отсутствует, `task auth:migrate-up` (или `task profiles:migrate-up`) упадёт с ошибкой `database "..." does not exist`.
 
@@ -1559,7 +1566,8 @@ task <service-name>:migrate-version
 |------------|----------------------|------------|
 | `GATEWAY_HTTP_PORT` | `:8081` | HTTP-порт Gateway (внутри контейнера) |
 | `AUTH_GRPC_ADDR` | `auth-service:50051` | Адрес Auth Service для gRPC-вызовов |
-| `GATEWAY_TIMEOUT` | `10s` | Таймаут gRPC-запросов к Auth |
+| `PROFILES_GRPC_ADDR` | `profiles-service:50052` | Адрес Profiles Service для gRPC-вызовов |
+| `GATEWAY_TIMEOUT` | `10s` | Таймаут gRPC-запросов к Auth и Profiles |
 | `REDIS_ADDR` | `redis-gateway:6379` | Адрес Redis (свой инстанс) внутри Docker-сети |
 | `REDIS_PASSWORD` | — | Пароль Redis (для локали можно простой, для прода — `openssl rand -hex 32`) |
 | `REDIS_DB` | `0` | Номер логической БД Redis |
