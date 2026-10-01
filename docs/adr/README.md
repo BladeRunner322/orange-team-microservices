@@ -18,6 +18,7 @@
 - [ADR-004: Паттерны микросервисов](004-microservices-patterns.md)
 - [ADR-005: Распределение портов](005-port-allocation.md)
 - [ADR-006: Управление секретами](006-secrets-management.md)
+- [ADR-007: Известные проблемы и технический долг](007-known-issues.md)
 
 ## Как добавить
 
