@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package exercises;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "internal/gen/api/exercises";
+
+service ExercisesService {
+  rpc GetExercises(GetExercisesRequest) returns (GetExercisesResponse);
+  rpc GetExercise(GetExerciseRequest) returns (Exercise);
+  rpc CreateExercise(CreateExerciseRequest) returns (Exercise);
+  rpc PatchExercise(PatchExerciseRequest) returns (Exercise);
+  rpc DeleteExercise(DeleteExerciseRequest) returns (DeleteExerciseResponse);
+}
+
+message NullableString {
+  optional string value = 1;
+}
+
+message NullableInt32 {
+  optional int32 value = 1;
+}
+
+message GetExercisesRequest{
+  // пусто
+}
+
+message GetExerciseRequest{
+  string id = 1;
+}
+
+message CreateExerciseRequest{
+  string name        = 1;
+  string description = 2;
+  int32  difficulty  = 3;
+  string type        = 4;
+}
+
+message PatchExerciseRequest{
+  string         id          = 1;
+  NullableString name        = 2;
+  NullableString description = 3;
+  NullableInt32  difficulty  = 4;
+}
+
+message DeleteExerciseRequest{
+  string id = 1;
+}
+
+message Exercise {
+  string                    id          = 1;
+  string                    name        = 2;
+  string                    description = 3;
+  int32                     difficulty  = 4;
+  string                    type        = 5;
+  google.protobuf.Timestamp created_at  = 6;
+  google.protobuf.Timestamp updated_at  = 7;
+  bool                      is_deleted  = 8;
+}
+
+message GetExercisesResponse {
+  repeated Exercise exercises = 1;
+}
+
+message DeleteExerciseResponse {
+  // пусто
+}
