@@ -47,9 +47,16 @@ func (m *Manager) Generate(ctx context.Context, userID string, role string) (str
 }
 
 func (m *Manager) Validate(ctx context.Context, tokenString string) (ports.UserInfo, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		return m.secret, nil
-	})
+	token, err := jwt.ParseWithClaims(
+		tokenString,
+		&Claims{},
+		func(token *jwt.Token) (interface{}, error) {
+			return m.secret, nil
+		},
+		jwt.WithIssuer(m.issuer),
+		jwt.WithAudience(m.audience),
+	)
+
 	if err != nil {
 		return ports.UserInfo{}, err
 	}

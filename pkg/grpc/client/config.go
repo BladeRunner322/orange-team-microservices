@@ -29,7 +29,8 @@ type Config struct {
 	// TLSMode — режим TLS.
 	TLSMode TLSMode
 
-	// Timeout — таймаут на dial. Если 0 — 5 секунд по умолчанию.
+	// Timeout — таймаут на каждый gRPC-вызов (per-call).
+	// Если 0 — применяется 5 секунд по умолчанию.
 	Timeout time.Duration
 }
 
@@ -37,6 +38,11 @@ func (c Config) validate() error {
 	if c.Target == "" {
 		return fmt.Errorf("grpc client target is empty")
 	}
+
+	if c.Timeout < 0 {
+		return fmt.Errorf("grpc client timeout must be non-negative, got %s", c.Timeout)
+	}
+
 	switch c.TLSMode {
 	case TLSModeDisabled, TLSModeInsecure, TLSModeVerify:
 		return nil

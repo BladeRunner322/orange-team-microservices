@@ -3,6 +3,7 @@ package clients
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"google.golang.org/grpc"
 
@@ -18,13 +19,18 @@ type AuthClient struct {
 
 // NewAuthClient создаёт gRPC-клиент к Auth Service.
 //
-// Использует общий pkg/grpc/client — единый TLS-режим (TLSModeInsecure,
-// так как Auth использует self-signed сертификат) и автоматическое
-// прокидывание user_id в metadata (для будущих вызовов).
-func NewAuthClient(ctx context.Context, addr string) (*AuthClient, error) {
+// Использует общий pkg/grpc/client для соединения:
+//   - TLSModeInsecure (Auth использует self-signed сертификат);
+//   - Timeout из аргумента — ограничивает каждый вызов;
+//   - автоматическое прокидывание user_id из context в metadata.
+//
+// TLS-режим захардкожен внутри, потому что это деталь Auth,
+// а не Gateway — вызывающему коду не нужно об этом думать.
+func NewAuthClient(ctx context.Context, addr string, timeout time.Duration) (*AuthClient, error) {
 	conn, err := grpcclient.New(ctx, grpcclient.Config{
 		Target:  addr,
 		TLSMode: grpcclient.TLSModeInsecure,
+		Timeout: timeout,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create auth grpc client: %w", err)

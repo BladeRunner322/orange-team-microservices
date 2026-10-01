@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -62,5 +63,16 @@ func TestRegister_Execute(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, domain.ErrWeakPassword)
+	})
+
+	t.Run("ошибка репозитория при проверке email — пробрасывается", func(t *testing.T) {
+		repo := newMockRepository()
+		repo.err = errors.New("db is down")
+		uc := NewRegister(repo, log)
+
+		_, err := uc.Execute(context.Background(), "test@example.com", "password123", "Test User")
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "db is down")
 	})
 }
