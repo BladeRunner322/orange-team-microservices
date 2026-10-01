@@ -20,6 +20,7 @@
   - [Управление зависимостями (vendor)](#управление-зависимостями-vendor)
 - [Сервисы](#сервисы)
   - [Auth (аутентификация)](#auth-аутентификация)
+  - [Profiles (профили пользователей)](#profiles-профили-пользователей)
   - [Gateway (API Gateway)](#gateway-api-gateway)
   - [Refresh tokens flow](#refresh-tokens-flow)
   - [Rate Limiting flow](#rate-limiting-flow)
@@ -29,6 +30,7 @@
 - [Тестирование](#тестирование)
 - [Управление миграциями](#управление-миграциями)
 - [Переменные окружения](#переменные-окружения)
+- [Architecture Decision Records](#architecture-decision-records)
 
 ## Требования
 
@@ -74,18 +76,20 @@ cd orange-team-microservices
 ```
 2. Настройте переменные окружения
 
-В проекте **три файла `.env`** — по одному на каждый контекст:
+В проекте **четыре файла `.env`** — по одному на каждый контекст:
 
 - **Корневой `.env`** — порты для `docker-compose` и Grafana.
 - **`services/auth/.env`** — переменные Auth Service.
 - **`services/gateway/.env`** — переменные Gateway Service.
+- **`services/profiles/.env`** — переменные Profiles Service.
 
-У каждого есть шаблон `.env.example`. Скопируйте все три:
+У каждого есть шаблон `.env.example`. Скопируйте все четыре:
 
 ```bash
 cp .env.example .env
 cp services/auth/.env.example services/auth/.env
 cp services/gateway/.env.example services/gateway/.env
+cp services/profiles/.env.example services/profiles/.env
 ```
 
 Затем заполните секреты в каждом из них.
@@ -104,7 +108,11 @@ cp services/gateway/.env.example services/gateway/.env
 
 - `REDIS_PASSWORD` — пароль для Redis (rate limiting, можно тот же или отдельный)
 
-> ⚠️ Все три `.env` добавлены в `.gitignore` и **не коммитятся** в репозиторий. Секреты хранятся только локально.
+**В `services/profiles/.env`:**
+
+- `POSTGRES_PASSWORD` — пароль для PostgreSQL
+
+> ⚠️ Все четыре `.env` добавлены в `.gitignore` и **не коммитятся** в репозиторий. Секреты хранятся только локально.
 
 3. Сгенерируйте TLS-сертификаты для разработки
 
@@ -129,11 +137,13 @@ task docker-up
 
 Это поднимет:
 
-- PostgreSQL (порт 5432) — для Auth Service
+- PostgreSQL Auth (порт 5432) — для Auth Service
+- PostgreSQL Profiles (порт 5433) — для Profiles Service
 - Redis Auth (порт 6379) — для refresh-токенов
 - Redis Gateway (порт 6380) — для rate limiting
-- Миграции (создание таблиц)
+- Миграции Auth и Profiles (создание таблиц)
 - Auth-сервис (gRPC, порт 50051)
+- Profiles-сервис (gRPC, порт 50052)
 - Gateway-сервис (HTTP, порт 8081)
 - Мониторинг (Prometheus, Grafana, Loki, Promtail)
 
@@ -152,12 +162,32 @@ grpc.reflection.v1.ServerReflection
 grpc.reflection.v1alpha.ServerReflection
 ```
 
+**Profiles (gRPC):**
+```bash
+grpcurl -insecure localhost:50052 list
+```
+
+Ожидаемый ответ Profiles:
+```bash
+profiles.ProfilesService
+grpc.reflection.v1.ServerReflection
+grpc.reflection.v1alpha.ServerReflection
+```
+
 **Gateway (HTTP):**
 ```bash
 curl http://localhost:8081/health
 ```
 
 Ожидаемый ответ Gateway: `{"service":"gateway","status":"ok"}`.
+
+**Profiles (HTTP):**
+```bash
+curl http://localhost:8082/health
+curl http://localhost:8082/ready
+```
+
+Ожидаемые ответы: `{"service":"profiles","status":"ok"}` и `{"status":"ok","checks":{"postgres":"ok"}}`.
 
 6. Протестируйте регистрацию и логин
 
@@ -203,8 +233,8 @@ orange-team-microservices/
 ├── api/                              # gRPC-контракты
 │   ├── auth/
 │   │   └── auth.proto
-│   ├── users/
-│   │   └── users.proto
+│   ├── profiles/
+│   │   └── profiles.proto
 │   ├── exercises/
 │   │   └── exercises.proto
 │   ├── habits/
@@ -221,7 +251,7 @@ orange-team-microservices/
 │   └── gen/                          # сгенерированный код из proto
 │       └── api/
 │           ├── auth/                 # auth.pb.go, auth_grpc.pb.go
-│           ├── users/                # users.pb.go, users_grpc.pb.go
+│           ├── profiles/             # profiles.pb.go, profiles_grpc.pb.go
 │           ├── exercises/
 │           ├── habits/
 │           ├── workouts/
@@ -229,9 +259,12 @@ orange-team-microservices/
 │
 ├── pkg/                              # общие пакеты
 │   ├── grpc/
-│   │   └── interceptors/             # gRPC-интерсепторы (логирование, метрики, recovery)
+│   │   ├── authctx/                  # user_id/role в context + gRPC metadata
+│   │   ├── client/                   # конструктор gRPC-клиентов (TLS + interceptor)
+│   │   └── interceptors/             # gRPC-интерсепторы (логирование, метрики, recovery, user_id)
 │   ├── logger/                       # структурированное логирование (slog)
 │   ├── metrics/                      # метрики Prometheus (grpc.go, http.go)
+│   ├── nullable/                     # Nullable[T] для patch-полей (Set / Value)
 │   ├── postgres/                     # пул соединений pgx, конфиг, адаптеры, ошибки
 │   ├── ratelimit/                    # Token Bucket на Redis (rate limiting)
 │   └── redis/                        # клиент Redis (refresh tokens, rate limiting)
@@ -243,12 +276,12 @@ orange-team-microservices/
 │   │   ├── internal/
 │   │   │   ├── bootstrap/            # сборка зависимостей приложения
 │   │   │   ├── application/
-│   │   │   │   └── ports/            # интерфейсы клиентов (AuthClientInterface)
+│   │   │   │   └── ports/            # интерфейсы клиентов (AuthClientInterface, ProfilesClientInterface)
 │   │   │   ├── infrastructure/
-│   │   │   │   └── clients/          # реализация gRPC-клиента Auth
+│   │   │   │   └── clients/          # реализация gRPC-клиентов Auth и Profiles
 │   │   │   └── interfaces/
 │   │   │       └── http/             # HTTP-слой
-│   │   │           ├── handlers/     # хендлеры (auth, user, token, health, proxy)
+│   │   │           ├── handlers/     # хендлеры (auth, user, token, health, proxy, mapper)
 │   │   │           ├── middleware/   # аутентификация, RBAC, rate limit, логирование, request_id
 │   │   │           └── httputil/     # утилиты (SendJSON, SendError, GrpcErrorToHTTP)
 │   │   ├── .env.example              # шаблон переменных Gateway Service
@@ -270,22 +303,28 @@ orange-team-microservices/
 │   │   │   └── interfaces/
 │   │   │       ├── authgrpc/         # gRPC-сервер (обработчики AuthService)
 │   │   │       └── http/
-│   │   │           └── health/       # HTTP-эндпоинты /health и /metrics
+│   │   │           └── health/       # HTTP-эндпоинты /health, /ready, /metrics
 │   │   ├── migrations/               # SQL-миграции для auth_db
 │   │   ├── .env.example              # шаблон переменных Auth Service
 │   │   └── Dockerfile
 │   │
-│   ├── users/                        # НОВЫЙ
-│   │   ├── cmd/
-│   │   ├── config/
+│   ├── profiles/                     # ✅ ГОТОВ — Profiles Service (профили пользователей)
+│   │   ├── cmd/                      # точка входа (main.go)
+│   │   ├── config/                   # конфигурация (envconfig)
 │   │   ├── internal/
-│   │   │   ├── bootstrap/
-│   │   │   ├── domain/
+│   │   │   ├── bootstrap/            # сборка зависимостей приложения
+│   │   │   ├── domain/               # Profile, ProfilePatch, VO (sex, weight, height, birth_date)
 │   │   │   ├── application/
+│   │   │   │   ├── ports/            # интерфейс Repository
+│   │   │   │   └── usecases/         # GetMyProfile, GetProfile, PatchMyProfile, DeleteMyProfile
 │   │   │   ├── infrastructure/
+│   │   │   │   └── postgres_repo/    # реализация Repository для PostgreSQL
 │   │   │   └── interfaces/
-│   │   ├── migrations/               # users_db
-│   │   ├── .env.example
+│   │   │       ├── profilesgrpc/     # gRPC-сервер (обработчики ProfilesService)
+│   │   │       └── http/
+│   │   │           └── health/       # HTTP-эндпоинты /health, /ready, /metrics
+│   │   ├── migrations/               # SQL-миграции для profiles_db
+│   │   ├── .env.example              # шаблон переменных Profiles Service
 │   │   └── Dockerfile
 │   │
 │   ├── exercises/                    # НОВЫЙ
@@ -299,6 +338,16 @@ orange-team-microservices/
 │   │
 │   └── leaderboard/                  # НОВЫЙ
 │       └── ... (аналогично)
+│
+├── adr/                              # Architecture Decision Records
+│   ├── README.md
+│   ├── 001-profile.md
+│   ├── 002-user-workout-score.md
+│   ├── 003-transactions.md
+│   ├── 004-microservices-patterns.md
+│   ├── 005-port-allocation.md
+│   ├── 006-secrets-management.md
+│   └── 007-known-issues.md
 │
 ├── .env.example                      # шаблон корневого .env (порты, Grafana)
 ├── .dockerignore                     # исключения для Docker-контекста
@@ -331,7 +380,7 @@ orange-team-microservices/
 
 ### Что реализовано сейчас
 
-Актуально на текущий момент работают два сервиса: **Auth** и **Gateway**. Остальные — в плане.
+Актуально на текущий момент работают три сервиса: **Auth**, **Gateway** и **Profiles**. Остальные (Exercises, Habits, Workouts, Leaderboard) — в плане.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -349,7 +398,8 @@ orange-team-microservices/
 │  • RBAC: читает role из токена, RequireRole("admin") на POST /exercises    │
 │  • Rate limiting (Token Bucket на Redis)                                   │
 │  • Проксирует публичные запросы в Auth (register/login/refresh/logout)     │
-│  • Защищённые маршруты бизнес-сервисов — пока заглушки 501                 │
+│  • Проксирует /users/me (GET/PATCH/DELETE) в Profiles                      │
+│  • Остальные защищённые маршруты бизнес-сервисов — пока заглушки 501       │
 │  • Логирует запросы, собирает метрики                                      │
 └──────────────┬─────────────────────────────────────────────────────────────┘
                │ gRPC
@@ -365,6 +415,23 @@ orange-team-microservices/
 │  • RBAC: роль хранится в auth.users, кладётся в токен при логине/refresh   │
 │  • БД: auth_db (PostgreSQL) + Redis (refresh)                              │
 │  • Порт: :50051                                                            │
+│  • HTTP: /health, /ready, /metrics (:8080)                                 │
+└────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│                      PROFILES SERVICE  (✅ ГОТОВ)                          │
+│                                                                            │
+│  gRPC-методы:                                                              │
+│  • GetMyProfile, GetProfile, PatchMyProfile, DeleteMyProfile               │
+│                                                                            │
+│  • Владеет профилем пользователя (sex, weight, height, birth_date)         │
+│  • Lazy-create: пустая запись создаётся при первом чтении (см. ADR-001)    │
+│  • profile_completed = все 4 поля заполнены                                │
+│  • user_id из gRPC metadata (ставит Gateway) или из тела запроса           │
+│    для GetProfile (внутренний вызов других сервисов)                       │
+│  • БД: profiles_db (PostgreSQL)                                            │
+│  • Порт: :50052                                                            │
+│  • HTTP: /health, /ready, /metrics (:8080)                                 │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -398,9 +465,9 @@ orange-team-microservices/
 │  POST   /login                  → Auth.Login                               │
 │  POST   /refresh                → Auth.RefreshToken                        │
 │  POST   /logout                 → Auth.Logout                              │
-│  GET    /users/me               → Users.GetUser                            │
-│  PATCH  /users/me               → Users.PatchUser                          │
-│  DELETE /users/me               → Users.DeleteUser                         │
+│  GET    /users/me               → Profiles.GetMyProfile                    │
+│  PATCH  /users/me               → Profiles.PatchMyProfile                  │
+│  DELETE /users/me               → Profiles.DeleteMyProfile                 │
 │  GET    /exercises              → Exercises.GetExercises                   │
 │  POST   /exercises              → Exercises.CreateExercise (admin)         │
 │  GET    /habits                 → Habits.GetHabits                         │
@@ -423,23 +490,23 @@ orange-team-microservices/
                │                 │                 │
                │ gRPC            │ gRPC            │ gRPC
                ▼                 ▼                 ▼
-┌──────────────────────┐ ┌──────────────────┐ ┌───────────────────┐
-│   AUTH SERVICE       │ │   USERS SERVICE  │ │  EXERCISES        │
-│   (✅ ГОТОВ)         │ │   (НОВЫЙ)        │ │  SERVICE          │
-│                      │ │                  │ │  (НОВЫЙ)          │
-│  gRPC-методы:        │ │  gRPC-методы:    │ │  gRPC-методы:     │
-│  • Register          │ │  • GetUser       │ │  • GetExercises   │
-│  • Login             │ │  • PatchUser     │ │  • CreateExercise │
-│  • ValidateToken     │ │  • DeleteUser    │ │                   │
-│  • RefreshToken      │ │                  │ │                   │
-│  • Logout            │ │                  │ │                   │
-│                      │ │                  │ │                   │
-│  БД: auth_db + Redis │ │  БД: users_db    │ │  БД: exercises_db │
-│  (PG users, Redis    │ │                  │ │                   │
-│   refresh tokens)    │ │                  │ │                   │
-│                      │ │                  │ │                   │
-│  Порт: :50051        │ │  Порт: :50052    │ │  Порт: :50053     │
-└──────────────────────┘ └──────────────────┘ └───────────────────┘
+┌──────────────────────┐ ┌──────────────────────┐ ┌──────────────────────┐
+│   AUTH SERVICE       │ │  PROFILES SERVICE    │ │  EXERCISES SERVICE   │
+│   (✅ ГОТОВ)         │ │   (✅ ГОТОВ)         │ │  (НОВЫЙ)             │
+│                      │ │                      │ │                      │
+│  gRPC-методы:        │ │  gRPC-методы:        │ │  gRPC-методы:        │
+│  • Register          │ │  • GetMyProfile      │ │  • GetExercises      │
+│  • Login             │ │  • GetProfile        │ │  • CreateExercise    │
+│  • ValidateToken     │ │  • PatchMyProfile    │ │                      │
+│  • RefreshToken      │ │  • DeleteMyProfile   │ │                      │
+│  • Logout            │ │                      │ │                      │
+│                      │ │                      │ │                      │
+│  БД: auth_db + Redis │ │  БД: profiles_db     │ │  БД: exercises_db    │
+│  (PG users, Redis    │ │                      │ │                      │
+│   refresh tokens)    │ │                      │ │                      │
+│                      │ │                      │ │                      │
+│  Порт: :50051        │ │  Порт: :50052        │ │  Порт: :50053        │
+└──────────────────────┘ └──────────────────────┘ └──────────────────────┘
                │                 │                 │
                │ gRPC            │ gRPC            │ gRPC
                ▼                 ▼                 ▼
@@ -477,9 +544,9 @@ orange-team-microservices/
 
 ### Что реализовано сейчас
 
-- **PostgreSQL:** `postgres-auth` (порт 5432) → `auth_db`
+- **PostgreSQL:** `postgres-auth` (порт 5432) → `auth_db`; `postgres-profiles` (порт 5433) → `profiles_db`
 - **Redis:** `redis-auth` (порт 6379) — refresh-токены; `redis-gateway` (порт 6380) — rate limiting
-- **Миграции:** `migrate-auth` → для `auth_db`
+- **Миграции:** `migrate-auth` → для `auth_db`; `migrate-profiles` → для `profiles_db`
 - **Мониторинг:** Prometheus (9090), Grafana (3000)
 - **Логи:** Loki (3100), Promtail (9080)
 
@@ -493,7 +560,7 @@ orange-team-microservices/
 │  🔷 PostgreSQL Контейнеры:                                          │
 │  ┌──────────────────────────────────────────────────────────────┐   │
 │  │  postgres-auth     (порт 5432)  → auth_db                    │   │
-│  │  postgres-users    (порт 5433)  → users_db                   │   │
+│  │  postgres-profiles (порт 5433)  → profiles_db                │   │
 │  │  postgres-exercises (порт 5434) → exercises_db               │   │
 │  │  postgres-habits   (порт 5435)  → habits_db                  │   │
 │  │  postgres-workouts (порт 5436)  → workouts_db                │   │
@@ -517,7 +584,7 @@ orange-team-microservices/
 │  🔷 Миграции:                                                       │
 │  ┌──────────────────────────────────────────────────────────────┐   │
 │  │  migrate-auth     → для auth_db                              │   │
-│  │  migrate-users    → для users_db                             │   │
+│  │  migrate-profiles → для profiles_db                          │   │
 │  │  migrate-exercises → для exercises_db                        │   │
 │  │  migrate-habits   → для habits_db                            │   │
 │  │  migrate-workouts → для workouts_db                          │   │
@@ -533,7 +600,10 @@ orange-team-microservices/
 | **Auth** | gRPC | gRPC | `50051` | `50051` | `50061` | Смещение +10 |
 | **Auth** | Health / Metrics | HTTP | `8080` | `8080` | `8090` | Смещение +10, переопределяется в `docker-compose.yml` |
 | **Gateway** | HTTP API | HTTP | `8081` | `8081` | `8091` | Смещение +10 |
+| **Profiles** | gRPC | gRPC | `50052` | `50052` | `50062` | Смещение +10 |
+| **Profiles** | Health / Ready / Metrics | HTTP | `8080` | `8082` | `8092` | Смещение +10, переопределяется в `docker-compose.yml` |
 | **PostgreSQL (Auth)** | База данных | TCP | `5432` | `5432` | — | Используется через Docker, проброс на хост |
+| **PostgreSQL (Profiles)** | База данных | TCP | `5432` | `5433` | — | Используется через Docker, проброс на хост |
 | **Redis Auth** | Refresh-токены | TCP | `6379` | `6379` | — | Только для Auth Service |
 | **Redis Gateway** | Rate limiting | TCP | `6379` | `6380` | — | Только для Gateway Service |
 | **Prometheus** | Метрики | HTTP | `9090` | `9090` | — | Только в Docker |
@@ -567,24 +637,35 @@ task auth:run
 - gRPC: `localhost:50061`
 - HTTP (health/metrics): `localhost:8090`
 
-**Gateway Service (требует запущенного Auth):**
+**Gateway Service (требует запущенных Auth и Profiles):**
 ```bash
 task gateway:run
 ```
 
 - HTTP: `localhost:8091`
 
+**Profiles Service:**
+```bash
+task profiles:run
+```
+
+- gRPC: `localhost:50062`
+- HTTP (health/ready/metrics): `localhost:8092`
+
 **Требования для локального запуска:**
 - PostgreSQL запущен через Docker: `task auth:postgres-up`
 - Redis запущен через Docker: `task auth:redis-up`
 - Миграции применены: `task auth:migrate-up`
+- PostgreSQL для Profiles запущен: `task profiles:postgres-up`
+- Миграции Profiles применены: `task profiles:migrate-up`
 - TLS-сертификаты созданы: `task gen-certs`
 
 ### Важно: команда `task docker-down-v`
 
 Команда `task docker-down-v` **останавливает все контейнеры и удаляет volumes**, включая:
 
-- `pgdata` — **все данные PostgreSQL** (пользователи, тренировки, привычки и т.д.)
+- `pgdata-auth`, `pgdata-profiles` — все данные PostgreSQL (пользователи, профили)
+- `redisdata-auth`, `redisdata-gateway` — данные Redis (refresh-токены, rate-limit buckets)
 - `grafana-storage` — дашборды и настройки Grafana
 
 После её выполнения база данных будет пустой, и миграции придётся применять заново (`task docker-up` сделает это автоматически).
@@ -658,27 +739,106 @@ task vendor
   | `task auth:redis-logs` | Просмотр логов Redis |
   | `task auth:redis-cli` | Консоль redis-cli |
 
-#### Healthcheck
+#### Healthcheck и readiness
 
-Auth-сервис предоставляет HTTP-эндпоинт для проверки состояния:
+Auth-сервис предоставляет HTTP-эндпоинты для проверки состояния:
 
-- **Порт:** `8080` (Docker) / `8090` (локально)
-- **Эндпоинт:** `/health`
-- **Ответ:** `{"status":"ok","service":"auth"}`
+| Эндпоинт | Назначение | Ответ |
+|----------|------------|-------|
+| `/health` | Liveness — процесс жив | `{"status":"ok","service":"auth"}` |
+| `/ready` | Readiness — PostgreSQL и Redis доступны | `{"status":"ok","checks":{"postgres":"ok","redis":"ok"}}` или `503` |
+| `/metrics` | Prometheus-метрики | text/plain |
+
+**Порт:** `8080` (Docker) / `8090` (локально)
 
 Проверка:
 
 **Docker:**
 ```bash
 curl http://localhost:8080/health
+curl http://localhost:8080/ready
+curl http://localhost:8080/metrics
 ```
 
 **Локально (после `task auth:run`):**
 ```bash
 curl http://localhost:8090/health
+curl http://localhost:8090/ready
+curl http://localhost:8090/metrics
 ```
 
-> 💡 Этот эндпоинт используется Docker healthcheck'ом — если он не отвечает, контейнер помечается как `unhealthy` и может быть перезапущен.
+> 💡 `/ready` используется Docker healthcheck'ом (в compose проверяется `/ready`). `/health` — liveness. `/metrics` скрейпится Prometheus.
+
+### Profiles (профили пользователей)
+
+- Назначение: хранение и редактирование профиля пользователя (пол, вес, рост, дата рождения).
+
+- Протокол: gRPC
+
+- gRPC-методы: `GetMyProfile`, `GetProfile`, `PatchMyProfile`, `DeleteMyProfile`
+
+- Порт: 50052
+
+- БД: PostgreSQL (схема profiles, таблица users)
+
+- `user_id`:
+  - для `GetMyProfile` / `PatchMyProfile` / `DeleteMyProfile` — из gRPC metadata (ставит Gateway)
+  - для `GetProfile` — из тела запроса (внутренний вызов других сервисов)
+
+- **Lazy-create**: пустая запись создаётся при первом чтении профиля (см. [ADR-001](adr/001-profile.md)).
+
+- `profile_completed = true`, если заполнены все 4 поля: `sex`, `weight_kg`, `birth_date`, `height_cm`.
+
+- Команды:
+
+  | Команда | Назначение |
+  |---------|------------|
+  | `task profiles:run` | Запуск локально (gRPC `50062`, HTTP `8092`) |
+  | `task profiles:build` | Сборка Docker-образа |
+  | `task profiles:rebuild` | Пересборка без кеша (с обновлением vendor) |
+  | `task profiles:up` | Запуск в Docker Compose |
+  | `task profiles:restart` | Перезапуск (rebuild + up) |
+  | `task profiles:logs` | Просмотр логов Profiles |
+
+- Команды для PostgreSQL:
+
+  | Команда | Назначение |
+  |---------|------------|
+  | `task profiles:postgres-up` | Запуск PostgreSQL |
+  | `task profiles:postgres-down` | Остановка PostgreSQL |
+  | `task profiles:postgres-logs` | Просмотр логов PostgreSQL |
+  | `task profiles:postgres-psql` | Консоль psql |
+
+- Команды для миграций:
+
+  | Команда | Назначение |
+  |---------|------------|
+  | `task profiles:migrate-create -- <name>` | Создать новую миграцию |
+  | `task profiles:migrate-up` | Применить миграции |
+  | `task profiles:migrate-down -- 1` | Откатить последнюю |
+  | `task profiles:migrate-version` | Показать текущую версию |
+
+#### Healthcheck и readiness
+
+Profiles предоставляет HTTP-эндпоинты для проверки состояния:
+
+| Эндпоинт | Назначение | Ответ |
+|----------|------------|-------|
+| `/health` | Liveness — процесс жив | `{"status":"ok","service":"profiles"}` |
+| `/ready` | Readiness — PostgreSQL доступен | `{"status":"ok","checks":{"postgres":"ok"}}` или `503` |
+| `/metrics` | Prometheus-метрики | text/plain |
+
+**Порт:** `8080` (Docker) / `8092` (локально)
+
+Проверка:
+
+```bash
+curl http://localhost:8082/health
+curl http://localhost:8082/ready
+curl http://localhost:8082/metrics
+```
+
+> 💡 `/health` и `/ready` используются Docker healthcheck'ом (в compose проверяется `/ready`). `/metrics` скрейпится Prometheus.
 
 ### Gateway (API Gateway)
 
@@ -745,9 +905,9 @@ curl http://localhost:8081/metrics
 | POST | `/login` | Логин (access + refresh) | ❌ | — |
 | POST | `/refresh` | Обновление пары токенов (rotation) | ❌ | — |
 | POST | `/logout` | Отзыв refresh-токена | ❌ | — |
-| GET | `/users/me` | Профиль пользователя (заглушка) | ✅ | — |
-| PATCH | `/users/me` | Обновление профиля (заглушка) | ✅ | — |
-| DELETE | `/users/me` | Удаление профиля (заглушка) | ✅ | — |
+| GET | `/users/me` | Профиль пользователя → Profiles.GetMyProfile | ✅ | — |
+| PATCH | `/users/me` | Обновление профиля → Profiles.PatchMyProfile | ✅ | — |
+| DELETE | `/users/me` | Удаление профиля → Profiles.DeleteMyProfile | ✅ | — |
 | GET | `/exercises` | Список упражнений (заглушка) | ✅ | — |
 | POST | `/exercises` | Создать упражнение (заглушка) | ✅ | **admin** |
 | GET | `/habits` | Список привычек (заглушка) | ✅ | — |
@@ -768,7 +928,8 @@ curl http://localhost:8081/metrics
 | GET | `/leaderboard/monthly` | Месячный лидерборд (заглушка) | ✅ | — |
 
 > **Защищённые маршруты** требуют заголовок `Authorization: Bearer <access_token>`, который валидируется через Auth Service.  
-> **`/refresh` и `/logout`** принимают `refresh_token` в теле запроса (не требуют access-токен, потому что access мог истечь).
+> **`/refresh` и `/logout`** принимают `refresh_token` в теле запроса (не требуют access-токен, потому что access мог истечь).  
+> **`/users/me`** проксируется в Profiles Service. `user_id` берётся из JWT и передаётся через gRPC metadata (`x-user-id`).
 
 **Пример `/refresh`:**
 
@@ -998,7 +1159,7 @@ curl -X POST http://localhost:8081/exercises \
 - Установка Go.
 - Кеширование модулей.
 - `go test -v ./... -short` — юнит-тесты.
-- `go build` для `auth` и `gateway` — smoke-тест сборки.
+- `go build` для `auth`, `gateway` и `profiles` — smoke-тест сборки.
 
 Если CI зелёный — PR готов к слиянию.
 
@@ -1006,18 +1167,20 @@ curl -X POST http://localhost:8081/exercises \
 
 При пуше в `main`:
 
-1. Определяются изменённые сервисы (`services/auth/**`, `services/gateway/**`, `pkg/**`).
+1. Определяются изменённые сервисы (`services/auth/**`, `services/gateway/**`, `services/profiles/**`, `pkg/**`).
 2. Собираются Docker-образы только для изменённых сервисов.
 3. Образы публикуются в **GitHub Container Registry**:
    - `ghcr.io/bladerunner322/orange-team-microservices/auth:latest`
    - `ghcr.io/bladerunner322/orange-team-microservices/auth:<git-sha>`
    - `ghcr.io/bladerunner322/orange-team-microservices/gateway:latest`
    - `ghcr.io/bladerunner322/orange-team-microservices/gateway:<git-sha>`
+   - `ghcr.io/bladerunner322/orange-team-microservices/profiles:latest`
+   - `ghcr.io/bladerunner322/orange-team-microservices/profiles:<git-sha>`
 4. По SSH выполняется деплой на продакшен-сервер:
    - Обновление кода (`git pull origin main`).
    - Логин в GHCR.
-   - `docker compose pull auth gateway` — скачивание свежих образов.
-   - `docker compose up -d --no-build auth gateway` — перезапуск контейнеров из скачанных образов (без локальной сборки).
+   - `docker compose pull auth gateway profiles` — скачивание свежих образов.
+   - `docker compose up -d --no-build auth gateway profiles` — перезапуск контейнеров из скачанных образов (без локальной сборки).
 
 ### Секреты GitHub Actions
 
@@ -1038,28 +1201,32 @@ curl -X POST http://localhost:8081/exercises \
 ```bash
 curl http://<SERVER_HOST>:8081/health   # Gateway
 curl http://<SERVER_HOST>:8080/health   # Auth
+curl http://<SERVER_HOST>:8082/health   # Profiles
 ```
 
-Оба должны вернуть `{"status":"ok","service":"..."}`.
+Все три должны вернуть `{"status":"ok","service":"..."}`.
 
 **Ready:**
 
 ```bash
 curl http://<SERVER_HOST>:8081/ready    # Gateway → проверка Redis
+curl http://<SERVER_HOST>:8080/ready    # Auth → проверка Postgres + Redis
+curl http://<SERVER_HOST>:8082/ready    # Profiles → проверка Postgres
 ```
 
-Должен вернуть `{"status":"ok","checks":{"redis":"ok"}}`.
+Должны вернуть `{"status":"ok","checks":{...}}`.
 
 **Prometheus targets:**
 
-Открой `http://<SERVER_HOST>:9090` → **Status → Targets**. Оба job'а должны быть в статусе **UP**:
+Открой `http://<SERVER_HOST>:9090` → **Status → Targets**. Все три job'а должны быть в статусе **UP**:
 
 - `auth` — target `auth:8080`
 - `gateway` — target `gateway:8081`
+- `profiles` — target `profiles:8080`
 
 ### Обновление `.env` на сервере
 
-В проекте **три файла `.env`**, и **ни один из них не хранится в git** (все добавлены в `.gitignore`). Они **не подтягиваются** при `git pull` на сервере. Это значит, что при добавлении новых переменных окружения (например, `REDIS_ADDR`, `REDIS_PASSWORD`, `RATE_LIMIT_ENABLED`) их нужно **обновить вручную** в соответствующих файлах на сервере перед деплоем.
+В проекте **четыре файла `.env`**, и **ни один из них не хранится в git** (все добавлены в `.gitignore`). Они **не подтягиваются** при `git pull` на сервере. Это значит, что при добавлении новых переменных окружения (например, `REDIS_ADDR`, `REDIS_PASSWORD`, `RATE_LIMIT_ENABLED`, `PROFILES_GRPC_ADDR`) их нужно **обновить вручную** в соответствующих файлах на сервере перед деплоем.
 
 Структура `.env` на сервере:
 
@@ -1068,7 +1235,8 @@ curl http://<SERVER_HOST>:8081/ready    # Gateway → проверка Redis
 ├── .env                          # корневой (порты, Grafana)
 └── services/
     ├── auth/.env                 # Auth Service
-    └── gateway/.env              # Gateway Service
+    ├── gateway/.env              # Gateway Service
+    └── profiles/.env             # Profiles Service
 ```
 
 Порядок действий при добавлении новых переменных:
@@ -1084,6 +1252,7 @@ curl http://<SERVER_HOST>:8081/ready    # Gateway → проверка Redis
    nano .env                          # если меняются порты или Grafana
    nano services/auth/.env            # если меняются переменные Auth
    nano services/gateway/.env         # если меняются переменные Gateway
+   nano services/profiles/.env        # если меняются переменные Profiles
    ```
 4. Сохрани (`Ctrl+O`, Enter, `Ctrl+X`).
 5. После этого — вливай PR в `main`. CD задеплоит сервисы, и они корректно подхватят новые переменные.
@@ -1100,7 +1269,7 @@ curl http://<SERVER_HOST>:8081/ready    # Gateway → проверка Redis
 
 ### Метрики (Prometheus)
 
-Оба сервиса отдают метрики в формате Prometheus.
+Все три сервиса отдают метрики в формате Prometheus.
 
 **Auth-сервис:**
 
@@ -1122,7 +1291,17 @@ curl http://<SERVER_HOST>:8081/ready    # Gateway → проверка Redis
 - `http_request_duration_seconds` — длительность HTTP-запросов в секундах
 - `http_requests_in_flight` — HTTP-запросы в обработке
 
-Плюс транзитивно подтягиваются gRPC-метрики исходящих вызовов в Auth.
+Плюс транзитивно подтягиваются gRPC-метрики исходящих вызовов в Auth и Profiles.
+
+**Profiles:**
+
+- **Порт:** `8080` (Docker) / `8092` (локально)
+- **Эндпоинт:** `/metrics`
+
+Метрики:
+- `grpc_requests_total` — количество gRPC-запросов (method, status)
+- `grpc_request_duration_ms` — длительность gRPC-запросов в мс
+- `grpc_requests_in_flight` — gRPC-запросы в обработке
 
 **Путь нормализуется** через chi RoutePattern, чтобы `/workouts/123` и `/workouts/456` не создавали отдельные серии (защита от взрыва кардинальности).
 
@@ -1131,6 +1310,7 @@ curl http://<SERVER_HOST>:8081/ready    # Gateway → проверка Redis
 ```bash
 curl http://localhost:8080/metrics   # Auth
 curl http://localhost:8081/metrics   # Gateway
+curl http://localhost:8082/metrics   # Profiles
 ```
 
 ### Логи (Loki + Promtail)
@@ -1167,6 +1347,7 @@ Grafana доступна по адресу: `http://localhost:3000`
 - `rate(http_requests_total[1m])` — RPS по эндпоинтам
 - `{service="auth"}` — логи Auth в Loki
 - `{service="gateway"}` — логи Gateway в Loki
+- `{service="profiles"}` — логи Profiles в Loki
 
 > ⚠️ Дашборды Grafana не сохраняются при `task docker-down-v` (удаление volume `grafana-storage`). Для постоянного хранения настрой **provisioning** (папка `grafana/provisioning/`) или экспортируй дашборд в JSON и положи его в репозиторий.
 
@@ -1237,7 +1418,7 @@ task test-cover
 - Обновление токенов через `/refresh` (успех, невалидный refresh)
 - Logout и проверка, что refresh после logout не работает
 - Защищённые эндпоинты (с токеном, без токена, с невалидным токеном)
-- Заглушки для будущих сервисов (Users, Exercises, Habits, Workouts, Leaderboard)
+- Заглушки для будущих сервисов (Exercises, Habits, Workouts, Leaderboard)
 
 **Как использовать:**
 
@@ -1284,11 +1465,12 @@ task test-cover
 
 > 💡 При запуске `task docker-up` миграции применяются **автоматически** (сервис `migrate-auth` в `docker-compose.yml`). Ручные команды ниже нужны только для случаев, когда миграции запускаются отдельно (например, локальная разработка или откат).
 
-> ⚠️ Миграции **не создают базу данных** — они только создают таблицы и схему внутри существующей БД. Если база `auth_db` отсутствует, `task auth:migrate-up` упадёт с ошибкой `database "auth_db" does not exist`.
+> ⚠️ Миграции **не создают базу данных** — они только создают таблицы и схему внутри существующей БД. Если база `auth_db` (или `profiles_db`) отсутствует, `task auth:migrate-up` (или `task profiles:migrate-up`) упадёт с ошибкой `database "..." does not exist`.
 
 Для создания БД вручную:
 ```bash
 docker exec -it auth-postgres psql -U test -c "CREATE DATABASE auth_db;"
+docker exec -it profiles-postgres psql -U test -c "CREATE DATABASE profiles_db;"
 ```
 
 Или просто удали volume и подними заново — `task docker-up` создаст БД автоматически из переменной `POSTGRES_DB` в `.env`:
@@ -1319,11 +1501,12 @@ task <service-name>:migrate-version
 
 ## Переменные окружения
 
-В проекте **три файла `.env`** — по одному на каждый контекст:
+В проекте **четыре файла `.env`** — по одному на каждый контекст:
 
 - **Корневой `.env`** — порты для `docker-compose` и Grafana.
 - **`services/auth/.env`** — переменные Auth Service.
 - **`services/gateway/.env`** — переменные Gateway Service.
+- **`services/profiles/.env`** — переменные Profiles Service.
 
 У каждого есть шаблон `.env.example` (в той же папке). Реальные `.env` в `.gitignore` и **не коммитятся**.
 
@@ -1337,6 +1520,9 @@ task <service-name>:migrate-version
 | `AUTH_GRPC_PORT` | `50051` | Порт gRPC Auth на хосте |
 | `AUTH_HTTP_PORT` | `8080` | Порт HTTP Auth (health/metrics) на хосте |
 | `GATEWAY_HTTP_PORT` | `8081` | Порт HTTP Gateway на хосте |
+| `PROFILES_POSTGRES_PORT` | `5433` | Порт PostgreSQL (Profiles) на хосте |
+| `PROFILES_GRPC_PORT` | `50052` | Порт gRPC Profiles на хосте |
+| `PROFILES_HTTP_PORT` | `8082` | Порт HTTP Profiles (health/metrics/ready) на хосте |
 | `PROMETHEUS_PORT` | `9090` | Порт Prometheus на хосте |
 | `GRAFANA_PORT` | `3000` | Порт Grafana на хосте |
 | `GRAFANA_PASSWORD` | `admin` | Пароль администратора Grafana |
@@ -1391,6 +1577,23 @@ task <service-name>:migrate-version
 | `RATE_LIMIT_DEFAULT_BURST` | `60` | Вместимость ведра |
 | `RATE_LIMIT_DEFAULT_INTERVAL` | `1m` | Период восстановления |
 
+### `services/profiles/.env`
+
+| Переменная | Значение по умолчанию | Назначение |
+|------------|----------------------|------------|
+| `GRPC_PORT` | `:50052` | Порт gRPC-сервера (внутри контейнера) |
+| `HTTP_PORT` | `:8080` | Порт HTTP-сервера для /health, /ready и /metrics (внутри контейнера) |
+| `ENABLE_REFLECTION` | `true` | gRPC reflection (для grpcurl). В проде — `false` |
+| `POSTGRES_HOST` | `postgres-profiles` | Хост PostgreSQL внутри Docker-сети |
+| `POSTGRES_PORT` | `5432` | Порт PostgreSQL |
+| `POSTGRES_USER` | `test` | Пользователь БД |
+| `POSTGRES_PASSWORD` | — | Пароль БД |
+| `POSTGRES_DB` | `profiles_db` | Имя базы данных |
+| `POSTGRES_TIMEOUT` | `30s` | Таймаут операций с БД |
+| `ENABLE_TLS` | `true` | Использовать TLS для gRPC |
+| `TLS_CERT_FILE` | `/app/certs/server.crt` | Путь к сертификату (внутри контейнера) |
+| `TLS_KEY_FILE` | `/app/certs/server.key` | Путь к приватному ключу |
+
 ### Общие настройки
 
 Логгер применяется ко всем сервисам, но переменные задаются в каждом `.env` одинаково:
@@ -1401,4 +1604,20 @@ task <service-name>:migrate-version
 | `LOGGER_FORMAT` | `json` | Формат логов (`text` или `json`) |
 | `LOGGER_FOLDER` | `logs` | Папка для файлов логов |
 
-> ⚠️ Реальные `.env` **не коммитятся** в репозиторий (добавлены в `.gitignore`). Для запуска скопируйте `.env.example` в `.env` в каждой из трёх папок и заполните секреты.
+> ⚠️ Реальные `.env` **не коммитятся** в репозиторий (добавлены в `.gitignore`). Для запуска скопируйте `.env.example` в `.env` в каждой из четырёх папок и заполните секреты.
+
+## Architecture Decision Records
+
+Ключевые архитектурные решения проекта зафиксированы в ADR — отдельные файлы в папке [`adr/`](adr/).
+
+Список решений:
+
+- [ADR-001: Профиль пользователя](adr/001-profile.md) — lazy-create, nullable-поля, `profile_completed`
+- [ADR-002: `user_workout_score`](adr/002-user-workout-score.md) — почему не хранится в Profiles
+- [ADR-003: Транзакции](adr/003-transactions.md) — границы транзакций и sync-вызовы
+- [ADR-004: Паттерны микросервисов](adr/004-microservices-patterns.md) — что используем, что нет
+- [ADR-005: Распределение портов](adr/005-port-allocation.md) — диапазоны и смещение +10
+- [ADR-006: Управление секретами](adr/006-secrets-management.md) — SOPS + age
+- [ADR-007: Известные проблемы и технический долг](adr/007-known-issues.md) — что осталось до продакшена
+
+Подробнее — в [`adr/README.md`](adr/README.md).
