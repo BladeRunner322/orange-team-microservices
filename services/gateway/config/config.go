@@ -32,6 +32,13 @@ type Config struct {
 	TLSCertFile      string        `envconfig:"TLS_CERT_FILE" default:""`
 	TLSKeyFile       string        `envconfig:"TLS_KEY_FILE" default:""`
 
+	// TrustedProxies — список CIDR доверенных прокси.
+	// Если RemoteAddr входит в этот список — доверяем заголовку
+	// X-Forwarded-For. Если пусто — XFF игнорируется полностью.
+	// envconfig парсит значение как slice через запятую:
+	//   TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12
+	TrustedProxies []string `envconfig:"TRUSTED_PROXIES"`
+
 	// Redis для rate limiting
 	RedisAddr     string `envconfig:"REDIS_ADDR" required:"true"`
 	RedisPassword string `envconfig:"REDIS_PASSWORD" default:""`

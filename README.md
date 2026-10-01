@@ -109,6 +109,7 @@ cp services/profiles/.env.example services/profiles/.env
 - `AUTH_GRPC_ADDR` — адрес Auth Service (по умолчанию `auth-service:50051`)
 - `PROFILES_GRPC_ADDR` — адрес Profiles Service (по умолчанию `profiles-service:50052`)
 - `REDIS_PASSWORD` — пароль для Redis (rate limiting, можно тот же или отдельный)
+- `TRUSTED_PROXIES` — CIDR-список доверенных прокси через запятую (опционально). Если пусто — заголовок `X-Forwarded-For` игнорируется, IP клиента берётся из `RemoteAddr`. Заполнять, только если перед Gateway стоит прокси (nginx, ALB).
 
 **В `services/profiles/.env`:**
 
@@ -1568,6 +1569,7 @@ task <service-name>:migrate-version
 | `AUTH_GRPC_ADDR` | `auth-service:50051` | Адрес Auth Service для gRPC-вызовов |
 | `PROFILES_GRPC_ADDR` | `profiles-service:50052` | Адрес Profiles Service для gRPC-вызовов |
 | `GATEWAY_TIMEOUT` | `10s` | Таймаут gRPC-запросов к Auth и Profiles |
+| `TRUSTED_PROXIES` | — | CIDR-список доверенных прокси через запятую. Пусто — X-Forwarded-For игнорируется |
 | `REDIS_ADDR` | `redis-gateway:6379` | Адрес Redis (свой инстанс) внутри Docker-сети |
 | `REDIS_PASSWORD` | — | Пароль Redis (для локали можно простой, для прода — `openssl rand -hex 32`) |
 | `REDIS_DB` | `0` | Номер логической БД Redis |

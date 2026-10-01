@@ -3,6 +3,7 @@ package clients
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/profiles"
 	grpcclient "github.com/BladeRunner322/orange-team-microservices/pkg/grpc/client"
@@ -16,10 +17,20 @@ type ProfilesClient struct {
 }
 
 // NewProfilesClient создаёт gRPC-клиент к Profiles Service.
-func NewProfilesClient(ctx context.Context, addr string) (*ProfilesClient, error) {
+//
+// Использует общий pkg/grpc/client для соединения:
+//   - TLSModeInsecure (Profiles использует self-signed сертификат);
+//   - Timeout из аргумента — ограничивает каждый вызов;
+//   - автоматическое прокидывание user_id из context в metadata
+//     (для GetMyProfile, PatchMyProfile, DeleteMyProfile).
+//
+// TLS-режим захардкожен внутри, потому что это деталь Profiles,
+// а не Gateway — вызывающему коду не нужно об этом думать.
+func NewProfilesClient(ctx context.Context, addr string, timeout time.Duration) (*ProfilesClient, error) {
 	conn, err := grpcclient.New(ctx, grpcclient.Config{
 		Target:  addr,
 		TLSMode: grpcclient.TLSModeInsecure,
+		Timeout: timeout,
 	})
 
 	if err != nil {

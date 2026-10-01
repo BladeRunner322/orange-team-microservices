@@ -33,18 +33,18 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	ctx := context.Background()
 
 	// 1. gRPC-клиент к Auth Service
-	authClient, err := clients.NewAuthClient(ctx, cfg.AuthGRPCAddr)
+	authClient, err := clients.NewAuthClient(ctx, cfg.AuthGRPCAddr, cfg.Timeout)
 	if err != nil {
 		return nil, fmt.Errorf("create auth client: %w", err)
 	}
-	log.Info("auth gRPC client created", "addr", cfg.AuthGRPCAddr)
+	log.Info("auth gRPC client created", "addr", cfg.AuthGRPCAddr, "timeout", cfg.Timeout)
 
 	// 2. gRPC-клиент к Profiles Service
-	profilesClient, err := clients.NewProfilesClient(ctx, cfg.ProfilesGRPCAddr)
+	profilesClient, err := clients.NewProfilesClient(ctx, cfg.ProfilesGRPCAddr, cfg.Timeout)
 	if err != nil {
 		return nil, fmt.Errorf("create profiles client: %w", err)
 	}
-	log.Info("profiles gRPC client created", "addr", cfg.ProfilesGRPCAddr)
+	log.Info("profiles gRPC client created", "addr", cfg.ProfilesGRPCAddr, "timeout", cfg.Timeout)
 
 	// 3. Redis-клиент для rate limiting
 	redisClient, err := redis.NewClient(ctx, redis.Config{
@@ -60,7 +60,18 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	// 4. Rate limiter
 	limiter := ratelimit.NewLimiter(redisClient.Client)
 
-	// 4.1. Readiness handler (проверяет зависимости)
+	// 4.1. Trusted proxies для определения IP клиента
+	trustedProxies, err := middleware.ParseTrustedProxies(cfg.TrustedProxies)
+	if err != nil {
+		return nil, fmt.Errorf("parse trusted proxies: %w", err)
+	}
+	if len(trustedProxies) > 0 {
+		log.Info("trusted proxies configured", "count", len(trustedProxies))
+	} else {
+		log.Info("trusted proxies not configured — X-Forwarded-For will be ignored")
+	}
+
+	// 4.2. Readiness handler (проверяет зависимости)
 	readinessHandler := handlers.NewReadinessHandler(redisClient)
 
 	// 5. Роутер
@@ -71,7 +82,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	r.Use(middleware.HTTPMetricsMiddleware)
 
 	// 6. Публичные маршруты (rate limit по IP/email)
-	rateLimitPublic := middleware.RateLimitMiddleware(limiter, cfg.RateLimit, log)
+	rateLimitPublic := middleware.RateLimitMiddleware(limiter, trustedProxies, cfg.RateLimit, log)
 
 	r.Group(func(r chi.Router) {
 		r.Use(rateLimitPublic)
@@ -89,7 +100,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	// 7. Защищённые маршруты (обычные пользователи, без RBAC)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(authClient))
-		r.Use(middleware.RateLimitMiddleware(limiter, cfg.RateLimit, log))
+		r.Use(middleware.RateLimitMiddleware(limiter, trustedProxies, cfg.RateLimit, log))
 
 		// Users
 		r.Get("/users/me", handlers.GetUserHandler(profilesClient))
@@ -125,7 +136,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	// 8. Admin-only маршруты (RBAC: role == admin)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(authClient))
-		r.Use(middleware.RateLimitMiddleware(limiter, cfg.RateLimit, log))
+		r.Use(middleware.RateLimitMiddleware(limiter, trustedProxies, cfg.RateLimit, log))
 		r.Use(middleware.RequireRole("admin"))
 
 		// Exercises (создание — только admin)

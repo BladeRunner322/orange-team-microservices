@@ -2,6 +2,8 @@ package usecases
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -37,9 +39,15 @@ func (uc *Register) Execute(ctx context.Context, emailStr, password, fullNameStr
 		return domain.User{}, err
 	}
 
-	if _, err := uc.repo.FindByEmail(ctx, email); err == nil {
+	_, err = uc.repo.FindByEmail(ctx, email)
+	if err == nil {
 		log.Warn("email already exists")
 		return domain.User{}, domain.ErrEmailAlreadyExists
+	}
+
+	if !errors.Is(err, domain.ErrUserNotFound) {
+		log.Error("failed to check email", "error", err)
+		return domain.User{}, fmt.Errorf("check email: %w", err)
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
