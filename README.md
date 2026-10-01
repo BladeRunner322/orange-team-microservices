@@ -342,15 +342,16 @@ orange-team-microservices/
 │   └── leaderboard/                  # НОВЫЙ
 │       └── ... (аналогично)
 │
-├── adr/                              # Architecture Decision Records
-│   ├── README.md
-│   ├── 001-profile.md
-│   ├── 002-user-workout-score.md
-│   ├── 003-transactions.md
-│   ├── 004-microservices-patterns.md
-│   ├── 005-port-allocation.md
-│   ├── 006-secrets-management.md
-│   └── 007-known-issues.md
+├── docs/                             # Документация
+│   └── adr/                          # Architecture Decision Records
+│       ├── README.md
+│       ├── 001-profile.md
+│       ├── 002-user-workout-score.md
+│       ├── 003-transactions.md
+│       ├── 004-microservices-patterns.md
+│       ├── 005-port-allocation.md
+│       ├── 006-secrets-management.md
+│       └── 007-known-issues.md
 │
 ├── .env.example                      # шаблон корневого .env (порты, Grafana)
 ├── .dockerignore                     # исключения для Docker-контекста
@@ -788,7 +789,7 @@ curl http://localhost:8090/metrics
   - для `GetMyProfile` / `PatchMyProfile` / `DeleteMyProfile` — из gRPC metadata (ставит Gateway)
   - для `GetProfile` — из тела запроса (внутренний вызов других сервисов)
 
-- **Lazy-create**: пустая запись создаётся при первом чтении профиля (см. [ADR-001](adr/001-profile.md)).
+- **Lazy-create**: пустая запись создаётся при первом чтении профиля (см. [ADR-001](docs/adr/001-profile.md)).
 
 - `profile_completed = true`, если заполнены все 4 поля: `sex`, `weight_kg`, `birth_date`, `height_cm`.
 
@@ -1618,16 +1619,16 @@ task <service-name>:migrate-version
 
 ## Architecture Decision Records
 
-Ключевые архитектурные решения проекта зафиксированы в ADR — отдельные файлы в папке [`adr/`](adr/).
+Ключевые архитектурные решения проекта зафиксированы в ADR — отдельные файлы в папке [`docs/adr/`](docs/adr/).
 
 Список решений:
 
-- [ADR-001: Профиль пользователя](adr/001-profile.md) — lazy-create, nullable-поля, `profile_completed`
-- [ADR-002: `user_workout_score`](adr/002-user-workout-score.md) — почему не хранится в Profiles
-- [ADR-003: Транзакции](adr/003-transactions.md) — границы транзакций и sync-вызовы
-- [ADR-004: Паттерны микросервисов](adr/004-microservices-patterns.md) — что используем, что нет
-- [ADR-005: Распределение портов](adr/005-port-allocation.md) — диапазоны и смещение +10
-- [ADR-006: Управление секретами](adr/006-secrets-management.md) — SOPS + age
-- [ADR-007: Известные проблемы и технический долг](adr/007-known-issues.md) — что осталось до продакшена
+- [ADR-001: Профиль пользователя](docs/adr/001-profile.md) — lazy-create, nullable-поля, `profile_completed`
+- [ADR-002: user_workout_score](docs/adr/002-user-workout-score.md) — почему не хранится в Profiles
+- [ADR-003: Транзакции](docs/adr/003-transactions.md) — границы транзакций и sync-вызовы
+- [ADR-004: Паттерны микросервисов](docs/adr/004-microservices-patterns.md) — что используем, что нет
+- [ADR-005: Распределение портов](docs/adr/005-port-allocation.md) — диапазоны и смещение +10
+- [ADR-006: Управление секретами](docs/adr/006-secrets-management.md) — SOPS + age
+- [ADR-007: Известные проблемы и технический долг](docs/adr/007-known-issues.md) — что осталось до продакшена
 
-Подробнее — в [`adr/README.md`](adr/README.md).
+Подробнее — в [`docs/adr/README.md`](docs/adr/README.md).
