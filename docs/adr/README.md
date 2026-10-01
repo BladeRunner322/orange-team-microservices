@@ -13,12 +13,14 @@
 ## Список решений
 
 - [ADR-001: Профиль пользователя](001-profile.md)
-- [ADR-002: `user_workout_score`](002-user-workout-score.md)
+- [ADR-002: user_workout_score](002-user-workout-score.md)
 - [ADR-003: Транзакции](003-transactions.md)
 - [ADR-004: Паттерны микросервисов](004-microservices-patterns.md)
 - [ADR-005: Распределение портов](005-port-allocation.md)
 - [ADR-006: Управление секретами](006-secrets-management.md)
 - [ADR-007: Известные проблемы и технический долг](007-known-issues.md)
+- [ADR-008: Жизненный цикл упражнения](008-exercise-lifecycle.md)
+- [ADR-009: Карта зависимостей сервисов](009-service-dependencies.md)
 
 ## Как добавить
 

@@ -1655,5 +1655,7 @@ task <service-name>:migrate-version
 - [ADR-005: Распределение портов](docs/adr/005-port-allocation.md) — диапазоны и смещение +10
 - [ADR-006: Управление секретами](docs/adr/006-secrets-management.md) — SOPS + age
 - [ADR-007: Известные проблемы и технический долг](docs/adr/007-known-issues.md) — что осталось до продакшена
+- [ADR-008: Жизненный цикл упражнения](docs/adr/008-exercise-lifecycle.md) — immutable type, snapshot difficulty, soft delete
+- [ADR-009: Карта зависимостей сервисов](docs/adr/009-service-dependencies.md) — кто кого зовёт, правила
 
 Подробнее — в [`docs/adr/README.md`](docs/adr/README.md).

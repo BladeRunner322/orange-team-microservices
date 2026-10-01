@@ -29,10 +29,12 @@ SET user_workout_score = (
 
 - **Источник истины:** таблица `workouts` (в Workouts-сервисе).
 - **Вычисление:** `SUM(workout_score) WHERE user_id = ? AND status = 'completed'`, считает Workouts по запросу.
-- **Как отдаётся клиенту:** `GET /users/me` в Gateway делает два **параллельных** gRPC-вызова:
+- **Как отдаётся клиенту:** `GET /users/me` в Gateway **будет делать** два **параллельных** gRPC-вызова (после реализации Workouts):
   - `Profiles.GetProfile(user_id)` → профиль
   - `Workouts.GetUserScore(user_id)` → сумма очков
   - склеивает в один HTTP-ответ
+
+  **Текущее состояние:** пока Workouts не реализован, `GET /users/me` возвращает только профиль из Profiles.
 
 **Никаких событий `workout.completed` в Profiles.** Никаких distributed-транзакций.
 
