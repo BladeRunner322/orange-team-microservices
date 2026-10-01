@@ -1,4 +1,4 @@
-# ADR-002: `user_workout_score`
+# ADR-002: user_workout_score
 
 ## Контекст
 
