@@ -6,4 +6,6 @@
 //   - обработку graceful shutdown (SIGINT, SIGTERM)
 package main
 
-// TODO: реализовать по образцу services/profiles/cmd/main.go
+func main() {
+	// TODO: реализовать по образцу services/profiles/cmd/main.go
+}

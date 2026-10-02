@@ -20,7 +20,7 @@
 
 ## Решение
 
-Четыре правила для жизненного цикла упражнения.
+Правила для жизненного цикла упражнения. Пункты 1–4 описывают поведение данных, пункты 5–6 — устройство PATCH-запроса.
 
 ### 1. `type` — immutable
 
@@ -63,9 +63,32 @@ Gateway сам решает, что делать с флагом:
 
 ### 5. `PatchExercise` доступен только admin
 
-Поля, доступные в PATCH: `name`, `description`, `difficulty`. Все — опциональные через nullable.
+Поля, доступные в PATCH: `name`, `description`, `difficulty`. Все — опциональные.
 
 `type` — не входит.
+
+### 6. Типы полей в PATCH-запросе
+
+В `PatchExerciseRequest` (proto) поля `name`, `description`, `difficulty` — `optional`. В Go это генерирует `*string` / `*int32`.
+
+В домене `ExercisePatch` использует `*Name`, `*Description`, `*Difficulty`.
+
+**Почему не `nullable.Nullable[T]`, как в Profiles:**
+
+В Profiles поля `sex`, `weight_grams`, `birth_date`, `height_cm` — **nullable в БД**. У патча три состояния:
+- не трогать
+- сбросить в NULL
+- установить значение
+
+Поэтому там `nullable.Nullable[T]`.
+
+В Exercises все три поля — **`NOT NULL` в БД** (см. миграцию `000001_create_exercises_table.up.sql`). Сбрасывать нечего. У патча два состояния:
+- не трогать (`nil`)
+- установить значение (не-nil)
+
+Значит, `*T` достаточно — третье состояние отсутствует по определению.
+
+**Отличие от Profiles — осознанное, не копируем паттерн бездумно.** Если однажды `description` станет nullable (например, разрешим очищать) — точечно перейдём на `nullable.Nullable[T]` для этого поля.
 
 ## Последствия
 

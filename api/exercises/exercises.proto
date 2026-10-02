@@ -14,14 +14,6 @@ service ExercisesService {
   rpc DeleteExercise(DeleteExerciseRequest) returns (DeleteExerciseResponse);
 }
 
-message NullableString {
-  optional string value = 1;
-}
-
-message NullableInt32 {
-  optional int32 value = 1;
-}
-
 message GetExercisesRequest{
   // пусто
 }
@@ -38,10 +30,10 @@ message CreateExerciseRequest{
 }
 
 message PatchExerciseRequest{
-  string         id          = 1;
-  NullableString name        = 2;
-  NullableString description = 3;
-  NullableInt32  difficulty  = 4;
+  string          id          = 1;
+  optional string name        = 2;
+  optional string description = 3;
+  optional int32  difficulty  = 4;
 }
 
 message DeleteExerciseRequest{
