@@ -1,4 +1,4 @@
-// Package config загружает конфигурацию Profiles-сервиса из переменных окружения.
+// Package config загружает конфигурацию Exercises-сервиса из переменных окружения.
 package config
 
 import (
@@ -8,7 +8,7 @@ import (
 )
 
 type Config struct {
-	GRPCPort string `envconfig:"GRPC_PORT" default:":50052"`
+	GRPCPort string `envconfig:"GRPC_PORT" default:":50053"`
 	HTTPPort string `envconfig:"HTTP_PORT" default:":8080"`
 
 	EnableReflection bool   `envconfig:"ENABLE_REFLECTION" default:"false"`

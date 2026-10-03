@@ -132,6 +132,18 @@ lazy-create, а не про «сохранить всё».
 **Что делать:** одна общая обёртка в `httputil`.
 **Приоритет:** низкий.
 
+**S-4. `log.Info` в usecase дублируется с `LoggingInterceptor`.**
+Все usecase (Auth, Profiles, Exercises) логируют `Info` в конце операции: `"user registered successfully"`, `"profile patched"`, `"exercise fetched"`. При этом `LoggingInterceptor` уже логирует каждый gRPC-вызов с method, status и duration. Для чтений получается полное дублирование — две записи на один успешный запрос.
+
+Для мутаций (`CreateExercise`, `PatchExercise`, `DeleteExercise`, `Register`) `Info` полезен как бизнес-аудит: «кто что сделал». Для чтений (`GetExercise`, `GetExercises`, `ValidateToken`) — шум.
+
+**Что делать (варианты):**
+- **A.** Оставить везде — единообразие важнее чистоты логов.
+- **B.** Убрать `Info` из всех usecase — логирование на уровне интерсептора.
+- **C.** Оставить только в мутациях, убрать из чтений.
+
+**Приоритет:** низкий. Не блокер, но стоит решить один раз и применить единообразно ко всем сервисам.
+
 ### Отложено из ранее принятых ADR
 
 - **ADR-004:** circuit breaker, retry с backoff, gRPC deadlines на
@@ -155,7 +167,7 @@ lazy-create, а не про «сохранить всё».
 
 1. **До продакшена:** внедрить ADR-006 (SOPS + age — принято, но не реализовано).
 2. **Средний:** C-2, O-1, CI-1.
-3. **Низкий:** F-2, F-3, S-1, S-2, S-3.
+3. **Низкий:** F-2, F-3, S-1, S-2, S-3, S-4.
 4. **Документирование:** B-3.
 
 ## Когда пересмотреть
@@ -171,3 +183,4 @@ lazy-create, а не про «сохранить всё».
 - [ADR-003: Транзакции](003-transactions.md) — sync-вызовы между сервисами.
 - [ADR-004: Паттерны микросервисов](004-microservices-patterns.md) — общий tech debt.
 - [ADR-006: Управление секретами](006-secrets-management.md) — статус внедрения.
+- [ADR-011: Naming conventions и Code style](011-naming-and-code-style.md) — соглашения по именованию и стилю.
