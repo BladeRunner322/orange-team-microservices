@@ -308,6 +308,99 @@ tasks:
       - docker compose run --rm --entrypoint sh migrate-profiles -c 'migrate -path /migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres-profiles:5432/$POSTGRES_DB?sslmode=disable" version'
 
   # ============================================================
+  #  EXERCISES SERVICE – ЛОКАЛЬНЫЙ ЗАПУСК
+  # ============================================================
+
+  exercises:run:
+    desc: Run exercises service locally
+    deps: [generate, tidy]
+    cmds:
+      - env GRPC_PORT=:50063 POSTGRES_HOST=localhost POSTGRES_PORT=5434 ENABLE_TLS=true TLS_CERT_FILE=./certs/server.crt TLS_KEY_FILE=./certs/server.key HTTP_PORT=:8093 go run services/exercises/cmd/main.go
+
+  # ============================================================
+  #  EXERCISES SERVICE – DOCKER
+  # ============================================================
+
+  exercises:build:
+    desc: Build Exercises service Docker image
+    cmds:
+      - docker compose build exercises
+
+  exercises:rebuild:
+    desc: Rebuild Exercises with fresh vendor and no cache
+    deps: [vendor]
+    cmds:
+      - docker compose build exercises --no-cache
+
+  exercises:up:
+    desc: Start Exercises service with all dependencies
+    cmds:
+      - docker compose up -d postgres-exercises migrate-exercises exercises
+
+  exercises:down:
+    desc: Stop Exercises service
+    cmds:
+      - docker compose down exercises
+
+  exercises:restart:
+    desc: Restart Exercises service (rebuild and start)
+    cmds:
+      - docker compose up -d --build exercises
+
+  exercises:logs:
+    desc: Show Exercises service logs
+    cmds:
+      - docker compose logs -f exercises
+
+  # ============================================================
+  #  EXERCISES SERVICE – POSTGRES
+  # ============================================================
+
+  exercises:postgres-up:
+    desc: Start PostgreSQL for Exercises
+    cmds:
+      - docker compose up -d postgres-exercises
+
+  exercises:postgres-down:
+    desc: Stop PostgreSQL for Exercises
+    cmds:
+      - docker compose down postgres-exercises
+
+  exercises:postgres-logs:
+    desc: Show PostgreSQL logs for Exercises
+    cmds:
+      - docker compose logs -f postgres-exercises
+
+  exercises:postgres-psql:
+    desc: Open psql console for Exercises database
+    cmds:
+      - docker compose exec postgres-exercises sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+
+  # ============================================================
+  #  EXERCISES SERVICE – МИГРАЦИИ
+  # ============================================================
+
+  exercises:migrate-create:
+    desc: Create a new migration for Exercises
+    cmds:
+      - docker compose run --rm --entrypoint migrate migrate-exercises create -ext sql -dir /migrations -seq {{.CLI_ARGS}}
+
+  exercises:migrate-up:
+    desc: Apply all pending migrations for Exercises
+    cmds:
+      - docker compose run --rm --entrypoint sh migrate-exercises -c 'migrate -path /migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres-exercises:5432/$POSTGRES_DB?sslmode=disable" up'
+
+  exercises:migrate-down:
+    desc: Rollback the last migration for Exercises
+    cmds:
+      - docker compose run --rm --entrypoint sh migrate-exercises -c 'migrate -path /migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres-exercises:5432/$POSTGRES_DB?sslmode=disable" down {{.CLI_ARGS}}'
+
+  exercises:migrate-version:
+    desc: Show current migration version for Exercises
+    cmds:
+      - docker compose run --rm --entrypoint sh migrate-exercises -c 'migrate -path /migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres-exercises:5432/$POSTGRES_DB?sslmode=disable" version'
+
+  # ============================================================
   #  ОБЩИЕ ЗАДАЧИ ДЛЯ ВСЕГО DOCKER-СТЕКА
   # ============================================================
 
@@ -315,7 +408,7 @@ tasks:
     desc: Start all services (app + monitoring + logging)
     cmds:
       - docker compose up -d --build
-      - echo "✅ All services started! (postgres-auth, redis-auth, migrate-auth, auth, redis-gateway, gateway, postgres-profiles, migrate-profiles, profiles, prometheus, grafana, loki, promtail)"
+      - echo "✅ All services started! (postgres-auth, redis-auth, migrate-auth, auth, redis-gateway, gateway, postgres-profiles, migrate-profiles, profiles, postgres-exercises, migrate-exercises, exercises, prometheus, grafana, loki, promtail)"
 
   docker-down:
     desc: Stop all services

@@ -605,9 +605,12 @@ orange-team-microservices/
 | **Auth** | Health / Metrics | HTTP | `8080` | `8080` | `8090` | Смещение +10, переопределяется в `docker-compose.yml` |
 | **Gateway** | HTTP API | HTTP | `8081` | `8081` | `8091` | Смещение +10 |
 | **Profiles** | gRPC | gRPC | `50052` | `50052` | `50062` | Смещение +10 |
-| **Profiles** | Health / Ready / Metrics | HTTP | `8080` | `8082` | `8092` | Смещение +10, переопределяется в `docker-compose.yml` |
+| **Profiles** | Health / Ready / Metrics | HTTP | `8080` | `8082` | `8092` | Смещение +10, переопределяется в `docker-compose.yml`
+| **Exercises** | gRPC | gRPC | `50053` | `50053` | `50063` | Смещение +10 |
+| **Exercises** | Health / Ready / Metrics | HTTP | `8080` | `8083` | `8093` | Смещение +10, переопределяется в `docker-compose.yml` |
 | **PostgreSQL (Auth)** | База данных | TCP | `5432` | `5432` | — | Используется через Docker, проброс на хост |
 | **PostgreSQL (Profiles)** | База данных | TCP | `5432` | `5433` | — | Используется через Docker, проброс на хост |
+| **PostgreSQL (Exercises)** | База данных | TCP | `5432` | `5434` | — | Используется через Docker, проброс на хост | |
 | **Redis Auth** | Refresh-токены | TCP | `6379` | `6379` | — | Только для Auth Service |
 | **Redis Gateway** | Rate limiting | TCP | `6379` | `6380` | — | Только для Gateway Service |
 | **Prometheus** | Метрики | HTTP | `9090` | `9090` | — | Только в Docker |
