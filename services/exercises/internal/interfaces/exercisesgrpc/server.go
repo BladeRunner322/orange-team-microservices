@@ -1,3 +1,4 @@
+// Package exercisesgrpc реализует gRPC-сервер Exercises-сервиса: обработчики RPC и мапперы proto ↔ domain.
 package exercisesgrpc
 
 import (

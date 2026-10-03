@@ -1,4 +1,3 @@
-// Package domain — доменные ошибки Exercises-сервиса.
 package domain
 
 import "errors"

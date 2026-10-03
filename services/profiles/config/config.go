@@ -28,7 +28,7 @@ func Load() (Config, error) {
 func MustLoad() Config {
 	config, err := Load()
 	if err != nil {
-		err = fmt.Errorf("get Service config %w", err)
+		err = fmt.Errorf("get service config %w", err)
 		panic(err)
 	}
 	return config

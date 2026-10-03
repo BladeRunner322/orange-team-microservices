@@ -1,3 +1,4 @@
+// Package domain — доменная модель Exercises-сервиса: сущности, value objects и ошибки.
 package domain
 
 import (

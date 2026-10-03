@@ -1,3 +1,4 @@
+// Package usecases реализует сценарии работы с упражнениями.
 package usecases
 
 import (

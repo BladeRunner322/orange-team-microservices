@@ -1,4 +1,19 @@
+// Package health предоставляет HTTP-эндпоинты /health и /ready для Exercises-сервиса.
 package health
 
-// TODO: реализовать Handler() по образцу services/profiles/internal/interfaces/http/health/health.go.
-// Ответ: {"status":"ok","service":"exercises"}
+import (
+	"encoding/json"
+	"net/http"
+)
+
+// Handler возвращает HTTP-обработчик для healthcheck.
+func Handler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"status":  "ok",
+			"service": "exercises",
+		})
+	}
+}
