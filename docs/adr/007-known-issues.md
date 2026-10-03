@@ -266,6 +266,35 @@ Create → GetExercise → GetExercises → Update → MarkDeleted
 
 **Приоритет:** низкий. Косметика.
 
+**S-10. Обёртка ошибок при маппинге модели в домен.**
+В `postgres_repo` ошибки `ModelToDomain` обрабатываются по-разному:
+
+**Profiles — проброс без контекста:**
+```go
+return ModelToDomain(m)
+```
+
+**Exercises — с указанием id:**
+```go
+exercise, err := ModelToDomain(m)
+if err != nil {
+    return nil, fmt.Errorf("exercise %s: %w", m.ID, err)
+}
+```
+
+Доменные ошибки (`ErrInvalidName`, `ErrInvalidDifficulty`) сами по себе информативны, но не говорят **какую** запись в БД не удалось разобрать. В списке (`GetExercises`) это критично — иначе непонятно, где в БД искать мусор.
+
+**Решение:** при маппинге оборачивать ошибку с id записи:
+```go
+fmt.Errorf("exercise %s: %w", m.ID, err)
+```
+
+Правило применяется при `ModelToDomain` — в `GetExercises`, `GetExercise`, `Create`, `Update`.
+
+**Что делать:** унифицировать в Profiles в отдельном PR.
+
+**Приоритет:** низкий. Диагностика, не функциональность.
+
 ### Отложено из ранее принятых ADR
 
 - **ADR-004:** circuit breaker, retry с backoff, gRPC deadlines на
@@ -289,7 +318,7 @@ Create → GetExercise → GetExercises → Update → MarkDeleted
 
 1. **До продакшена:** внедрить ADR-006 (SOPS + age — принято, но не реализовано).
 2. **Средний:** C-2, O-1, CI-1.
-3. **Низкий:** F-2, F-3, S-1, S-2, S-3, S-4, S-5, S-6, S-7, S-8, S-9.
+3. **Низкий:** F-2, F-3, S-1, S-2, S-3, S-4, S-5, S-6, S-7, S-8, S-9, S-10.
 4. **Документирование:** B-3.
 
 ## Когда пересмотреть
