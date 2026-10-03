@@ -27,6 +27,31 @@
 
 **Почему разделяем:** хелпер поля («взять поле из proto») и маппер объекта («преобразовать объект в domain») — разные роли. Разные роли → разные имена.
 
+**Уточнение для универсальных парсеров скаляров.**
+
+Есть функции, которые парсят **одно скалярное значение** из proto (например, `id string` → `uuid.UUID`). Такие функции называют **`ToDomain<Type>`**, а не `<field>FromProto`, если они:
+
+- используются в **нескольких** request-типах (например, `id` в `GetExerciseRequest`, `PatchExerciseRequest`, `DeleteExerciseRequest`);
+- принимают **само значение** (не request целиком), чтобы не дублировать функцию под каждый request.
+
+Пример:
+```go
+func ToDomainID(raw string) (uuid.UUID, error) {
+    id, err := uuid.Parse(raw)
+    if err != nil {
+        return uuid.Nil, fmt.Errorf("parse id: %w", err)
+    }
+    return id, nil
+}
+```
+
+Если request с таким полем **один** — допустимо принимать request целиком:
+```go
+func ToDomainUserID(req *profiles.GetProfileRequest) (uuid.UUID, error)
+```
+
+Оба варианта осознанны. Разница: количество потребителей.
+
 **N-2. Методы репозитория — CRUD-alphabetical.**
 
 Порядок:
