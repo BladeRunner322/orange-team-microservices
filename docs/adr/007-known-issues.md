@@ -153,6 +153,40 @@ lazy-create, а не про «сохранить всё».
 
 **Приоритет:** низкий. Косметика, но приводит к единообразию.
 
+**S-6. Разнобой в стиле проверки ошибок.**
+В usecases используются два стиля проверки ошибок:
+
+**Вариант A — плоский (два if):**
+```go
+profile, err := uc.repo.GetByUserID(ctx, userID)
+
+if errors.Is(err, domain.ErrProfileNotFound) {
+    return ..., domain.ErrProfileNotFound
+}
+
+if err != nil {
+    return ..., fmt.Errorf(...)
+}
+```
+
+**Вариант B — вложенный (классический Go):**
+```go
+if err != nil {
+    if errors.Is(err, domain.ErrProfileNotFound) {
+        return ..., domain.ErrProfileNotFound
+    }
+    return ..., fmt.Errorf(...)
+}
+```
+
+Оба работают, но в одном файле соседствуют. Пример: `patch_my_profile.go` — блок `GetByUserID` использует A, блок `Update` использует B. В `register.go` (Auth) — A. В `getOrCreateProfile` (Profiles) — B.
+
+**Решение:** стандарт — **вариант B (вложенный)**. Причина: явный «ошибка → какая ошибка», классический Go-стиль, не даёт забыть про `err == nil`.
+
+**Что делать:** новые сервисы (Exercises, Habits, Workouts, Leaderboard) — только B. В Auth/Profiles переписать в отдельном PR.
+
+**Приоритет:** низкий. Косметика, но приводит к единообразию.
+
 ### Отложено из ранее принятых ADR
 
 - **ADR-004:** circuit breaker, retry с backoff, gRPC deadlines на
@@ -176,7 +210,7 @@ lazy-create, а не про «сохранить всё».
 
 1. **До продакшена:** внедрить ADR-006 (SOPS + age — принято, но не реализовано).
 2. **Средний:** C-2, O-1, CI-1.
-3. **Низкий:** F-2, F-3, S-1, S-2, S-3, S-4, S-5.
+3. **Низкий:** F-2, F-3, S-1, S-2, S-3, S-4, S-5, S-6.
 4. **Документирование:** B-3.
 
 ## Когда пересмотреть
