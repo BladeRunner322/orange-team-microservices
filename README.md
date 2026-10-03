@@ -1660,6 +1660,7 @@ task <service-name>:migrate-version
 - [ADR-007: Известные проблемы и технический долг](docs/adr/007-known-issues.md) — что осталось до продакшена
 - [ADR-008: Жизненный цикл упражнения](docs/adr/008-exercise-lifecycle.md) — immutable type, snapshot difficulty, soft delete
 - [ADR-009: Карта зависимостей сервисов](docs/adr/009-service-dependencies.md) — кто кого зовёт, правила
+- [ADR-010: Общие инфраструктурные пакеты](docs/adr/010-shared-infrastructure-packages.md) — что выносим в pkg, что оставляем локально
 - [ADR-011: Naming conventions и Code style](docs/adr/011-naming-and-code-style.md) — соглашения по именованию и стилю
 
 Подробнее — в [docs/adr/README.md](docs/adr/README.md).
