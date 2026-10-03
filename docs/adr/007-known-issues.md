@@ -229,6 +229,43 @@ func (m *ExerciseModel) Scan(row postgres.Row) error {
 
 **Приоритет:** низкий. Косметика, но приводит к единообразию.
 
+**S-9. Разнобой в порядке методов в `Repository`.**
+В `ports.Repository` двух сервисов порядок методов отличается:
+
+**Auth:**
+```go
+Save → FindByEmail → FindByID
+```
+
+**Profiles:**
+```go
+GetByUserID → Upsert → Update → Delete
+```
+
+**Exercises (текущий):**
+```go
+Create → GetExercise → GetExercises → Update → MarkDeleted
+```
+
+Единого правила нет. Читателю приходится каждый раз искать нужный метод.
+
+**Решение:** порядок **CRUD-alphabetical**:
+1. `Create`
+2. `Get<Entity>` (одно)
+3. `Get<Entities>` (список)
+4. `Update`
+5. `Delete` / `MarkDeleted` / `Remove`
+
+Почему так:
+- Соответствует CRUD — общепринятая ментальная модель: создать → прочитать → обновить → удалить.
+- `Get<Entity>` перед `Get<Entities>` — от частного к общему.
+- Совпадает с алфавитным порядком **имён файлов**, если методы разбиты по файлам (`create.go`, `get_exercise.go`, `get_exercises.go`, `update.go`, `delete.go`).
+- В godoc и IDE-автодополнении порядок сохраняется — легче ориентироваться.
+
+**Что делать:** новые сервисы (Exercises, Habits, Workouts, Leaderboard) — по этому правилу. В Auth/Profiles — унифицировать в отдельном PR.
+
+**Приоритет:** низкий. Косметика.
+
 ### Отложено из ранее принятых ADR
 
 - **ADR-004:** circuit breaker, retry с backoff, gRPC deadlines на
@@ -252,7 +289,7 @@ func (m *ExerciseModel) Scan(row postgres.Row) error {
 
 1. **До продакшена:** внедрить ADR-006 (SOPS + age — принято, но не реализовано).
 2. **Средний:** C-2, O-1, CI-1.
-3. **Низкий:** F-2, F-3, S-1, S-2, S-3, S-4, S-5, S-6, S-7, S-8.
+3. **Низкий:** F-2, F-3, S-1, S-2, S-3, S-4, S-5, S-6, S-7, S-8, S-9.
 4. **Документирование:** B-3.
 
 ## Когда пересмотреть
