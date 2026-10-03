@@ -1658,4 +1658,4 @@ task <service-name>:migrate-version
 - [ADR-008: Жизненный цикл упражнения](docs/adr/008-exercise-lifecycle.md) — immutable type, snapshot difficulty, soft delete
 - [ADR-009: Карта зависимостей сервисов](docs/adr/009-service-dependencies.md) — кто кого зовёт, правила
 
-Подробнее — в [`docs/adr/README.md`](docs/adr/README.md).
+Подробнее — в [docs/adr/README.md](docs/adr/README.md).
