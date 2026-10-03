@@ -45,12 +45,15 @@ func ToDomainID(raw string) (uuid.UUID, error) {
 }
 ```
 
-Если request с таким полем **один** — допустимо принимать request целиком:
-```go
-func ToDomainUserID(req *profiles.GetProfileRequest) (uuid.UUID, error)
-```
+**Стандарт — `raw`-значение, не request целиком.**
 
-Оба варианта осознанны. Разница: количество потребителей.
+Принимать сам `request` (как `ToDomainUserID(req *profiles.GetProfileRequest)` в Profiles) — **не используем**. Даже если request один. Причины:
+
+1. **Единый стиль.** Все парсеры скаляров принимают значение. Не надо помнить «а тут один request или нет».
+2. **Переиспользование.** Если завтра появится второй request с тем же полем — не надо писать вторую функцию.
+3. **Типобезопасность вызова.** В хендлере видно, что передаём: `ToDomainID(req.Id)` — источник явный.
+
+**Что делать:** переделать `ToDomainUserID` в Profiles на `ToDomainUserID(raw string)`. Обновить вызовы в `server.go` (`ToDomainUserID(req.UserId)`).
 
 **N-2. Методы репозитория — CRUD-alphabetical.**
 
