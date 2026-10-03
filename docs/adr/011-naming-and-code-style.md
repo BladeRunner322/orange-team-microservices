@@ -193,6 +193,46 @@ WHERE id = $1 AND deleted_at IS NULL
 - `updated_at` обновляется, потому что сущность изменилась.
 - Фильтр `deleted_at IS NULL` — защита от race condition: если параллельно кто-то удалил, `RowsAffected() == 0`.
 
+**CS-8. Возврат из функции — через переменную.**
+
+Промежуточный результат сохраняем в переменную с говорящим именем, потом возвращаем. Не возвращаем длинные выражения inline.
+
+**Правильно:**
+```go
+resp := ToProtoExercise(exercise)
+return resp, nil
+```
+
+```go
+created, err := ModelToDomain(m)
+if err != nil {
+    return domain.Exercise{}, fmt.Errorf("exercise %s: %w", m.ID, err)
+}
+return created, nil
+```
+
+**Неправильно (для длинных выражений):**
+```go
+return ToProtoExercise(exercise), nil
+```
+и
+```go
+return ModelToDomain(m)
+```
+
+**Почему так:**
+- **Читаемость.** Переменная с именем (`resp`, `created`, `updated`) говорит, что получилось. Inline выражение надо разбирать.
+- **Отладка.** Можно поставить breakpoint на строку `resp := ...` и посмотреть значение до возврата.
+- **Единообразие.** Все методы во всех слоях (`usecases`, `repository`, `grpc`) используют одинаковый паттерн.
+
+**Имена переменных:**
+- `resp` — для ответа gRPC-хендлера.
+- `created` — для результата `Create`.
+- `updated` — для результата `Update`.
+- `fetched` / `exercise` / `list` — для результата `Get`.
+
+**Исключение:** очень короткие и очевидные случаи — допустимо inline. Например, `return nil, nil` или `return err`. Границу определяет разработчик: если выражение короче 30 символов и очевидно — inline не вредит.
+
 ## Последствия
 
 **Плюсы:**
