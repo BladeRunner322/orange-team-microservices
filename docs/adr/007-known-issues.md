@@ -203,6 +203,32 @@ if err != nil {
 
 **Приоритет:** низкий. Косметика.
 
+**S-8. Разнобой в сканировании моделей из БД.**
+В `postgres_repo` двух сервисов скан делается по-разному:
+
+**Profiles — inline в репозитории:**
+```go
+var m ProfileModel
+row := r.pool.QueryRow(ctx, query, userID)
+err := row.Scan(&m.UserID, &m.Sex, &m.WeightGrams, &m.BirthDate,
+    &m.HeightCM, &m.CreatedAt, &m.UpdatedAt)
+```
+
+**Exercises — метод `Scan` на модели:**
+```go
+func (m *ExerciseModel) Scan(row postgres.Row) error {
+    return row.Scan(&m.ID, &m.Name, ...)
+}
+```
+
+Профили: 2 места скана (GetByUserID, Update). Exercises: 3 места (Create, GetExercise, GetExercises). При 3+ местах метод `Scan` экономит дублирование и упрощает правку при добавлении поля.
+
+**Решение:** метод `Scan(row postgres.Row) error` на модели — **стандарт**. Используем везде, где мест скана больше одного.
+
+**Что делать:** переделать Profiles — добавить метод `Scan` на `ProfileModel`, заменить inline-сканы в `GetByUserID` и `Update`.
+
+**Приоритет:** низкий. Косметика, но приводит к единообразию.
+
 ### Отложено из ранее принятых ADR
 
 - **ADR-004:** circuit breaker, retry с backoff, gRPC deadlines на
@@ -226,7 +252,7 @@ if err != nil {
 
 1. **До продакшена:** внедрить ADR-006 (SOPS + age — принято, но не реализовано).
 2. **Средний:** C-2, O-1, CI-1.
-3. **Низкий:** F-2, F-3, S-1, S-2, S-3, S-4, S-5, S-6, S-7.
+3. **Низкий:** F-2, F-3, S-1, S-2, S-3, S-4, S-5, S-6, S-7, S-8.
 4. **Документирование:** B-3.
 
 ## Когда пересмотреть
