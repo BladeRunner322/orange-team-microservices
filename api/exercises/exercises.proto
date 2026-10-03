@@ -7,19 +7,11 @@ import "google/protobuf/timestamp.proto";
 option go_package = "internal/gen/api/exercises";
 
 service ExercisesService {
-  rpc GetExercises(GetExercisesRequest) returns (GetExercisesResponse);
-  rpc GetExercise(GetExerciseRequest) returns (Exercise);
   rpc CreateExercise(CreateExerciseRequest) returns (Exercise);
+  rpc GetExercise(GetExerciseRequest) returns (Exercise);
+  rpc GetExercises(GetExercisesRequest) returns (GetExercisesResponse);
   rpc PatchExercise(PatchExerciseRequest) returns (Exercise);
   rpc DeleteExercise(DeleteExerciseRequest) returns (DeleteExerciseResponse);
-}
-
-message GetExercisesRequest{
-  // пусто
-}
-
-message GetExerciseRequest{
-  string id = 1;
 }
 
 message CreateExerciseRequest{
@@ -27,6 +19,14 @@ message CreateExerciseRequest{
   string description = 2;
   int32  difficulty  = 3;
   string type        = 4;
+}
+
+message GetExerciseRequest{
+  string id = 1;
+}
+
+message GetExercisesRequest{
+  // пусто
 }
 
 message PatchExerciseRequest{

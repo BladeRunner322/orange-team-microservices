@@ -9,16 +9,16 @@ import (
 )
 
 type Repository interface {
-	// GetExercises возвращает список активных упражнений (deleted_at IS NULL).
-	GetExercises(ctx context.Context) ([]domain.Exercise, error)
+	// Create сохраняет новое упражнение и возвращает его из БД
+	// (с заполненными created_at / updated_at).
+	Create(ctx context.Context, exercise domain.Exercise) (domain.Exercise, error)
 
 	// GetExercise возвращает упражнение по id, включая удалённые (см. ADR-008).
 	// Если не найдено — domain.ErrExerciseNotFound.
 	GetExercise(ctx context.Context, id uuid.UUID) (domain.Exercise, error)
 
-	// Create сохраняет новое упражнение и возвращает его из БД
-	// (с заполненными created_at / updated_at).
-	Create(ctx context.Context, exercise domain.Exercise) (domain.Exercise, error)
+	// GetExercises возвращает список активных упражнений (deleted_at IS NULL).
+	GetExercises(ctx context.Context) ([]domain.Exercise, error)
 
 	// Update сохраняет все бизнес-поля упражнения и возвращает актуальное
 	// состояние из БД. Не трогает deleted_at.
