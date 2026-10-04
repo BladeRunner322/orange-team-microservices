@@ -1,4 +1,4 @@
-package handlers
+package profiles
 
 import (
 	"bytes"
@@ -8,8 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/profiles"
-	"github.com/BladeRunner322/orange-team-microservices/pkg/nullable"
+	profilespb "github.com/BladeRunner322/orange-team-microservices/internal/gen/api/profiles"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -20,8 +19,8 @@ import (
 func TestGetUserHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		mock := &mockProfilesClient{
-			getMyProfileFunc: func(ctx context.Context) (*profiles.UserProfile, error) {
-				return &profiles.UserProfile{
+			getMyProfileFunc: func(ctx context.Context) (*profilespb.UserProfile, error) {
+				return &profilespb.UserProfile{
 					UserId:           "user-123",
 					Sex:              "male",
 					WeightKg:         80.5,
@@ -52,7 +51,7 @@ func TestGetUserHandler(t *testing.T) {
 
 	t.Run("gRPC error", func(t *testing.T) {
 		mock := &mockProfilesClient{
-			getMyProfileFunc: func(ctx context.Context) (*profiles.UserProfile, error) {
+			getMyProfileFunc: func(ctx context.Context) (*profilespb.UserProfile, error) {
 				return nil, status.Error(codes.Unauthenticated, "unauthenticated")
 			},
 		}
@@ -72,8 +71,8 @@ func TestGetUserHandler(t *testing.T) {
 func TestPatchUserHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		mock := &mockProfilesClient{
-			patchMyProfileFunc: func(ctx context.Context, req *profiles.PatchMyProfileRequest) (*profiles.UserProfile, error) {
-				return &profiles.UserProfile{
+			patchMyProfileFunc: func(ctx context.Context, req *profilespb.PatchMyProfileRequest) (*profilespb.UserProfile, error) {
+				return &profilespb.UserProfile{
 					UserId:           "user-123",
 					Sex:              "female",
 					WeightKg:         60.0,
@@ -117,7 +116,7 @@ func TestPatchUserHandler(t *testing.T) {
 
 	t.Run("gRPC error", func(t *testing.T) {
 		mock := &mockProfilesClient{
-			patchMyProfileFunc: func(ctx context.Context, req *profiles.PatchMyProfileRequest) (*profiles.UserProfile, error) {
+			patchMyProfileFunc: func(ctx context.Context, req *profilespb.PatchMyProfileRequest) (*profilespb.UserProfile, error) {
 				return nil, status.Error(codes.InvalidArgument, "invalid weight")
 			},
 		}
@@ -135,12 +134,12 @@ func TestPatchUserHandler(t *testing.T) {
 	})
 
 	t.Run("null сбрасывает поле", func(t *testing.T) {
-		var captured *profiles.PatchMyProfileRequest
+		var captured *profilespb.PatchMyProfileRequest
 
 		mock := &mockProfilesClient{
-			patchMyProfileFunc: func(ctx context.Context, req *profiles.PatchMyProfileRequest) (*profiles.UserProfile, error) {
+			patchMyProfileFunc: func(ctx context.Context, req *profilespb.PatchMyProfileRequest) (*profilespb.UserProfile, error) {
 				captured = req
-				return &profiles.UserProfile{UserId: "user-123"}, nil
+				return &profilespb.UserProfile{UserId: "user-123"}, nil
 			},
 		}
 		handler := PatchUserHandler(mock)
@@ -159,12 +158,12 @@ func TestPatchUserHandler(t *testing.T) {
 	})
 
 	t.Run("пропущенное поле не трогается", func(t *testing.T) {
-		var captured *profiles.PatchMyProfileRequest
+		var captured *profilespb.PatchMyProfileRequest
 
 		mock := &mockProfilesClient{
-			patchMyProfileFunc: func(ctx context.Context, req *profiles.PatchMyProfileRequest) (*profiles.UserProfile, error) {
+			patchMyProfileFunc: func(ctx context.Context, req *profilespb.PatchMyProfileRequest) (*profilespb.UserProfile, error) {
 				captured = req
-				return &profiles.UserProfile{UserId: "user-123"}, nil
+				return &profilespb.UserProfile{UserId: "user-123"}, nil
 			},
 		}
 		handler := PatchUserHandler(mock)
@@ -238,6 +237,3 @@ func TestDeleteUserHandler(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 }
-
-// чтобы компилятор не ругался на неиспользуемый импорт nullable
-var _ = nullable.Nullable[string]{}

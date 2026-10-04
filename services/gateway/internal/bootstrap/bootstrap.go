@@ -15,7 +15,10 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/pkg/redis"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/config"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/infrastructure/clients"
-	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers"
+	authhandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/auth"
+	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/health"
+	profileshandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/profiles"
+	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/proxy"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/middleware"
 )
 
@@ -80,7 +83,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	}
 
 	// 7. Readiness handler (проверяет зависимости)
-	readinessHandler := handlers.NewReadinessHandler(redisClient)
+	readinessHandler := health.NewReadinessHandler(redisClient)
 
 	// 8. Роутер
 	r := chi.NewRouter()
@@ -95,14 +98,14 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	r.Group(func(r chi.Router) {
 		r.Use(rateLimitPublic)
 
-		r.Get("/health", handlers.HealthHandler)
+		r.Get("/health", health.Handler)
 		r.Get("/ready", readinessHandler.Handle)
 		r.Handle("/metrics", promhttp.Handler())
 
-		r.Post("/register", handlers.RegisterHandler(authClient))
-		r.Post("/login", handlers.LoginHandler(authClient))
-		r.Post("/refresh", handlers.RefreshHandler(authClient))
-		r.Post("/logout", handlers.LogoutHandler(authClient))
+		r.Post("/register", authhandlers.RegisterHandler(authClient))
+		r.Post("/login", authhandlers.LoginHandler(authClient))
+		r.Post("/refresh", authhandlers.RefreshHandler(authClient))
+		r.Post("/logout", authhandlers.LogoutHandler(authClient))
 	})
 
 	// 10. Защищённые маршруты (обычные пользователи, без RBAC)
@@ -111,34 +114,34 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Use(middleware.RateLimitMiddleware(limiter, trustedProxies, cfg.RateLimit, log))
 
 		// Users
-		r.Get("/users/me", handlers.GetUserHandler(profilesClient))
-		r.Patch("/users/me", handlers.PatchUserHandler(profilesClient))
-		r.Delete("/users/me", handlers.DeleteUserHandler(profilesClient))
+		r.Get("/users/me", profileshandlers.GetUserHandler(profilesClient))
+		r.Patch("/users/me", profileshandlers.PatchUserHandler(profilesClient))
+		r.Delete("/users/me", profileshandlers.DeleteUserHandler(profilesClient))
 
 		// Exercises (только чтение — всем авторизованным)
-		r.Get("/exercises", handlers.ProxyHandler)
+		r.Get("/exercises", proxy.Handler)
 
 		// Habits
-		r.Get("/habits", handlers.ProxyHandler)
-		r.Post("/habits", handlers.ProxyHandler)
-		r.Post("/habits/{habitId}/complete", handlers.ProxyHandler)
-		r.Delete("/habits/{habitId}", handlers.ProxyHandler)
+		r.Get("/habits", proxy.Handler)
+		r.Post("/habits", proxy.Handler)
+		r.Post("/habits/{habitId}/complete", proxy.Handler)
+		r.Delete("/habits/{habitId}", proxy.Handler)
 
 		// Workouts
-		r.Get("/workouts", handlers.ProxyHandler)
-		r.Post("/workouts", handlers.ProxyHandler)
-		r.Get("/workouts/{workoutId}", handlers.ProxyHandler)
-		r.Patch("/workouts/{workoutId}", handlers.ProxyHandler)
-		r.Delete("/workouts/{workoutId}", handlers.ProxyHandler)
-		r.Post("/workouts/{workoutId}/exercises", handlers.ProxyHandler)
-		r.Get("/workouts/{workoutId}/exercises", handlers.ProxyHandler)
-		r.Patch("/workouts/{workoutId}/exercises/{exerciseId}", handlers.ProxyHandler)
-		r.Delete("/workouts/{workoutId}/exercises/{exerciseId}", handlers.ProxyHandler)
+		r.Get("/workouts", proxy.Handler)
+		r.Post("/workouts", proxy.Handler)
+		r.Get("/workouts/{workoutId}", proxy.Handler)
+		r.Patch("/workouts/{workoutId}", proxy.Handler)
+		r.Delete("/workouts/{workoutId}", proxy.Handler)
+		r.Post("/workouts/{workoutId}/exercises", proxy.Handler)
+		r.Get("/workouts/{workoutId}/exercises", proxy.Handler)
+		r.Patch("/workouts/{workoutId}/exercises/{exerciseId}", proxy.Handler)
+		r.Delete("/workouts/{workoutId}/exercises/{exerciseId}", proxy.Handler)
 
 		// Leaderboard
-		r.Get("/leaderboard/daily", handlers.ProxyHandler)
-		r.Get("/leaderboard/weekly", handlers.ProxyHandler)
-		r.Get("/leaderboard/monthly", handlers.ProxyHandler)
+		r.Get("/leaderboard/daily", proxy.Handler)
+		r.Get("/leaderboard/weekly", proxy.Handler)
+		r.Get("/leaderboard/monthly", proxy.Handler)
 	})
 
 	// 11. Admin-only маршруты (RBAC: role == admin)
@@ -148,7 +151,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Use(middleware.RequireRole("admin"))
 
 		// Exercises (создание — только admin)
-		r.Post("/exercises", handlers.ProxyHandler)
+		r.Post("/exercises", proxy.Handler)
 	})
 
 	// 12. HTTP-сервер

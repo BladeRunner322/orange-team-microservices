@@ -1,4 +1,4 @@
-package handlers
+package auth
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/auth"
+	authpb "github.com/BladeRunner322/orange-team-microservices/internal/gen/api/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -18,8 +18,8 @@ import (
 func TestRegisterHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		mock := &mockAuthClient{
-			registerFunc: func(ctx context.Context, email, password, fullName string) (*auth.RegisterResponse, error) {
-				return &auth.RegisterResponse{Id: "123", Email: email, FullName: fullName}, nil
+			registerFunc: func(ctx context.Context, email, password, fullName string) (*authpb.RegisterResponse, error) {
+				return &authpb.RegisterResponse{Id: "123", Email: email, FullName: fullName}, nil
 			},
 		}
 		handler := RegisterHandler(mock)
@@ -33,7 +33,7 @@ func TestRegisterHandler(t *testing.T) {
 		handler.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
-		var resp auth.RegisterResponse
+		var resp authpb.RegisterResponse
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.Equal(t, "123", resp.Id)
@@ -70,7 +70,7 @@ func TestRegisterHandler(t *testing.T) {
 
 	t.Run("gRPC error", func(t *testing.T) {
 		mock := &mockAuthClient{
-			registerFunc: func(ctx context.Context, email, password, fullName string) (*auth.RegisterResponse, error) {
+			registerFunc: func(ctx context.Context, email, password, fullName string) (*authpb.RegisterResponse, error) {
 				return nil, status.Error(codes.AlreadyExists, "email already exists")
 			},
 		}
@@ -90,8 +90,8 @@ func TestRegisterHandler(t *testing.T) {
 func TestLoginHandler(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		mock := &mockAuthClient{
-			loginFunc: func(ctx context.Context, email, password string) (*auth.LoginResponse, error) {
-				return &auth.LoginResponse{AccessToken: "token", TokenType: "Bearer"}, nil
+			loginFunc: func(ctx context.Context, email, password string) (*authpb.LoginResponse, error) {
+				return &authpb.LoginResponse{AccessToken: "token", TokenType: "Bearer"}, nil
 			},
 		}
 		handler := LoginHandler(mock)
@@ -103,7 +103,7 @@ func TestLoginHandler(t *testing.T) {
 		handler.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp auth.LoginResponse
+		var resp authpb.LoginResponse
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.Equal(t, "token", resp.AccessToken)
@@ -125,7 +125,7 @@ func TestLoginHandler(t *testing.T) {
 
 	t.Run("gRPC error", func(t *testing.T) {
 		mock := &mockAuthClient{
-			loginFunc: func(ctx context.Context, email, password string) (*auth.LoginResponse, error) {
+			loginFunc: func(ctx context.Context, email, password string) (*authpb.LoginResponse, error) {
 				return nil, status.Error(codes.Unauthenticated, "invalid credentials")
 			},
 		}

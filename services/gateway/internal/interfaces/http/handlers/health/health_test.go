@@ -1,4 +1,4 @@
-package handlers
+package health
 
 import (
 	"encoding/json"
@@ -9,10 +9,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestHealthHandler(t *testing.T) {
+func TestHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rr := httptest.NewRecorder()
-	HealthHandler(rr, req)
+	Handler(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	var resp map[string]string

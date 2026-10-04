@@ -1,10 +1,10 @@
-package handlers
+package profiles
 
 import (
 	"testing"
 	"time"
 
-	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/profiles"
+	profilespb "github.com/BladeRunner322/orange-team-microservices/internal/gen/api/profiles"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/nullable"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -142,7 +142,7 @@ func TestProtoToUserProfileResponse(t *testing.T) {
 		created := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 		updated := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
 
-		out := protoToUserProfileResponse(&profiles.UserProfile{
+		out := protoToUserProfileResponse(&profilespb.UserProfile{
 			UserId:           "user-123",
 			Sex:              "male",
 			WeightKg:         80.5,
@@ -165,7 +165,7 @@ func TestProtoToUserProfileResponse(t *testing.T) {
 	})
 
 	t.Run("updated_at nil — указатель nil", func(t *testing.T) {
-		out := protoToUserProfileResponse(&profiles.UserProfile{
+		out := protoToUserProfileResponse(&profilespb.UserProfile{
 			UserId:    "user-123",
 			CreatedAt: timestamppb.New(time.Now()),
 			UpdatedAt: nil,
@@ -176,7 +176,7 @@ func TestProtoToUserProfileResponse(t *testing.T) {
 	})
 
 	t.Run("пустой профиль — zero values", func(t *testing.T) {
-		out := protoToUserProfileResponse(&profiles.UserProfile{
+		out := protoToUserProfileResponse(&profilespb.UserProfile{
 			UserId: "user-123",
 		})
 

@@ -1,0 +1,57 @@
+package auth
+
+import (
+	"context"
+
+	authpb "github.com/BladeRunner322/orange-team-microservices/internal/gen/api/auth"
+	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/application/ports"
+)
+
+type mockAuthClient struct {
+	registerFunc     func(ctx context.Context, email, password, fullName string) (*authpb.RegisterResponse, error)
+	loginFunc        func(ctx context.Context, email, password string) (*authpb.LoginResponse, error)
+	validateFunc     func(ctx context.Context, token string) (ports.UserInfo, error)
+	refreshTokenFunc func(ctx context.Context, refreshToken string) (*authpb.RefreshTokenResponse, error)
+	logoutFunc       func(ctx context.Context, refreshToken string) error
+}
+
+func (m *mockAuthClient) Register(ctx context.Context, email, password, fullName string) (*authpb.RegisterResponse, error) {
+	if m.registerFunc != nil {
+		return m.registerFunc(ctx, email, password, fullName)
+	}
+	return &authpb.RegisterResponse{Id: "test-id", Email: email, FullName: fullName}, nil
+}
+
+func (m *mockAuthClient) Login(ctx context.Context, email, password string) (*authpb.LoginResponse, error) {
+	if m.loginFunc != nil {
+		return m.loginFunc(ctx, email, password)
+	}
+	return &authpb.LoginResponse{AccessToken: "test-token", TokenType: "Bearer"}, nil
+}
+
+func (m *mockAuthClient) ValidateToken(ctx context.Context, token string) (ports.UserInfo, error) {
+	if m.validateFunc != nil {
+		return m.validateFunc(ctx, token)
+	}
+	return ports.UserInfo{UserID: "user-id", Role: "user"}, nil
+}
+
+func (m *mockAuthClient) RefreshToken(ctx context.Context, refreshToken string) (*authpb.RefreshTokenResponse, error) {
+	if m.refreshTokenFunc != nil {
+		return m.refreshTokenFunc(ctx, refreshToken)
+	}
+	return &authpb.RefreshTokenResponse{
+		AccessToken:  "new-access",
+		RefreshToken: "new-refresh",
+		TokenType:    "Bearer",
+	}, nil
+}
+
+func (m *mockAuthClient) Logout(ctx context.Context, refreshToken string) error {
+	if m.logoutFunc != nil {
+		return m.logoutFunc(ctx, refreshToken)
+	}
+	return nil
+}
+
+func (m *mockAuthClient) Close() {}

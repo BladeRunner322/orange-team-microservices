@@ -1,12 +1,12 @@
-package handlers
+package profiles
 
 import (
-	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/profiles"
+	profilespb "github.com/BladeRunner322/orange-team-microservices/internal/gen/api/profiles"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/nullable"
 )
 
 // protoToUserProfileResponse преобразует proto-ответ в HTTP-DTO.
-func protoToUserProfileResponse(p *profiles.UserProfile) UserProfileResponse {
+func protoToUserProfileResponse(p *profilespb.UserProfile) UserProfileResponse {
 	resp := UserProfileResponse{
 		UserID:           p.UserId,
 		Sex:              p.Sex,
@@ -29,8 +29,8 @@ func protoToUserProfileResponse(p *profiles.UserProfile) UserProfileResponse {
 }
 
 // patchRequestToProto преобразует HTTP-DTO патча в proto-запрос.
-func patchRequestToProto(req PatchUserRequest) *profiles.PatchMyProfileRequest {
-	return &profiles.PatchMyProfileRequest{
+func patchRequestToProto(req PatchUserRequest) *profilespb.PatchMyProfileRequest {
+	return &profilespb.PatchMyProfileRequest{
 		Sex:       nullableStringToProto(req.Sex),
 		WeightKg:  nullableDoubleToProto(req.WeightKg),
 		BirthDate: nullableStringToProto(req.BirthDate),
@@ -40,42 +40,42 @@ func patchRequestToProto(req PatchUserRequest) *profiles.PatchMyProfileRequest {
 
 // nullableStringToProto конвертирует nullable-поле string в proto-обёртку,
 // сохраняя три состояния: не задано / сброс в NULL / значение.
-func nullableStringToProto(n nullable.Nullable[string]) *profiles.NullableString {
+func nullableStringToProto(n nullable.Nullable[string]) *profilespb.NullableString {
 	if !n.Set {
 		return nil
 	}
 
 	if n.Value == nil {
-		return &profiles.NullableString{}
+		return &profilespb.NullableString{}
 	}
 
-	return &profiles.NullableString{Value: n.Value}
+	return &profilespb.NullableString{Value: n.Value}
 }
 
 // nullableDoubleToProto конвертирует nullable-поле float64 в proto-обёртку,
 // сохраняя три состояния: не задано / сброс в NULL / значение.
-func nullableDoubleToProto(n nullable.Nullable[float64]) *profiles.NullableDouble {
+func nullableDoubleToProto(n nullable.Nullable[float64]) *profilespb.NullableDouble {
 	if !n.Set {
 		return nil
 	}
 
 	if n.Value == nil {
-		return &profiles.NullableDouble{}
+		return &profilespb.NullableDouble{}
 	}
 
-	return &profiles.NullableDouble{Value: n.Value}
+	return &profilespb.NullableDouble{Value: n.Value}
 }
 
 // nullableInt32ToProto конвертирует nullable-поле int32 в proto-обёртку,
 // сохраняя три состояния: не задано / сброс в NULL / значение.
-func nullableInt32ToProto(n nullable.Nullable[int32]) *profiles.NullableInt32 {
+func nullableInt32ToProto(n nullable.Nullable[int32]) *profilespb.NullableInt32 {
 	if !n.Set {
 		return nil
 	}
 
 	if n.Value == nil {
-		return &profiles.NullableInt32{}
+		return &profilespb.NullableInt32{}
 	}
 
-	return &profiles.NullableInt32{Value: n.Value}
+	return &profilespb.NullableInt32{Value: n.Value}
 }
