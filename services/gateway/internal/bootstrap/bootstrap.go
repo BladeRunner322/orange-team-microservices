@@ -15,17 +15,22 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/pkg/redis"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/config"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/infrastructure/clients"
-	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers"
+	authhandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/auth"
+	exerciseshandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/exercises"
+	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/health"
+	profileshandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/profiles"
+	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/proxy"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/middleware"
 )
 
 // App объединяет все компоненты Gateway.
 type App struct {
-	httpServer     *http.Server
-	logger         *logger.Logger
-	authClient     *clients.AuthClient
-	profilesClient *clients.ProfilesClient
-	redisClient    *redis.Client
+	httpServer      *http.Server
+	logger          *logger.Logger
+	authClient      *clients.AuthClient
+	profilesClient  *clients.ProfilesClient
+	exercisesClient *clients.ExercisesClient
+	redisClient     *redis.Client
 }
 
 // New создаёт экземпляр App, собирает все зависимости.
@@ -46,7 +51,14 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	}
 	log.Info("profiles gRPC client created", "addr", cfg.ProfilesGRPCAddr, "timeout", cfg.Timeout)
 
-	// 3. Redis-клиент для rate limiting
+	// 3. gRPC-клиент к Exercises Service
+	exercisesClient, err := clients.NewExercisesClient(ctx, cfg.ExercisesGRPCAddr, cfg.Timeout)
+	if err != nil {
+		return nil, fmt.Errorf("create exercises client: %w", err)
+	}
+	log.Info("exercises gRPC client created", "addr", cfg.ExercisesGRPCAddr, "timeout", cfg.Timeout)
+
+	// 4. Redis-клиент для rate limiting
 	redisClient, err := redis.NewClient(ctx, redis.Config{
 		Addr:     cfg.RedisAddr,
 		Password: cfg.RedisPassword,
@@ -57,10 +69,10 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	}
 	log.Info("redis client created", "addr", cfg.RedisAddr)
 
-	// 4. Rate limiter
+	// 5. Rate limiter
 	limiter := ratelimit.NewLimiter(redisClient.Client)
 
-	// 4.1. Trusted proxies для определения IP клиента
+	// 6. Trusted proxies для определения IP клиента
 	trustedProxies, err := middleware.ParseTrustedProxies(cfg.TrustedProxies)
 	if err != nil {
 		return nil, fmt.Errorf("parse trusted proxies: %w", err)
@@ -71,79 +83,82 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		log.Info("trusted proxies not configured — X-Forwarded-For will be ignored")
 	}
 
-	// 4.2. Readiness handler (проверяет зависимости)
-	readinessHandler := handlers.NewReadinessHandler(redisClient)
+	// 7. Readiness handler (проверяет зависимости)
+	readinessHandler := health.NewReadinessHandler(redisClient)
 
-	// 5. Роутер
+	// 8. Роутер
 	r := chi.NewRouter()
 	r.Use(middleware.RequestIDMiddleware)
 	r.Use(middleware.LoggerMiddleware(log))
 	r.Use(chimid.Recoverer)
 	r.Use(middleware.HTTPMetricsMiddleware)
 
-	// 6. Публичные маршруты (rate limit по IP/email)
+	// 9. Публичные маршруты (rate limit по IP/email)
 	rateLimitPublic := middleware.RateLimitMiddleware(limiter, trustedProxies, cfg.RateLimit, log)
 
 	r.Group(func(r chi.Router) {
 		r.Use(rateLimitPublic)
 
-		r.Get("/health", handlers.HealthHandler)
+		r.Get("/health", health.Handler)
 		r.Get("/ready", readinessHandler.Handle)
 		r.Handle("/metrics", promhttp.Handler())
 
-		r.Post("/register", handlers.RegisterHandler(authClient))
-		r.Post("/login", handlers.LoginHandler(authClient))
-		r.Post("/refresh", handlers.RefreshHandler(authClient))
-		r.Post("/logout", handlers.LogoutHandler(authClient))
+		r.Post("/register", authhandlers.RegisterHandler(authClient))
+		r.Post("/login", authhandlers.LoginHandler(authClient))
+		r.Post("/refresh", authhandlers.RefreshHandler(authClient))
+		r.Post("/logout", authhandlers.LogoutHandler(authClient))
 	})
 
-	// 7. Защищённые маршруты (обычные пользователи, без RBAC)
+	// 10. Защищённые маршруты (обычные пользователи, без RBAC)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(authClient))
 		r.Use(middleware.RateLimitMiddleware(limiter, trustedProxies, cfg.RateLimit, log))
 
 		// Users
-		r.Get("/users/me", handlers.GetUserHandler(profilesClient))
-		r.Patch("/users/me", handlers.PatchUserHandler(profilesClient))
-		r.Delete("/users/me", handlers.DeleteUserHandler(profilesClient))
+		r.Get("/users/me", profileshandlers.GetUserHandler(profilesClient))
+		r.Patch("/users/me", profileshandlers.PatchUserHandler(profilesClient))
+		r.Delete("/users/me", profileshandlers.DeleteUserHandler(profilesClient))
 
-		// Exercises (только чтение — всем авторизованным)
-		r.Get("/exercises", handlers.ProxyHandler)
+		// Exercises (чтение — всем авторизованным)
+		r.Get("/exercises", exerciseshandlers.GetExercisesHandler(exercisesClient))
+		r.Get("/exercises/{exerciseId}", exerciseshandlers.GetExerciseHandler(exercisesClient))
 
 		// Habits
-		r.Get("/habits", handlers.ProxyHandler)
-		r.Post("/habits", handlers.ProxyHandler)
-		r.Post("/habits/{habitId}/complete", handlers.ProxyHandler)
-		r.Delete("/habits/{habitId}", handlers.ProxyHandler)
+		r.Get("/habits", proxy.Handler)
+		r.Post("/habits", proxy.Handler)
+		r.Post("/habits/{habitId}/complete", proxy.Handler)
+		r.Delete("/habits/{habitId}", proxy.Handler)
 
 		// Workouts
-		r.Get("/workouts", handlers.ProxyHandler)
-		r.Post("/workouts", handlers.ProxyHandler)
-		r.Get("/workouts/{workoutId}", handlers.ProxyHandler)
-		r.Patch("/workouts/{workoutId}", handlers.ProxyHandler)
-		r.Delete("/workouts/{workoutId}", handlers.ProxyHandler)
-		r.Post("/workouts/{workoutId}/exercises", handlers.ProxyHandler)
-		r.Get("/workouts/{workoutId}/exercises", handlers.ProxyHandler)
-		r.Patch("/workouts/{workoutId}/exercises/{exerciseId}", handlers.ProxyHandler)
-		r.Delete("/workouts/{workoutId}/exercises/{exerciseId}", handlers.ProxyHandler)
+		r.Get("/workouts", proxy.Handler)
+		r.Post("/workouts", proxy.Handler)
+		r.Get("/workouts/{workoutId}", proxy.Handler)
+		r.Patch("/workouts/{workoutId}", proxy.Handler)
+		r.Delete("/workouts/{workoutId}", proxy.Handler)
+		r.Post("/workouts/{workoutId}/exercises", proxy.Handler)
+		r.Get("/workouts/{workoutId}/exercises", proxy.Handler)
+		r.Patch("/workouts/{workoutId}/exercises/{exerciseId}", proxy.Handler)
+		r.Delete("/workouts/{workoutId}/exercises/{exerciseId}", proxy.Handler)
 
 		// Leaderboard
-		r.Get("/leaderboard/daily", handlers.ProxyHandler)
-		r.Get("/leaderboard/weekly", handlers.ProxyHandler)
-		r.Get("/leaderboard/monthly", handlers.ProxyHandler)
+		r.Get("/leaderboard/daily", proxy.Handler)
+		r.Get("/leaderboard/weekly", proxy.Handler)
+		r.Get("/leaderboard/monthly", proxy.Handler)
 	})
 
-	// 8. Admin-only маршруты (RBAC: role == admin)
+	// 11. Admin-only маршруты (RBAC: role == admin)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(authClient))
 		r.Use(middleware.RateLimitMiddleware(limiter, trustedProxies, cfg.RateLimit, log))
 		r.Use(middleware.RequireRole("admin"))
 
-		// Exercises (создание — только admin)
-		r.Post("/exercises", handlers.ProxyHandler)
+		// Exercises (мутации — только admin)
+		r.Post("/exercises", exerciseshandlers.CreateExerciseHandler(exercisesClient))
+		r.Patch("/exercises/{exerciseId}", exerciseshandlers.PatchExerciseHandler(exercisesClient))
+		r.Delete("/exercises/{exerciseId}", exerciseshandlers.DeleteExerciseHandler(exercisesClient))
 	})
 
-	// 9. HTTP-сервер
+	// 12. HTTP-сервер
 	httpSrv := &http.Server{
 		Addr:         cfg.HTTPPort,
 		Handler:      r,
@@ -154,11 +169,12 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	log.Info("HTTP server configured", "port", cfg.HTTPPort)
 
 	return &App{
-		httpServer:     httpSrv,
-		logger:         log,
-		authClient:     authClient,
-		profilesClient: profilesClient,
-		redisClient:    redisClient,
+		httpServer:      httpSrv,
+		logger:          log,
+		authClient:      authClient,
+		profilesClient:  profilesClient,
+		exercisesClient: exercisesClient,
+		redisClient:     redisClient,
 	}, nil
 }
 
@@ -183,6 +199,10 @@ func (a *App) Close() {
 
 	if a.profilesClient != nil {
 		a.profilesClient.Close()
+	}
+
+	if a.exercisesClient != nil {
+		a.exercisesClient.Close()
 	}
 
 	if a.redisClient != nil {

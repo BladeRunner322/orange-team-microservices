@@ -1,4 +1,4 @@
-package handlers
+package proxy
 
 import (
 	"encoding/json"
@@ -9,10 +9,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestProxyHandler(t *testing.T) {
+func TestHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/any", nil)
 	rr := httptest.NewRecorder()
-	ProxyHandler(rr, req)
+	Handler(rr, req)
 
 	assert.Equal(t, http.StatusNotImplemented, rr.Code)
 	var resp map[string]string
