@@ -58,6 +58,9 @@ jobs:
       - name: Build Profiles Service (smoke test)
         run: go build -v ./services/profiles/cmd/...
 
+      - name: Build Exercises Service (smoke test)
+        run: go build -v ./services/exercises/cmd/...
+
   # ------------------------------------------------------------
   #  JOB 2: CD
   # ------------------------------------------------------------
@@ -94,6 +97,7 @@ jobs:
             services/auth/**
             services/gateway/**
             services/profiles/**
+            services/exercises/**
             pkg/**
             go.mod
             go.sum
@@ -134,6 +138,18 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/profiles:latest
             ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/profiles:${{ github.sha }}
 
+      # Build & push Exercises
+      - name: Build and push Exercises image
+        if: steps.changed-services.outputs.any_changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./services/exercises/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/exercises:latest
+            ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/exercises:${{ github.sha }}
+
       # Деплой на сервер
       - name: Deploy to production server
         uses: appleboy/ssh-action@v1.0.3
@@ -158,7 +174,8 @@ jobs:
             docker compose pull auth
             docker compose pull gateway
             docker compose pull profiles
+            docker compose pull exercises
 
-            docker compose up -d --no-build auth gateway profiles
+            docker compose up -d --no-build auth gateway profiles exercises
 
             docker image prune -f

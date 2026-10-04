@@ -13,3 +13,7 @@ scrape_configs:
   - job_name: 'profiles'
     static_configs:
       - targets: ['profiles:8080']
+
+  - job_name: 'exercises'
+    static_configs:
+      - targets: ['exercises:8080']
