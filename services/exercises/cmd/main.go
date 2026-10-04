@@ -5,6 +5,8 @@
 //   - инициализацию логгера
 //   - запуск bootstrap
 //   - обработку graceful shutdown (SIGINT, SIGTERM)
+//
+// gRPC на порту 50053, HTTP (health/ready/metrics) на 8080.
 package main
 
 import (
