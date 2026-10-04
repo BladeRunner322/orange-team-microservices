@@ -7,6 +7,7 @@
 //   - обработку graceful shutdown (SIGINT, SIGTERM)
 //
 // gRPC на порту 50053, HTTP (health/ready/metrics) на 8080.
+// См. docs/adr/008-exercise-lifecycle.md по жизненному циклу
 package main
 
 import (
