@@ -81,14 +81,14 @@ Gateway **не делает**:
 
 ### Целевое состояние
 
-Статусы: ✅ — реализован, 🚧 — в работе, 📋 — в плане.
+Статусы: ✅ — реализован, 📋 — в плане.
 
 | Сервис | Статус | Зовёт | Его зовут |
 |---|---|---|---|
 | **Auth** | ✅ | — | Gateway |
-| **Gateway** | ✅ | Auth, Profiles | клиенты |
+| **Gateway** | ✅ | Auth, Profiles, Exercises | клиенты |
 | **Profiles** | ✅ | — | Gateway |
-| **Exercises** | 🚧 | — | Gateway (план), Workouts (план) |
+| **Exercises** | ✅ | — | Gateway, Workouts (план) |
 | **Habits** | 📋 | — | Gateway (план) |
 | **Workouts** | 📋 | Profiles (план), Exercises (план) | Gateway (план), Leaderboard (план) |
 | **Leaderboard** | 📋 | Workouts (план) | Gateway (план) |

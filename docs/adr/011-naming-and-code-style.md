@@ -279,9 +279,16 @@ package domain
 
 ## Что делать
 
-**Новые сервисы (Exercises, Habits, Workouts, Leaderboard):** следуют этим конвенциям с самого начала.
+**Новые сервисы (Habits, Workouts, Leaderboard):** следуют этим конвенциям с самого начала.
 
-**Существующие (Auth, Profiles):** привести к конвенциям в отдельном PR — «refactor: apply naming conventions».
+**Exercises — ✅ сделан по конвенциям** (этот ADR писался параллельно с Exercises). Суффикс `Raw`, `Scan(row)` на модели, вложенный стиль ошибок, `ModelToDomain` с id, `ToDomainID(raw)` — всё применено.
+
+**Существующие (Auth, Profiles):** привести к конвенциям в отдельном PR — «refactor: apply naming conventions». Что переделать:
+
+- Auth: суффикс `Str` в параметрах usecase (`emailStr`) → `Raw` (N-3).
+- Profiles: `ToDomainUserID(req)` → `ToDomainUserID(raw string)` (N-1).
+- Profiles: inline-скан в репозитории → `Scan(row)` на модели (CS-3).
+- Профили и Auth: комментарий пакета — один раз, в представительном файле (CS-9).
 
 **Приоритет рефакторинга:** низкий. Косметика, не блокер.
 
