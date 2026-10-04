@@ -36,7 +36,5 @@ func (uc *GetExercise) Execute(ctx context.Context, id uuid.UUID) (domain.Exerci
 		return domain.Exercise{}, fmt.Errorf("get exercise: %w", err)
 	}
 
-	log.Info("exercise fetched")
-
 	return exercise, nil
 }

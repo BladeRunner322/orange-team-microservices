@@ -61,18 +61,52 @@ fixes), но остаётся список того, что нужно зала�
 **Приоритет:** до продакшена.
 **Статус:** ✅ Закрыто в PR #19 (2026-10-01).
 
-**F-2. `PatchMyProfile` в Profiles — read-then-write без транзакции.**
-`services/profiles/internal/application/usecases/patch_my_profile.go`.
-Два параллельных патча разных полей — last write wins по всему профилю.
-**Что делать:** `SELECT ... FOR UPDATE` внутри транзакции через
-`pool.WithTx`, либо принять как осознанное (патчи редки).
-**Приоритет:** низкий (однопользовательский сценарий).
+**F-2. `PatchMyProfile` (Profiles) и `PatchExercise` (Exercises) — read-then-write без транзакции.**
+`services/profiles/internal/application/usecases/patch_my_profile.go`,
+`services/exercises/internal/application/usecases/patch_exercise.go`.
 
-**F-3. `DeleteMyProfile` не идемпотентен.**
-Возвращает `ErrProfileNotFound`, если профиля нет. В Auth `Logout` —
-идемпотентен. Разные решения для похожих сценариев.
-**Что делать:** либо привести к единому стилю, либо зафиксировать разницу.
-**Приоритет:** низкий.
+Оба usecase читают сущность через `GetByXxx` / `GetExercise`, применяют
+патч в памяти, затем пишут через `Update`. Между SELECT и UPDATE есть
+окно: если два патча одного ресурса идут параллельно, оба читают
+одну версию, оба применяют свой патч к ней, второй UPDATE затирает
+результат первого — **lost update** (классический last-write-wins).
+
+Ресурс админский (профиль — свой, упражнение — только admin), патчи
+редкие, вероятность одновременного патча одного ресурса низкая.
+Осознанно принято как компромисс.
+
+**Что делать:** `SELECT ... FOR UPDATE` внутри транзакции через
+`pool.WithTx` (пессимистичная блокировка), либо оптимистичная через
+колонку `version` + `WHERE version = $N` + `409 Conflict` на 0 rows.
+**Приоритет:** низкий. Триггер на исправление — жалобы на потерянные
+правки или рост числа админов.
+
+**F-3. Идемпотентность операций удаления.**
+
+Три операции удаления/отзыва в проекте:
+
+| Операция | Поведение при повторе | Где |
+|---|---|---|
+| `Auth.Logout` | идемпотентен | `services/auth/internal/application/usecases/logout.go` |
+| `Exercises.DeleteExercise` | **идемпотентен** | `services/exercises/internal/application/usecases/delete_exercise.go` |
+| `Profiles.DeleteMyProfile` | не идемпотентен → NotFound | `services/profiles/internal/application/usecases/delete_my_profile.go` |
+
+**Решение.** DELETE-подобные операции проектируем **идемпотентными**:
+повторный вызов возвращает успех, не NotFound. Это защищает от
+retry-проблем: прокси, load balancer или клиент может безопасно
+повторить запрос после network timeout, не получив ложный 404.
+
+- `Logout` — идемпотентен изначально, оставляем.
+- `DeleteExercise` — идемпотентен: soft delete, повторный `MarkDeleted`
+  даёт `0 rows affected`, usecase возвращает `nil`.
+- `DeleteMyProfile` — **отстаёт**, привести к идемпотентному стилю
+  при следующем касании Profiles.
+
+**Приоритет:** низкий для `DeleteMyProfile` (рефакторинг Profiles),
+не блокер.
+
+**Связанные контракты:** `DELETE /exercises/{id}` в Gateway после
+реализации должен возвращать `204` и на первый, и на повторный вызов.
 
 ### Конфигурация
 
@@ -133,16 +167,44 @@ lazy-create, а не про «сохранить всё».
 **Приоритет:** низкий.
 
 **S-4. `log.Info` в usecase дублируется с `LoggingInterceptor`.**
-Все usecase (Auth, Profiles, Exercises) логируют `Info` в конце операции: `"user registered successfully"`, `"profile patched"`, `"exercise fetched"`. При этом `LoggingInterceptor` уже логирует каждый gRPC-вызов с method, status и duration. Для чтений получается полное дублирование — две записи на один успешный запрос.
 
-Для мутаций (`CreateExercise`, `PatchExercise`, `DeleteExercise`, `Register`) `Info` полезен как бизнес-аудит: «кто что сделал». Для чтений (`GetExercise`, `GetExercises`, `ValidateToken`) — шум.
+Все usecase (Auth, Profiles, Exercises) логируют `Info` в конце операции: `"user registered successfully"`, `"profile patched"`, `"exercise fetched"`. При этом `LoggingInterceptor` уже логирует каждый gRPC-вызов с method, status и duration. Получается две записи на один успешный запрос.
 
-**Что делать (варианты):**
-- **A.** Оставить везде — единообразие важнее чистоты логов.
-- **B.** Убрать `Info` из всех usecase — логирование на уровне интерсептора.
-- **C.** Оставить только в мутациях, убрать из чтений.
+Для мутаций (`CreateExercise`, `PatchExercise`, `DeleteExercise`, `Register`) `Info` иногда рассматривают как бизнес-аудит: «кто что сделал». Но в Exercises аудит неполный — сервис не знает `user_id` (его использует только Gateway), поэтому запись «упражнение X удалено» без «кем» ценности не несёт. Полные данные всегда можно получить из БД.
 
-**Приоритет:** низкий. Не блокер, но стоит решить один раз и применить единообразно ко всем сервисам.
+**Решение (принято в PR по Exercises):**
+- **Exercises — вариант B.** `log.Info` в usecase убран полностью. Логирование успешных операций — только на уровне `LoggingInterceptor`. `log.Warn` и `log.Error` в usecase остаются: они несут информацию, которой у интерсептора нет (`invalid name` vs `invalid difficulty` vs `db is down`).
+- **Auth, Profiles — пока вариант A** (Info везде). Устаревший стиль, привести к B при следующем касании соответствующего usecase. Отдельным PR.
+- **Правило для новых сервисов (Habits, Workouts, Leaderboard):** вариант B. `Info` в usecase не пишем с самого начала.
+
+**Приоритет:** низкий для Auth/Profiles (рефакторинг), не блокер.
+
+**S-5. `pkg/postgres` не различает constraint при unique violation.**
+
+`pkg/postgres/adapters.go`, функция `mapErrors`. Postgres возвращает
+один и тот же код `23505` для любого нарушения unique-индекса, вне
+зависимости от того, какой именно constraint сработал. `mapErrors`
+смотрит только на код, но не на `pgErr.ConstraintName`, и возвращает
+общую `ErrViolatesUnique`.
+
+Репозитории маппят её в **доменную** ошибку — сейчас это корректно,
+потому что в каждой таблице один unique-индекс:
+
+- Auth → `email` → `ErrEmailAlreadyExists`
+- Exercises → partial `name WHERE deleted_at IS NULL` → `ErrExerciseNameExists`
+- Profiles → unique не используется
+
+Проблема станет реальной, когда в любой таблице появится **второй**
+unique-индекс. Тогда оба нарушения будут маппиться в одну и ту же
+доменную ошибку — клиент увидит неверное сообщение («name already
+exists» вместо «slug already exists»).
+
+**Что делать:** расширить `mapErrors` или добавить хелпер
+`ConstraintNameFromError(err) string` в `pkg/postgres`, чтобы
+репозиторий сам решал, что маппить. Правка `pkg/` — затрагивает Auth
+и Profiles одновременно.
+**Приоритет:** низкий. Триггер — появление второго unique-индекса
+в любой таблице любого сервиса.
 
 ### Отложено из ранее принятых ADR
 
@@ -167,7 +229,7 @@ lazy-create, а не про «сохранить всё».
 
 1. **До продакшена:** внедрить ADR-006 (SOPS + age — принято, но не реализовано).
 2. **Средний:** C-2, O-1, CI-1.
-3. **Низкий:** F-2, F-3, S-1, S-2, S-3, S-4.
+3. **Низкий:** F-2, F-3, S-1, S-2, S-3, S-4, S-5.
 4. **Документирование:** B-3.
 
 ## Когда пересмотреть

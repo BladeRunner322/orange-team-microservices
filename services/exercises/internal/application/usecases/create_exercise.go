@@ -63,7 +63,5 @@ func (uc *CreateExercise) Execute(ctx context.Context, nameRaw string, descripti
 		return domain.Exercise{}, fmt.Errorf("create exercise: %w", err)
 	}
 
-	log.Info("exercise created", "exercise_id", created.ID())
-
 	return created, nil
 }
