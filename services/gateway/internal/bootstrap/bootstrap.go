@@ -16,6 +16,7 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/config"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/infrastructure/clients"
 	authhandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/auth"
+	exerciseshandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/exercises"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/health"
 	profileshandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/profiles"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/proxy"
@@ -118,8 +119,9 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Patch("/users/me", profileshandlers.PatchUserHandler(profilesClient))
 		r.Delete("/users/me", profileshandlers.DeleteUserHandler(profilesClient))
 
-		// Exercises (только чтение — всем авторизованным)
-		r.Get("/exercises", proxy.Handler)
+		// Exercises (чтение — всем авторизованным)
+		r.Get("/exercises", exerciseshandlers.GetExercisesHandler(exercisesClient))
+		r.Get("/exercises/{exerciseId}", exerciseshandlers.GetExerciseHandler(exercisesClient))
 
 		// Habits
 		r.Get("/habits", proxy.Handler)
@@ -150,8 +152,10 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Use(middleware.RateLimitMiddleware(limiter, trustedProxies, cfg.RateLimit, log))
 		r.Use(middleware.RequireRole("admin"))
 
-		// Exercises (создание — только admin)
-		r.Post("/exercises", proxy.Handler)
+		// Exercises (мутации — только admin)
+		r.Post("/exercises", exerciseshandlers.CreateExerciseHandler(exercisesClient))
+		r.Patch("/exercises/{exerciseId}", exerciseshandlers.PatchExerciseHandler(exercisesClient))
+		r.Delete("/exercises/{exerciseId}", exerciseshandlers.DeleteExerciseHandler(exercisesClient))
 	})
 
 	// 12. HTTP-сервер
