@@ -23,10 +23,10 @@
 
 | Диапазон | Назначение | Примеры |
 |---|---|---|
-| **50051–50060** | gRPC-сервисы | Auth=50051, Profiles=50052, Workouts=50053, ... |
+| **50051–50060** | gRPC-сервисы | Auth=50051, Profiles=50052, Exercises=50053, ... |
 | **8080–8089** | HTTP-сервисы (Docker) | Auth=8080, Gateway=8081, Profiles=8082, ... |
 | **8090–8099** | HTTP-сервисы (локально, +10 от Docker) | Auth=8090, Gateway=8091, Profiles=8092, ... |
-| **5432–5439** | PostgreSQL (хост-порт) | Auth=5432, Profiles=5433, Workouts=5434, ... |
+| **5432–5439** | PostgreSQL (хост-порт) | Auth=5432, Profiles=5433, Exercises=5434, ... |
 | **6379–6389** | Redis (хост-порт) | Auth=6379, Gateway=6380 |
 | **9090** | Prometheus | Фиксирован |
 | **3000** | Grafana | Фиксирован |

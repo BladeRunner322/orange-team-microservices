@@ -208,8 +208,9 @@ exists» вместо «slug already exists»).
 
 ### Отложено из ранее принятых ADR
 
-- **ADR-004:** circuit breaker, retry с backoff, gRPC deadlines на
-  клиентах, distributed tracing, mTLS — осознанно отложены «до продакшена».
+- **ADR-004:** circuit breaker, retry с backoff, distributed tracing,
+  mTLS — осознанно отложены «до продакшена». (gRPC deadlines на
+  клиентах — закрыты, см. C-1.)
 - **ADR-006:** SOPS + age. Статус «принято, внедрение — отдельным PR».
   Фактически `.env` на сервере до сих пор правятся руками.
 
@@ -229,7 +230,12 @@ exists» вместо «slug already exists»).
 
 1. **До продакшена:** внедрить ADR-006 (SOPS + age — принято, но не реализовано).
 2. **Средний:** C-2, O-1, CI-1.
-3. **Низкий:** F-2, F-3, S-1, S-2, S-3, S-4, S-5.
+3. **Низкий:**
+   - **F-2** — открыт (Profiles, Exercises).
+   - **F-3** — частично закрыт: Exercises идемпотентен ✅, Profiles — открыт.
+   - **S-1, S-2, S-3** — открыты.
+   - **S-4** — частично закрыт: Exercises следует варианту B ✅, Auth и Profiles — открыты.
+   - **S-5** — открыт.
 4. **Документирование:** B-3.
 
 ## Когда пересмотреть
@@ -245,4 +251,5 @@ exists» вместо «slug already exists»).
 - [ADR-003: Транзакции](003-transactions.md) — sync-вызовы между сервисами.
 - [ADR-004: Паттерны микросервисов](004-microservices-patterns.md) — общий tech debt.
 - [ADR-006: Управление секретами](006-secrets-management.md) — статус внедрения.
+- [ADR-008: Жизненный цикл упражнения](008-exercise-lifecycle.md) — F-3 про идемпотентность DELETE.
 - [ADR-011: Naming conventions и Code style](011-naming-and-code-style.md) — соглашения по именованию и стилю.

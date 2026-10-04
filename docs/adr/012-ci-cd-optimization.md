@@ -186,3 +186,23 @@ strategy:
 - [ADR-010: Общие инфраструктурные пакеты](010-shared-infrastructure-packages.md) —
   `pkg/**`, из-за которого все сервисы пересобираются вместе.
 - [ADR-011: Naming conventions и Code style](011-naming-and-code-style.md).
+
+## Статус
+
+**Реализовано** (2026-10-05).
+
+Что сделано:
+
+- **Docker layer caching** — `cache-from: type=gha` + `cache-to: type=gha,mode=max` во всех 4 build-push шагах. Обязательно с `docker/setup-buildx-action` — дефолтный драйвер `docker` не поддерживает cache export.
+- **Matrix strategy** — `cd` job разбит на три: `changed-services` → `build-and-push` (matrix 4x) → `deploy`.
+- **Deploy с условием** — `if: any_changed == 'true'` на шаге SSH-деплоя (защита от пустого pull).
+- **`changed-files` расширен** — `.github/workflows/ci-cd.yml` тоже триггерит пересборку.
+
+Замеры после внедрения (при изменении 1 сервиса из 4):
+
+| Фаза | Было | Стало |
+|---|---|---|
+| `cd`: 4 build-push | 6–16 мин | ~2 мин |
+| Итого деплой | 10–18 мин | **~4 мин** |
+
+Точные цифры зависят от прогрева кеша.

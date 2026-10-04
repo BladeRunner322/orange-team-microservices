@@ -119,3 +119,17 @@ Gateway сам решает, что делать с флагом:
 - [ADR-002: `user_workout_score`](002-user-workout-score.md) — score считается из source of truth.
 - [ADR-004: Паттерны микросервисов](004-microservices-patterns.md) — sync-вызовы вместо event-driven.
 - [ADR-007: Известные проблемы](007-known-issues.md) — B-3 про gRPC-порты.
+
+## Статус
+
+**Реализовано** (2026-10-05). Все правила lifecycle работают:
+
+- `type` — immutable (в proto `PatchExerciseRequest` его нет).
+- `difficulty` — снапшот (в Workouts, когда будут готовы).
+- `name`, `description` — live (в Workouts, когда будут готовы).
+- DELETE — soft через `deleted_at`, идемпотентный (ADR-007 F-3).
+- `GetExercises` — только активные, `GetExercise` — включая удалённые с `is_deleted=true`.
+- `PatchExercise` — admin-only, поля `name`/`description`/`difficulty` опциональные.
+- `*T` вместо `nullable.Nullable[T]` (поля NOT NULL в БД).
+
+E2E проверено в Postman-коллекции (13 проверок, все зелёные).

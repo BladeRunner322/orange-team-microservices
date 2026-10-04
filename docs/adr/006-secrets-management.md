@@ -2,12 +2,13 @@
 
 ## Контекст
 
-В проекте **4 файла `.env`**:
+В проекте **5 файлов `.env`**:
 
 - Корневой `.env` — для `docker-compose.yml` (хост-порты, Grafana password).
 - `services/auth/.env` — Auth Service.
 - `services/gateway/.env` — Gateway Service.
 - `services/profiles/.env` — Profiles Service.
+- `services/exercises/.env` — Exercises Service.
 
 Все они в `.gitignore` и **не попадают в git**. В репозитории — только `.env.example` (шаблоны).
 

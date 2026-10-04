@@ -21,9 +21,10 @@
 - [ADR-007: Известные проблемы и технический долг](007-known-issues.md)
 - [ADR-008: Жизненный цикл упражнения](008-exercise-lifecycle.md)
 - [ADR-009: Карта зависимостей сервисов](009-service-dependencies.md)
-- [ADR-010: Общие инфраструктурные пакеты](docs/adr/010-shared-infrastructure-packages.md) — что выносим в pkg, что оставляем локально
+- [ADR-010: Общие инфраструктурные пакеты](010-shared-infrastructure-packages.md)
 - [ADR-011: Naming conventions и Code style](011-naming-and-code-style.md)
 - [ADR-012: Оптимизация CI/CD](012-ci-cd-optimization.md)
+- [ADR-013: Требования к инфраструктуре](013-infrastructure-requirements.md)
 
 ## Как добавить
 
