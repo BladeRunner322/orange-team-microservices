@@ -160,7 +160,8 @@ func (s *Server) PatchExercise(
 }
 
 // DeleteExercise помечает упражнение удалённым (soft delete, admin-only).
-// Возвращает ErrExerciseNotFound, если не найдено или уже удалено.
+//
+// Идемпотентен: повторный вызов возвращает успех (см. ADR-007 F-3).
 func (s *Server) DeleteExercise(
 	ctx context.Context,
 	req *exercises.DeleteExerciseRequest,
@@ -171,10 +172,6 @@ func (s *Server) DeleteExercise(
 	}
 
 	if err := s.deleteExerciseUC.Execute(ctx, id); err != nil {
-		if errors.Is(err, domain.ErrExerciseNotFound) {
-			return nil, status.Error(codes.NotFound, "exercise not found")
-		}
-
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 

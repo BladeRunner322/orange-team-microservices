@@ -39,17 +39,12 @@ func (uc *PatchExercise) Execute(ctx context.Context, id uuid.UUID, patch domain
 		return domain.Exercise{}, fmt.Errorf("get exercise: %w", err)
 	}
 
-	if exercise.IsDeleted() {
-		log.Warn("exercise is deleted")
-		return domain.Exercise{}, domain.ErrExerciseNotFound
-	}
-
 	exercise.ApplyPatch(patch)
 
 	updated, err := uc.repo.Update(ctx, exercise)
 	if err != nil {
 		if errors.Is(err, domain.ErrExerciseNotFound) {
-			log.Warn("exercise not found during update")
+			log.Warn("exercise not found or already deleted")
 			return domain.Exercise{}, domain.ErrExerciseNotFound
 		}
 
@@ -61,8 +56,6 @@ func (uc *PatchExercise) Execute(ctx context.Context, id uuid.UUID, patch domain
 		log.Error("failed to update exercise", "error", err)
 		return domain.Exercise{}, fmt.Errorf("update exercise: %w", err)
 	}
-
-	log.Info("exercise patched")
 
 	return updated, nil
 }

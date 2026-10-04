@@ -21,37 +21,24 @@ func NewDeleteExercise(repo ports.Repository, log *logger.Logger) *DeleteExercis
 	return &DeleteExercise{repo: repo, logger: log}
 }
 
-// Execute помечает упражнение удалённым (deleted_at = NOW()).
-// Возвращает ErrExerciseNotFound, если упражнение не найдено или уже удалено.
+// / Execute помечает упражнение удалённым (deleted_at = NOW()).
+//
+// Идемпотентен: повторный вызов (или DELETE несуществующего id)
+// возвращает nil, а не ошибку (см. ADR-007 F-3). Это защищает
+// от retry после network timeout — прокси/клиент может безопасно
+// повторить запрос.
 func (uc *DeleteExercise) Execute(ctx context.Context, id uuid.UUID) error {
 	log := uc.logger.With("operation", "DeleteExercise", "exercise_id", id)
 
-	exercise, err := uc.repo.GetExercise(ctx, id)
-	if err != nil {
-		if errors.Is(err, domain.ErrExerciseNotFound) {
-			log.Warn("exercise not found")
-			return domain.ErrExerciseNotFound
-		}
-
-		log.Error("failed to get exercise", "error", err)
-		return fmt.Errorf("get exercise: %w", err)
-	}
-
-	if exercise.IsDeleted() {
-		log.Warn("exercise is deleted")
-		return domain.ErrExerciseNotFound
-	}
-
 	if err := uc.repo.MarkDeleted(ctx, id); err != nil {
 		if errors.Is(err, domain.ErrExerciseNotFound) {
-			log.Warn("exercise already deleted")
-			return domain.ErrExerciseNotFound
+			log.Warn("exercise not found or already deleted")
+			return nil
 		}
 
 		log.Error("failed to mark deleted", "error", err)
 		return fmt.Errorf("mark deleted: %w", err)
 	}
 
-	log.Info("exercise deleted")
 	return nil
 }

@@ -89,7 +89,7 @@ func (r *Repository) GetExercises(ctx context.Context) ([]domain.Exercise, error
         SELECT id, name, description, difficulty, type, deleted_at, created_at, updated_at
         FROM exercises.exercises
 		WHERE deleted_at IS NULL
-		ORDER BY id ASC
+		ORDER BY name ASC
     `
 
 	rows, err := r.pool.Query(ctx, query)

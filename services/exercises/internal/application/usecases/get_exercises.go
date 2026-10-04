@@ -29,7 +29,5 @@ func (uc *GetExercises) Execute(ctx context.Context) ([]domain.Exercise, error) 
 		return []domain.Exercise{}, fmt.Errorf("get exercises: %w", err)
 	}
 
-	log.Info("exercises fetched", "count", len(exercises))
-
 	return exercises, nil
 }

@@ -55,7 +55,7 @@ func difficultyFromProto(raw *int32) (*domain.Difficulty, error) {
 	return &difficulty, nil
 }
 
-// patchFromProto конвертирует PatchExerciseRequest в domain.ExercisePatch.
+// ToDomainPatch конвертирует PatchExerciseRequest в domain.ExercisePatch.
 // Поля с nil-значением не трогаются; не-nil проходят валидацию через VO.
 func ToDomainPatch(req *exercises.PatchExerciseRequest) (domain.ExercisePatch, error) {
 	name, err := nameFromProto(req.Name)
@@ -76,7 +76,7 @@ func ToDomainPatch(req *exercises.PatchExerciseRequest) (domain.ExercisePatch, e
 	return domain.NewExercisePatch(name, description, difficulty), nil
 }
 
-// ToDomainPatch конвертирует PatchExerciseRequest в domain.ExercisePatch.
+// ToProtoExercise конвертирует domain.Exercise в *exercises.Exercise (proto-ответ).
 func ToProtoExercise(exercise domain.Exercise) *exercises.Exercise {
 	var updatedAt *timestamppb.Timestamp
 	if t := exercise.UpdatedAt(); t != nil {
