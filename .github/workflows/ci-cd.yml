@@ -111,6 +111,8 @@ jobs:
           context: .
           file: ./services/auth/Dockerfile
           push: true
+          cache-from: type=gha,scope=auth
+          cache-to: type=gha,mode=max,scope=auth
           tags: |
             ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/auth:latest
             ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/auth:${{ github.sha }}
@@ -123,6 +125,8 @@ jobs:
           context: .
           file: ./services/gateway/Dockerfile
           push: true
+          cache-from: type=gha,scope=gateway
+          cache-to: type=gha,mode=max,scope=gateway
           tags: |
             ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/gateway:latest
             ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/gateway:${{ github.sha }}
@@ -135,6 +139,8 @@ jobs:
           context: .
           file: ./services/profiles/Dockerfile
           push: true
+          cache-from: type=gha,scope=profiles
+          cache-to: type=gha,mode=max,scope=profiles
           tags: |
             ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/profiles:latest
             ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/profiles:${{ github.sha }}
@@ -147,6 +153,8 @@ jobs:
           context: .
           file: ./services/exercises/Dockerfile
           push: true
+          cache-from: type=gha,scope=exercises
+          cache-to: type=gha,mode=max,scope=exercises
           tags: |
             ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/exercises:latest
             ${{ env.REGISTRY }}/${{ env.REPO_LOWER }}/exercises:${{ github.sha }}
