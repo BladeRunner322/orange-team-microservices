@@ -87,6 +87,7 @@ jobs:
             services/gateway/**
             services/profiles/**
             services/exercises/**
+            scripts/**
             .github/workflows/ci-cd.yml
             pkg/**
             go.mod
