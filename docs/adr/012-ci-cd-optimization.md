@@ -197,6 +197,7 @@ strategy:
 - **Matrix strategy** — `cd` job разбит на три: `changed-services` → `build-and-push` (matrix 4x) → `deploy`.
 - **Deploy с условием** — `if: any_changed == 'true'` на шаге SSH-деплоя (защита от пустого pull).
 - **`changed-files` расширен** — `.github/workflows/ci-cd.yml` тоже триггерит пересборку.
+- **Интеграционные тесты в CI** — добавлен шаг `Run Integration Tests` с `go test -tags=integration -v -timeout=15m ./...` после smoke-build'ов. Закрывает ADR-007 CI-1.
 
 Замеры после внедрения (при изменении 1 сервиса из 4):
 
@@ -205,4 +206,4 @@ strategy:
 | `cd`: 4 build-push | 6–16 мин | ~2 мин |
 | Итого деплой | 10–18 мин | **~4 мин** |
 
-Точные цифры зависят от прогрева кеша.
+Точные цифры зависят от прогрева кеша. Шаг `Run Integration Tests` добавляет к CI ещё ~3-5 минут (Testcontainers поднимает Postgres/Redis для каждой integration-группы).

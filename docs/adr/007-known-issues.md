@@ -132,6 +132,9 @@ retry-проблем: прокси, load balancer или клиент может
 Gateway считает себя готовым, но защищённые запросы будут падать.
 **Что делать:** добавить в `/ready` проверку gRPC-коннектов к Auth/Profiles.
 **Приоритет:** средний.
+**Статус:** ✅ Закрыто (2026-10-05). `/ready` проверяет Redis + gRPC-каналы
+к Auth, Profiles, Exercises. Каждый клиент имеет метод `IsHealthy(ctx) error`,
+основанный на `grpc.conn.GetState()`. Readiness-логика вынесена в `pkg/health`.
 
 ### CI/CD
 
@@ -143,6 +146,8 @@ rate limiter) CI не поймает.
 **Что делать:** добавить шаг с `go test -tags=integration ./...` —
 Docker на GitHub Actions доступен, Testcontainers работает.
 **Приоритет:** средний.
+**Статус:** ✅ Закрыто (2026-10-05). Добавлен шаг `Run Integration Tests`
+с `-tags=integration -timeout=15m`. См. ADR-012.
 
 ### Мелкие
 
@@ -158,6 +163,7 @@ lazy-create, а не про «сохранить всё».
 При `Close()` — паника на nil.
 **Что делать:** `Close()` проверять `if l.file != nil`.
 **Приоритет:** низкий.
+**Статус:** ✅ Закрыто (2026-10-05). `Logger.Close()` теперь возвращает nil при `file == nil`.
 
 **S-3. Две обёртки `ResponseWriter` в Gateway middleware.**
 `logger.go` (`responseWriterWrapper`) и `metrics.go`
@@ -229,11 +235,11 @@ exists» вместо «slug already exists»).
 ## Приоритеты
 
 1. **До продакшена:** внедрить ADR-006 (SOPS + age — принято, но не реализовано).
-2. **Средний:** C-2, O-1, CI-1.
+2. **Средний:** C-2 (TLS config в Gateway-клиентах).
 3. **Низкий:**
    - **F-2** — открыт (Profiles, Exercises).
    - **F-3** — частично закрыт: Exercises идемпотентен ✅, Profiles — открыт.
-   - **S-1, S-2, S-3** — открыты.
+   - **S-1, S-3** — открыты.
    - **S-4** — частично закрыт: Exercises следует варианту B ✅, Auth и Profiles — открыты.
    - **S-5** — открыт.
 4. **Документирование:** B-3.

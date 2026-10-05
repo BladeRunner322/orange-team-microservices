@@ -294,7 +294,9 @@ orange-team-microservices/
 │   ├── grpc/
 │   │   ├── authctx/                  # user_id/role в context + gRPC metadata
 │   │   ├── client/                   # конструктор gRPC-клиентов (TLS + interceptor)
-│   │   └── interceptors/             # gRPC-интерсепторы (логирование, метрики, recovery, user_id)
+│   │   ├── interceptors/             # gRPC-интерсепторы (логирование, метрики, recovery, user_id)
+│   │   └── server/                   # конструктор gRPC-сервера (interceptors + TLS + reflection)
+│   ├── health/                       # HTTP-хендлеры /health, /ready, /metrics для всех сервисов
 │   ├── logger/                       # структурированное логирование (slog)
 │   ├── metrics/                      # метрики Prometheus (grpc.go, http.go)
 │   ├── nullable/                     # Nullable[T] для patch-полей (Set / Value)
@@ -314,7 +316,7 @@ orange-team-microservices/
 │   │   │   │   └── clients/          # реализация gRPC-клиентов Auth и Profiles
 │   │   │   └── interfaces/
 │   │   │       └── http/             # HTTP-слой
-│   │   │           ├── handlers/     # хендлеры по подпакетам: auth/, profiles/, exercises/, health/, proxy/
+│   │   │           ├── handlers/     # хендлеры по подпакетам: auth/, profiles/, exercises/, proxy/
 │   │   │           ├── middleware/   # аутентификация, RBAC, rate limit, логирование, request_id
 │   │   │           └── httputil/     # утилиты (SendJSON, SendError, GrpcErrorToHTTP)
 │   │   ├── .env.example              # шаблон переменных Gateway Service
@@ -334,9 +336,7 @@ orange-team-microservices/
 │   │   │   │   ├── postgres_repo/    # реализация репозитория для PostgreSQL
 │   │   │   │   └── redis_repo/       # реализация RefreshTokenRepository на Redis
 │   │   │   └── interfaces/
-│   │   │       ├── authgrpc/         # gRPC-сервер (обработчики AuthService)
-│   │   │       └── http/
-│   │   │           └── health/       # HTTP-эндпоинты /health, /ready, /metrics
+│   │   │       └── authgrpc/         # gRPC-сервер (обработчики AuthService)
 │   │   ├── migrations/               # SQL-миграции для auth_db
 │   │   ├── .env.example              # шаблон переменных Auth Service
 │   │   └── Dockerfile
@@ -353,9 +353,7 @@ orange-team-microservices/
 │   │   │   ├── infrastructure/
 │   │   │   │   └── postgres_repo/    # реализация Repository для PostgreSQL
 │   │   │   └── interfaces/
-│   │   │       ├── profilesgrpc/     # gRPC-сервер (обработчики ProfilesService)
-│   │   │       └── http/
-│   │   │           └── health/       # HTTP-эндпоинты /health, /ready, /metrics
+│   │   │       └── profilesgrpc/     # gRPC-сервер (обработчики ProfilesService)
 │   │   ├── migrations/               # SQL-миграции для profiles_db
 │   │   ├── .env.example              # шаблон переменных Profiles Service
 │   │   └── Dockerfile
@@ -372,9 +370,7 @@ orange-team-microservices/
 │   │   │   ├── infrastructure/
 │   │   │   │   └── postgres_repo/    # реализация Repository для PostgreSQL
 │   │   │   └── interfaces/
-│   │   │       ├── exercisesgrpc/    # gRPC-сервер (обработчики ExercisesService)
-│   │   │       └── http/
-│   │   │           └── health/       # HTTP-эндпоинты /health, /ready, /metrics
+│   │   │       └── exercisesgrpc/    # gRPC-сервер (обработчики ExercisesService)
 │   │   ├── migrations/               # SQL-миграции для exercises_db
 │   │   ├── .env.example              # шаблон переменных Exercises Service
 │   │   └── Dockerfile
@@ -455,7 +451,8 @@ orange-team-microservices/
 │  • Rate limiting (Token Bucket на Redis)                                   │
 │  • Проксирует публичные запросы в Auth (register/login/refresh/logout)     │
 │  • Проксирует /users/me (GET/PATCH/DELETE) в Profiles                      │
-│  • Остальные защищённые маршруты бизнес-сервисов — пока заглушки 501       │
+│  • Проксирует /exercises в Exercises (чтение — user, мутации — admin)      │
+│  • Habits, Workouts, Leaderboard — пока заглушки 501                       │
 │  • Логирует запросы, собирает метрики                                      │
 └──────────────┬─────────────────────────────────────────────────────────────┘
                │ gRPC
@@ -720,7 +717,7 @@ task gateway:run
 
 - HTTP: `localhost:8091`
 
-*Profiles Service:**
+**Profiles Service:**
 ```bash
 task profiles:run
 ```
@@ -1040,7 +1037,7 @@ Gateway предоставляет три служебных HTTP-эндпоин
 | Эндпоинт | Назначение | Ответ |
 |----------|------------|-------|
 | `/health` | Liveness — процесс жив | `{"status":"ok","service":"gateway"}` |
-| `/ready` | Readiness — зависимости доступны (Redis) | `{"status":"ok","checks":{"redis":"ok"}}` или `503` |
+| `/ready` | Readiness — зависимости доступны (Redis + Auth + Profiles + Exercises) | `{"status":"ok","checks":{"redis":"ok","auth":"ok","profiles":"ok","exercises":"ok"}}` или `503` |
 | `/metrics` | Prometheus-метрики | text/plain |
 
 **Проверка:**
@@ -1051,10 +1048,10 @@ curl http://localhost:8081/ready
 curl http://localhost:8081/metrics
 ```
 
-Если Redis недоступен, `/ready` вернёт `503` с описанием:
+Если любая из зависимостей недоступна, `/ready` вернёт `503`:
 
 ```json
-{"status":"not_ready","checks":{"redis":"fail: dial tcp ..."}}
+{"status":"not_ready","checks":{"redis":"ok","auth":"fail: auth connection state: TransientFailure","profiles":"ok","exercises":"ok"}}
 ```
 
 > 💡 `/health` используется Docker healthcheck'ом. `/ready` — для внешнего балансировщика (не направлять трафик в инстанс, пока он не готов).
@@ -1354,8 +1351,9 @@ Docker Compose v2.20+, SSH-доступ для деплоя.
 - Кеширование модулей.
 - `go test -v ./... -short` — юнит-тесты.
 - `go build` для `auth`, `gateway`, `profiles` и `exercises` — smoke-тест сборки.
+- `go test -tags=integration -v -timeout=15m ./...` — интеграционные тесты (Testcontainers).
 
-Если CI зелёный — PR готов к слиянию.
+Интеграционные тесты добавляют к CI ~3-5 минут. Если CI зелёный — PR готов к слиянию.
 
 ### CD (Continuous Deployment)
 
@@ -1404,7 +1402,7 @@ curl http://<SERVER_HOST>:8083/health   # Exercises
 **Ready:**
 
 ```bash
-curl http://<SERVER_HOST>:8081/ready    # Gateway → проверка Redis
+curl http://<SERVER_HOST>:8081/ready    # Gateway → проверка Redis + Auth/Profiles/Exercises
 curl http://<SERVER_HOST>:8080/ready    # Auth → проверка Postgres + Redis
 curl http://<SERVER_HOST>:8082/ready    # Profiles → проверка Postgres
 curl http://<SERVER_HOST>:8083/ready    # Exercises → проверка Postgres
@@ -1818,7 +1816,7 @@ task <service-name>:migrate-version
 | `POSTGRES_TIMEOUT` | `30s` | Таймаут операций с БД |
 | `ENABLE_TLS` | `true` | Использовать TLS для gRPC |
 | `TLS_CERT_FILE` | `/app/certs/server.crt` | Путь к сертификату (внутри контейнера) |
-| `TLS_KEY_FILE` | `/app/certs/server.key` | Путь к приватному ключу ||
+| `TLS_KEY_FILE` | `/app/certs/server.key` | Путь к приватному ключу |
 
 ### Общие настройки
 

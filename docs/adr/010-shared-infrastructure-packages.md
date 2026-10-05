@@ -23,32 +23,39 @@
 
 ### 1. Выносим в `pkg/` (общее)
 
-**`pkg/health`** — health/ready/metrics-эндпоинты.
+**`pkg/health`** — health/ready/metrics-обработчики.
 
-API (предполагаемый):
+**Реализовано** (2026-10-05). Возвращает отдельные `http.HandlerFunc`,
+чтобы каждый сервис вешал их на свой роутер (`ServeMux` в Auth/Profiles/Exercises,
+chi в Gateway):
+
 ```go
-mux := health.NewMux("exercises",
-    health.WithPostgres(pool),
-    health.WithRedis(redisClient), // опционально
-)
+mux.HandleFunc("/health", health.HealthHandler("auth"))
+mux.HandleFunc("/ready", health.ReadyHandler(map[string]health.Check{
+    "postgres": health.PostgresCheck(pool),
+    "redis":    health.RedisCheck(redisClient),
+}))
+mux.Handle("/metrics", health.MetricsHandler())
 ```
 
-Даёт: `/health`, `/ready`, `/metrics` с настраиваемым набором проверок. Разница между сервисами — только имя и набор зависимостей.
+Хелперы: `PostgresCheck(pool)`, `RedisCheck(client)`. Тип `Check func(ctx) error`.
 
 **`pkg/grpc/server`** — конструктор gRPC-сервера с интерсепторами.
 
-API (предполагаемый):
+**Реализовано** (2026-10-05):
+
 ```go
-s := grpcserver.New(grpcserver.Config{
+s, err := grpcserver.New(grpcserver.Config{
     EnableTLS:        cfg.EnableTLS,
     TLSCertFile:      cfg.TLSCertFile,
     TLSKeyFile:       cfg.TLSKeyFile,
     EnableReflection: cfg.EnableReflection,
+    WithUserID:       true, // false у Auth, true у Profiles/Exercises
     Logger:           log,
 })
 ```
 
-Внутри — стандартная цепочка: `MetricsInterceptor → RecoveryInterceptor → UserIDServerInterceptor → LoggingInterceptor`, TLS-конфиг, reflection. Единообразно во всех сервисах.
+Внутри — стандартная цепочка: `Metrics → Recovery → [UserID] → Logging`, TLS-конфиг, reflection. `WithUserID` опционален: Auth — источник `user_id`, остальные — читают из metadata.
 
 **Уже вынесено (для контекста):**
 - `pkg/postgres`, `pkg/redis`, `pkg/ratelimit`
@@ -102,17 +109,17 @@ s := grpcserver.New(grpcserver.Config{
 
 ## Порядок внедрения
 
-**Статус на 2026-10-05:** Exercises реализован и задеплоен. 4 сервиса (Auth, Profiles, Exercises — с дублирующимся health/grpc-server; Gateway — особый случай). Можно приступать к выносу общих пакетов.
+**Реализовано** (2026-10-05).
 
-**Следующий шаг — отдельным PR:**
-1. Вынести `pkg/health` — самый безопасный кандидат.
-2. Вынести `pkg/grpc/server`.
-3. Мигрировать Auth, Profiles, Exercises на новые пакеты.
-4. Прогнать тесты, проверить e2e.
+Что сделано:
 
-**Потом:** для 5+ сервисов — пересмотреть правило. Если код снова начнёт дублироваться — вынести.
+1. Создан `pkg/health` — отдельные `http.HandlerFunc` для `/health`, `/ready`, `/metrics`.
+2. Создан `pkg/grpc/server` — конструктор gRPC-сервера с интерсепторами, TLS, reflection.
+3. Мигрированы Auth, Profiles, Exercises, Gateway на новые пакеты.
+4. Удалены локальные `health/`-пакеты из 4 сервисов.
+5. Тесты и e2e — зелёные.
 
-**Триггер для этого PR:** Exercises задеплоен, дублирование `bootstrap.go` и health-серверов стало заметным. При добавлении Habits копипаста вырастет ещё на один сервис — выгоднее вынести сейчас.
+**Дальше:** для 5+ сервисов — пересмотреть правило. Если код снова начнёт дублироваться — вынести.
 
 ## Последствия
 
