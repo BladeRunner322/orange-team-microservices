@@ -37,21 +37,21 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	ctx := context.Background()
 
 	// 1. gRPC-клиент к Auth Service
-	authClient, err := clients.NewAuthClient(ctx, cfg.AuthGRPCAddr, cfg.Timeout)
+	authClient, err := clients.NewAuthClient(ctx, cfg.AuthGRPCAddr, cfg.Timeout, cfg.GRPCClientTLSMode)
 	if err != nil {
 		return nil, fmt.Errorf("create auth client: %w", err)
 	}
 	log.Info("auth gRPC client created", "addr", cfg.AuthGRPCAddr, "timeout", cfg.Timeout)
 
 	// 2. gRPC-клиент к Profiles Service
-	profilesClient, err := clients.NewProfilesClient(ctx, cfg.ProfilesGRPCAddr, cfg.Timeout)
+	profilesClient, err := clients.NewProfilesClient(ctx, cfg.ProfilesGRPCAddr, cfg.Timeout, cfg.GRPCClientTLSMode)
 	if err != nil {
 		return nil, fmt.Errorf("create profiles client: %w", err)
 	}
 	log.Info("profiles gRPC client created", "addr", cfg.ProfilesGRPCAddr, "timeout", cfg.Timeout)
 
 	// 3. gRPC-клиент к Exercises Service
-	exercisesClient, err := clients.NewExercisesClient(ctx, cfg.ExercisesGRPCAddr, cfg.Timeout)
+	exercisesClient, err := clients.NewExercisesClient(ctx, cfg.ExercisesGRPCAddr, cfg.Timeout, cfg.GRPCClientTLSMode)
 	if err != nil {
 		return nil, fmt.Errorf("create exercises client: %w", err)
 	}

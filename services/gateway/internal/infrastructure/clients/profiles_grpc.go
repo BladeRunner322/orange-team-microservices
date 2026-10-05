@@ -26,12 +26,13 @@ type ProfilesClient struct {
 //   - автоматическое прокидывание user_id из context в metadata
 //     (для GetMyProfile, PatchMyProfile, DeleteMyProfile).
 //
-// TLS-режим захардкожен внутри, потому что это деталь Profiles,
-// а не Gateway — вызывающему коду не нужно об этом думать.
-func NewProfilesClient(ctx context.Context, addr string, timeout time.Duration) (*ProfilesClient, error) {
+// TLS-режим приходит из config (GRPC_CLIENT_TLS_MODE).
+// "insecure" — для self-signed сертификатов в dev/staging;
+// "verify" — для прода; "disabled" — только для локальной разработки.
+func NewProfilesClient(ctx context.Context, addr string, timeout time.Duration, tlsMode string) (*ProfilesClient, error) {
 	conn, err := grpcclient.New(ctx, grpcclient.Config{
 		Target:  addr,
-		TLSMode: grpcclient.TLSModeInsecure,
+		TLSMode: grpcclient.TLSMode(tlsMode),
 		Timeout: timeout,
 	})
 

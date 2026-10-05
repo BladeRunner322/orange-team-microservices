@@ -165,6 +165,24 @@ jobs:
 
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
+            # Validate .env files against .env.example before starting
+            # containers. Catches missing variables early with a clear
+            # error instead of a cryptic envconfig panic on startup.
+            for svc in auth gateway profiles exercises; do
+              if [ -f "$PROJECT_DIR/services/$svc/.env.example" ] && [ -f "$PROJECT_DIR/services/$svc/.env" ]; then
+                echo "→ Validating services/$svc/.env"
+                missing=$(comm -23 \
+                  <(grep -vE '^\s*#|^\s*$' "$PROJECT_DIR/services/$svc/.env.example" | cut -d= -f1 | sort -u) \
+                  <(grep -vE '^\s*#|^\s*$' "$PROJECT_DIR/services/$svc/.env"          | cut -d= -f1 | sort -u) \
+                )
+                if [ -n "$missing" ]; then
+                  echo "❌ Missing vars in services/$svc/.env:"
+                  echo "$missing"
+                  exit 1
+                fi
+              fi
+            done
+
             docker compose pull auth gateway profiles exercises
 
             docker compose up -d --no-build auth gateway profiles exercises
