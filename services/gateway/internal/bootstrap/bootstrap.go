@@ -84,7 +84,11 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	}
 
 	// 7. Readiness handler (проверяет зависимости)
-	readinessHandler := health.NewReadinessHandler(redisClient)
+	readinessHandler := health.NewReadinessHandler(redisClient, map[string]health.Check{
+		"auth":      authClient.IsHealthy,
+		"profiles":  profilesClient.IsHealthy,
+		"exercises": exercisesClient.IsHealthy,
+	})
 
 	// 8. Роутер
 	r := chi.NewRouter()

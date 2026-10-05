@@ -91,5 +91,9 @@ func (l *Logger) With(args ...any) *Logger {
 }
 
 func (l *Logger) Close() error {
+	if l.file == nil {
+		return nil
+	}
+
 	return l.file.Close()
 }

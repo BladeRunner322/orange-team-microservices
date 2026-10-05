@@ -61,6 +61,9 @@ jobs:
       - name: Build Exercises Service (smoke test)
         run: go build -v ./services/exercises/cmd/...
 
+      - name: Run Integration Tests
+        run: go test -tags=integration -v -timeout=15m ./...
+
 # ------------------------------------------------------------
 #  JOB 2: Detect changed services
 # ------------------------------------------------------------

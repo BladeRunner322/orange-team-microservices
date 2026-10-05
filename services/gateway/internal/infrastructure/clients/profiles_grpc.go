@@ -2,12 +2,14 @@ package clients
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/profiles"
 	grpcclient "github.com/BladeRunner322/orange-team-microservices/pkg/grpc/client"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 )
 
 // ProfilesClient — gRPC-клиент к Profiles Service.
@@ -60,6 +62,24 @@ func (c *ProfilesClient) DeleteMyProfile(ctx context.Context) error {
 	_, err := c.client.DeleteMyProfile(ctx, req)
 
 	return err
+}
+
+// IsHealthy проверяет, что gRPC-соединение с Profiles не в фатальном состоянии.
+//
+// Используется в /ready Gateway. Idle и Connecting считаются «здоровыми»,
+// потому что gRPC ленив: соединение открывается при первом RPC, а не при старте.
+func (c *ProfilesClient) IsHealthy(ctx context.Context) error {
+	if c.conn == nil {
+		return errors.New("profiles connection is nil")
+	}
+
+	state := c.conn.GetState()
+	switch state {
+	case connectivity.Ready, connectivity.Idle, connectivity.Connecting:
+		return nil
+	default:
+		return fmt.Errorf("profiles connection state: %s", state)
+	}
 }
 
 // Close закрывает gRPC-соединение.
