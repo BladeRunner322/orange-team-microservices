@@ -8,8 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimid "github.com/go-chi/chi/v5/middleware"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/BladeRunner322/orange-team-microservices/pkg/health"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/ratelimit"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/redis"
@@ -17,7 +17,6 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/infrastructure/clients"
 	authhandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/auth"
 	exerciseshandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/exercises"
-	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/health"
 	profileshandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/profiles"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/proxy"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/middleware"
@@ -83,12 +82,13 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		log.Info("trusted proxies not configured — X-Forwarded-For will be ignored")
 	}
 
-	// 7. Readiness handler (проверяет зависимости)
-	readinessHandler := health.NewReadinessHandler(redisClient, map[string]health.Check{
+	// 7. Readiness checks (Redis + gRPC-клиенты)
+	readinessChecks := map[string]health.Check{
+		"redis":     health.RedisCheck(redisClient),
 		"auth":      authClient.IsHealthy,
 		"profiles":  profilesClient.IsHealthy,
 		"exercises": exercisesClient.IsHealthy,
-	})
+	}
 
 	// 8. Роутер
 	r := chi.NewRouter()
@@ -103,9 +103,9 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	r.Group(func(r chi.Router) {
 		r.Use(rateLimitPublic)
 
-		r.Get("/health", health.Handler)
-		r.Get("/ready", readinessHandler.Handle)
-		r.Handle("/metrics", promhttp.Handler())
+		r.Get("/health", health.HealthHandler("gateway"))
+		r.Get("/ready", health.ReadyHandler(readinessChecks))
+		r.Handle("/metrics", health.MetricsHandler())
 
 		r.Post("/register", authhandlers.RegisterHandler(authClient))
 		r.Post("/login", authhandlers.LoginHandler(authClient))

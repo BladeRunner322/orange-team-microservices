@@ -8,19 +8,15 @@ import (
 	"time"
 
 	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/exercises"
-	"github.com/BladeRunner322/orange-team-microservices/pkg/grpc/interceptors"
+	grpcserver "github.com/BladeRunner322/orange-team-microservices/pkg/grpc/server"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/health"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
 	"github.com/BladeRunner322/orange-team-microservices/services/exercises/config"
 	"github.com/BladeRunner322/orange-team-microservices/services/exercises/internal/application/usecases"
 	"github.com/BladeRunner322/orange-team-microservices/services/exercises/internal/infrastructure/postgres_repo"
 	"github.com/BladeRunner322/orange-team-microservices/services/exercises/internal/interfaces/exercisesgrpc"
-	"github.com/BladeRunner322/orange-team-microservices/services/exercises/internal/interfaces/http/health"
-
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/reflection"
 )
 
 // App объединяет все компоненты приложения.
@@ -64,46 +60,20 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	// ============================================================
 	// 4. gRPC СЕРВЕР С ИНТЕРСЕПТОРАМИ
 	// ============================================================
-
-	// Собираем опции сервера
-	var grpcOpts []grpc.ServerOption
-
-	// Интерсепторы
-	grpcOpts = append(grpcOpts,
-		grpc.ChainUnaryInterceptor(
-			// 4.1. Метрики (prometheus)
-			interceptors.MetricsInterceptor(),
-			// 4.2. Восстановление после паники
-			interceptors.RecoveryInterceptor(log),
-			// 4.3. Извлечение user_id и role из metadata и помещение их в контекст
-			interceptors.UserIDServerInterceptor(),
-			// 4.4. Логирование запросов
-			interceptors.LoggingInterceptor(log),
-		),
-	)
-
-	// TLS
-	if cfg.EnableTLS {
-		creds, err := credentials.NewServerTLSFromFile(cfg.TLSCertFile, cfg.TLSKeyFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load TLS credentials: %w", err)
-		}
-		grpcOpts = append(grpcOpts, grpc.Creds(creds))
-		log.Info("TLS enabled for gRPC")
-	} else {
-		log.Warn("gRPC running without TLS (insecure mode)")
+	s, err := grpcserver.New(grpcserver.Config{
+		EnableTLS:        cfg.EnableTLS,
+		TLSCertFile:      cfg.TLSCertFile,
+		TLSKeyFile:       cfg.TLSKeyFile,
+		EnableReflection: cfg.EnableReflection,
+		WithUserID:       true, // Exercises читает user_id из metadata (для единообразия)
+		Logger:           log,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create grpc server: %w", err)
 	}
-
-	// Создаём сервер с опциями
-	s := grpc.NewServer(grpcOpts...)
 
 	// Регистрация gRPC-сервиса
 	exercises.RegisterExercisesServiceServer(s, exercisesgrpc.NewServer(createExerciseUC, getExerciseUC, getExercisesUC, patchExerciseUC, deleteExerciseUC))
-
-	// Режим разработки — включаем reflection для grpcurl
-	if cfg.EnableReflection {
-		reflection.Register(s)
-	}
 	log.Info("gRPC server registered")
 
 	// ============================================================
@@ -118,12 +88,12 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	// ============================================================
 	// 6. HTTP СЕРВЕР (HEALTHCHECK + METRICS + READINESS)
 	// ============================================================
-	readinessHandler := health.NewReadinessHandler(pool)
-
 	healthMux := http.NewServeMux()
-	healthMux.HandleFunc("/health", health.Handler())
-	healthMux.HandleFunc("/ready", readinessHandler.Handle)
-	healthMux.Handle("/metrics", promhttp.Handler())
+	healthMux.HandleFunc("/health", health.HealthHandler("exercises"))
+	healthMux.HandleFunc("/ready", health.ReadyHandler(map[string]health.Check{
+		"postgres": health.PostgresCheck(pool),
+	}))
+	healthMux.Handle("/metrics", health.MetricsHandler())
 
 	httpSrv := &http.Server{
 		Addr:         cfg.HTTPPort,
