@@ -35,8 +35,21 @@ func NewPgxPool(ctx context.Context, cfg Config) (*PgxPool, error) {
 		return nil, fmt.Errorf("create pgxpool: %w", err)
 	}
 
-	if err := pool.Ping(ctx); err != nil {
-		return nil, fmt.Errorf("ping pgxpool: %w", err)
+	// Retry Ping: на медленных runner'ах Postgres может открыть порт,
+	// но ещё завершать инициализацию. 10 попыток × 500 мс = до 5 сек.
+	var lastErr error
+	for i := 0; i < 10; i++ {
+		if err := pool.Ping(ctx); err == nil {
+			lastErr = nil
+			break
+		} else {
+			lastErr = err
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if lastErr != nil {
+		pool.Close()
+		return nil, fmt.Errorf("ping pgxpool: %w", lastErr)
 	}
 
 	return &PgxPool{
