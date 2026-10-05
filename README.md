@@ -28,6 +28,7 @@
   - [RBAC flow](#rbac-flow)
 - [CI/CD и деплой](#cicd-и-деплой)
 - [Мониторинг и логирование](#мониторинг-и-логирование)
+- [Бэкапы](#бэкапы)
 - [Тестирование](#тестирование)
 - [Управление миграциями](#управление-миграциями)
 - [Переменные окружения](#переменные-окружения)
@@ -1586,6 +1587,94 @@ curl http://localhost:8090/metrics
 ```bash
 curl http://localhost:3100/ready
 ```
+
+## Бэкапы
+
+PostgreSQL-базы (`auth_db`, `profiles_db`, `exercises_db`) бэкапятся скриптом
+[`scripts/backup-db.sh`](scripts/backup-db.sh).
+
+Redis **не бэкапится** — там только refresh-токены (TTL 30 дней) и rate-limit-вёдра
+(TTL секунды-минуты). При потере Redis пользователи просто перелогинятся.
+
+### Что делает скрипт
+
+- Дампит три базы через `pg_dump` (контейнеры `auth-postgres`, `profiles-postgres`, `exercises-postgres`).
+- Сжимает каждый дамп через `gzip`.
+- Кладёт в `/root/backups/YYYY-MM-DD_HH-MM-SS/` (папка на каждую дату).
+- Удаляет папки старше `RETENTION_DAYS` (по умолчанию 7 дней).
+- Падает с явной ошибкой при `pg_dump` failure или подозрительно маленьком дампе (< 100 байт).
+
+### Как запускается
+
+Через cron на продакшн-сервере:
+
+```
+0 3 * * * /root/projects/orange-team-microservices/scripts/backup-db.sh >> /var/log/backup.log 2>&1
+```
+
+Раз в сутки в 03:00 UTC. Логи — в `/var/log/backup.log`.
+
+### Где лежат бэкапы
+
+**Локально на сервере:** `/root/backups/YYYY-MM-DD_HH-MM-SS/`.
+
+**Off-site:** пока не настроено. Планируется копирование в S3-совместимое хранилище (Yandex Object Storage / Selectel / Backblaze B2) раз в сутки.
+
+> ⚠️ **Локальные бэкапы не защищают от смерти диска или удаления сервера.** Off-site — обязательное дополнение. Пока его нет, потеря сервера = потеря всего.
+
+### Восстановление
+
+**1. Распаковать дамп:**
+
+```bash
+gunzip -c /root/backups/YYYY-MM-DD_HH-MM-SS/auth_db.sql.gz > /tmp/auth_db.sql
+```
+
+**2. Создать временную базу:**
+
+```bash
+docker exec -it auth-postgres psql -U test -d postgres -c "CREATE DATABASE auth_restore;"
+```
+
+**3. Залить дамп:**
+
+```bash
+docker exec -i auth-postgres psql -U test -d auth_restore < /tmp/auth_db.sql
+```
+
+**4. Проверить, что данные на месте:**
+
+```bash
+docker exec -it auth-postgres psql -U test -d auth_restore -c "SELECT COUNT(*) FROM auth.users;"
+```
+
+### Проверка восстановления
+
+**Раз в месяц** — прогонять восстановление последнего дампа в тестовую базу
+(`auth_restore`), убеждаться, что таблицы и данные на месте, удалять тестовую БД.
+
+Бэкап без проверки восстановления — **не бэкап**. Классическая ошибка: cron годами
+пишет дампы, при первом инциденте выясняется, что они побитые.
+
+### Настройка cron (одноразово, при первом деплое)
+
+```bash
+ssh root@<SERVER_HOST>
+crontab -e
+# Добавить строку:
+# 0 3 * * * /root/projects/orange-team-microservices/scripts/backup-db.sh >> /var/log/backup.log 2>&1
+```
+
+Проверка:
+
+```bash
+crontab -l              # должна быть строка
+cat /var/log/backup.log # утром следующего дня
+```
+
+### Отключение бэкапов
+
+Удалить строку из `crontab -e`. Скрипт останется в репозитории, но запускаться не будет.
 
 ## Тестирование
 
