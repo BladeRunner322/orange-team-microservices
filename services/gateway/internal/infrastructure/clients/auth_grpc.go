@@ -2,10 +2,12 @@ package clients
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 
 	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/auth"
 	grpcclient "github.com/BladeRunner322/orange-team-microservices/pkg/grpc/client"
@@ -86,6 +88,24 @@ func (c *AuthClient) Logout(ctx context.Context, refreshToken string) error {
 	}
 	_, err := c.client.Logout(ctx, req)
 	return err
+}
+
+// IsHealthy проверяет, что gRPC-соединение с Auth не в фатальном состоянии.
+//
+// Используется в /ready Gateway. Idle и Connecting считаются «здоровыми»,
+// потому что gRPC ленив: соединение открывается при первом RPC, а не при старте.
+func (c *AuthClient) IsHealthy(ctx context.Context) error {
+	if c.conn == nil {
+		return errors.New("auth connection is nil")
+	}
+
+	state := c.conn.GetState()
+	switch state {
+	case connectivity.Ready, connectivity.Idle, connectivity.Connecting:
+		return nil
+	default:
+		return fmt.Errorf("auth connection state: %s", state)
+	}
 }
 
 func (c *AuthClient) Close() {

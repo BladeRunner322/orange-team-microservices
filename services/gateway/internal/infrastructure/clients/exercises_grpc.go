@@ -2,10 +2,12 @@ package clients
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 
 	"github.com/BladeRunner322/orange-team-microservices/internal/gen/api/exercises"
 	grpcclient "github.com/BladeRunner322/orange-team-microservices/pkg/grpc/client"
@@ -66,6 +68,24 @@ func (c *ExercisesClient) PatchExercise(ctx context.Context, req *exercises.Patc
 func (c *ExercisesClient) DeleteExercise(ctx context.Context, id string) error {
 	_, err := c.client.DeleteExercise(ctx, &exercises.DeleteExerciseRequest{Id: id})
 	return err
+}
+
+// IsHealthy проверяет, что gRPC-соединение с Exercises не в фатальном состоянии.
+//
+// Используется в /ready Gateway. Idle и Connecting считаются «здоровыми»,
+// потому что gRPC ленив: соединение открывается при первом RPC, а не при старте.
+func (c *ExercisesClient) IsHealthy(ctx context.Context) error {
+	if c.conn == nil {
+		return errors.New("exercises connection is nil")
+	}
+
+	state := c.conn.GetState()
+	switch state {
+	case connectivity.Ready, connectivity.Idle, connectivity.Connecting:
+		return nil
+	default:
+		return fmt.Errorf("exercises connection state: %s", state)
+	}
 }
 
 // Close закрывает gRPC-соединение.
