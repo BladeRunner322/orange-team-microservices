@@ -1799,7 +1799,7 @@ task <service-name>:migrate-version
 | `RATE_LIMIT_DEFAULT_RATE` | `60` | Токенов в минуту для защищённых |
 | `RATE_LIMIT_DEFAULT_BURST` | `60` | Вместимость ведра |
 | `RATE_LIMIT_DEFAULT_INTERVAL` | `1m` | Период восстановления |
-| `TLS_KEY_FILE` | `/app/certs/server.key` | Путь к приватному ключу |
+| `GRPC_CLIENT_TLS_MODE` | `insecure` | Режим TLS для исходящих gRPC-соединений (`disabled` / `insecure` / `verify`) |
 
 ### `services/exercises/.env`
 

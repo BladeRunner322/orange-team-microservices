@@ -29,9 +29,11 @@ type Config struct {
 	ProfilesGRPCAddr  string        `envconfig:"PROFILES_GRPC_ADDR" required:"true"`
 	ExercisesGRPCAddr string        `envconfig:"EXERCISES_GRPC_ADDR" required:"true"`
 	Timeout           time.Duration `envconfig:"GATEWAY_TIMEOUT" default:"10s"`
-	EnableTLS         bool          `envconfig:"ENABLE_TLS" default:"false"`
-	TLSCertFile       string        `envconfig:"TLS_CERT_FILE" default:""`
-	TLSKeyFile        string        `envconfig:"TLS_KEY_FILE" default:""`
+
+	// GRPCClientTLSMode — режим TLS для исходящих gRPC-соединений
+	// к Auth, Profiles, Exercises.
+	// Значения: "disabled" | "insecure" | "verify".
+	GRPCClientTLSMode string `envconfig:"GRPC_CLIENT_TLS_MODE" default:"insecure"`
 
 	// TrustedProxies — список CIDR доверенных прокси.
 	// Если RemoteAddr входит в этот список — доверяем заголовку

@@ -124,6 +124,9 @@ retry-проблем: прокси, load balancer или клиент может
 Флаг есть — эффекта нет.
 **Что делать:** прокидывать TLSMode из конфига, либо убрать неиспользуемые переменные.
 **Приоритет:** средний (вводит в заблуждение).
+**Статус:** ✅ Закрыто (2026-10-06). `ENABLE_TLS`/`TLSCertFile`/`TLSKeyFile` убраны из конфига Gateway.
+Добавлено поле `GRPC_CLIENT_TLS_MODE` (значения `disabled`/`insecure`/`verify`),
+прокидывается в `NewAuthClient`, `NewProfilesClient`, `NewExercisesClient`.
 
 ### Наблюдаемость
 
@@ -235,7 +238,7 @@ exists» вместо «slug already exists»).
 ## Приоритеты
 
 1. **До продакшена:** внедрить ADR-006 (SOPS + age — принято, но не реализовано).
-2. **Средний:** C-2 (TLS config в Gateway-клиентах).
+2. **Средний:** — (закрыто).
 3. **Низкий:**
    - **F-2** — открыт (Profiles, Exercises).
    - **F-3** — частично закрыт: Exercises идемпотентен ✅, Profiles — открыт.

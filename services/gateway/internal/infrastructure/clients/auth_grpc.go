@@ -26,12 +26,13 @@ type AuthClient struct {
 //   - Timeout из аргумента — ограничивает каждый вызов;
 //   - автоматическое прокидывание user_id из context в metadata.
 //
-// TLS-режим захардкожен внутри, потому что это деталь Auth,
-// а не Gateway — вызывающему коду не нужно об этом думать.
-func NewAuthClient(ctx context.Context, addr string, timeout time.Duration) (*AuthClient, error) {
+// TLS-режим приходит из config (GRPC_CLIENT_TLS_MODE).
+// "insecure" — для self-signed сертификатов в dev/staging;
+// "verify" — для прода; "disabled" — только для локальной разработки.
+func NewAuthClient(ctx context.Context, addr string, timeout time.Duration, tlsMode string) (*AuthClient, error) {
 	conn, err := grpcclient.New(ctx, grpcclient.Config{
 		Target:  addr,
-		TLSMode: grpcclient.TLSModeInsecure,
+		TLSMode: grpcclient.TLSMode(tlsMode),
 		Timeout: timeout,
 	})
 	if err != nil {
