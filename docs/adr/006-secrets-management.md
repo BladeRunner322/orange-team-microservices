@@ -128,10 +128,11 @@ sops_mac: ENC[AES256_GCM,data:...,type:str]
 
 ## Дополнительно
 
-**Валидация `.env` в CD (не в этом ADR, но полезно):**
-Перед `docker compose up` в CD добавить шаг:
-- Сравнить переменные из `.env.example` с расшифрованным `.env`.
-- Если чего-то не хватает — упасть с понятной ошибкой **до** старта сервисов.
+**Валидация `.env` в CD — ✅ реализовано** (2026-10-06):
+
+В `.github/workflows/ci-cd.yml` перед `docker compose up`:
+- Сравниваются переменные из `.env.example` с расшифрованным `.env`.
+- Если чего-то не хватает — workflow падает с понятной ошибкой **до** старта сервисов.
 
 Это не замена SOPS, а **страховка** от рассинхрона между `.env.example` и `.env.enc`.
 
@@ -159,4 +160,10 @@ attempted methods [none], no supported methods remain
 
 ## Статус
 
-**Принято.** Внедрение — отдельным PR.
+**Внедрено** (2026-10-06).
+
+- `.sops.yaml` с creation_rules для корневого и 4 сервисных `.env`.
+- Task-задачи `sops:encrypt` / `sops:decrypt` / `sops:edit`.
+- CD расшифровывает `.env.enc` на раннере и заливает `.env` на сервер через `scp-action`.
+- Приватный age-ключ — в GitHub Secrets (`SOPS_AGE_KEY`).
+- Валидация `.env` против `.env.example` в CD (см. раздел «Дополнительно»).
