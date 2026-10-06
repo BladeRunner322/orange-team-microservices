@@ -1,5 +1,7 @@
 global:
-  scrape_interval: 5s
+  # 15s — компромисс для прода и 7+ сервисов.
+  # 5s — только для локальной отладки (быстрая обратная связь по метрикам).
+  scrape_interval: 15s
 
 scrape_configs:
   - job_name: 'auth'
