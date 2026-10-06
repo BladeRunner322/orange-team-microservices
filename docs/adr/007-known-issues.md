@@ -128,6 +128,11 @@ retry-проблем: прокси, load balancer или клиент может
 Добавлено поле `GRPC_CLIENT_TLS_MODE` (значения `disabled`/`insecure`/`verify`),
 прокидывается в `NewAuthClient`, `NewProfilesClient`, `NewExercisesClient`.
 
+**C-3. `GRPC_CLIENT_TLS_MODE=verify` обязателен для прода.**
+Сейчас в `.env.example` и дефолтах — `insecure` (TLS без проверки сертификата). Для прода это не подходит — нужен `verify` с валидным сертификатом. Требование не зафиксировано.
+**Что делать:** после установки HTTPS/Caddy — выставить `GRPC_CLIENT_TLS_MODE=verify`. Зафиксировать в README и `.env.example` комментарием.
+**Приоритет:** до прода (вместе с Caddy).
+
 ### Наблюдаемость
 
 **O-1. `/ready` в Gateway проверяет только Redis.**
@@ -138,6 +143,11 @@ Gateway считает себя готовым, но защищённые зап
 **Статус:** ✅ Закрыто (2026-10-05). `/ready` проверяет Redis + gRPC-каналы
 к Auth, Profiles, Exercises. Каждый клиент имеет метод `IsHealthy(ctx) error`,
 основанный на `grpc.conn.GetState()`. Readiness-логика вынесена в `pkg/health`.
+
+**O-2. `x-request-id` не пробрасывается между сервисами.**
+Gateway генерирует `request_id` и кладёт в response header, но не добавляет его в gRPC metadata при вызове downstream. В логах Auth/Profiles/Exercises нет `request_id` — связать запрос через все сервисы по логам нельзя.
+**Что делать:** в `pkg/grpc/interceptors` добавить interceptor, который кладёт `x-request-id` из context в outgoing metadata. В server interceptor — читать из incoming metadata и класть в context. `LoggingInterceptor` логирует с этим полем.
+**Приоритет:** средний. Триггер — реальная отладка инцидента через несколько сервисов.
 
 ### CI/CD
 
@@ -151,6 +161,11 @@ Docker на GitHub Actions доступен, Testcontainers работает.
 **Приоритет:** средний.
 **Статус:** ✅ Закрыто (2026-10-05). Добавлен шаг `Run Integration Tests`
 с `-tags=integration -timeout=15m`. См. ADR-012.
+
+**CI-2. `appleboy/ssh-action@v1.0.3` — баг с Ed25519.**
+Версия не парсит Ed25519-ключи из `SERVER_SSH_KEY` (см. ADR-006). Костыль — отдельный RSA-ключ `~/.ssh/orange_deploy_rsa` только для CD.
+**Что делать:** обновить до `appleboy/ssh-action@v1.2+` — там баг исправлен. После апгрейда можно вернуться на Ed25519 и отказаться от RSA-костыля.
+**Приоритет:** низкий. Костыль работает, ничего не блокирует.
 
 ### Мелкие
 
@@ -217,10 +232,11 @@ exists» вместо «slug already exists»).
 
 ### Отложено из ранее принятых ADR
 
-- **ADR-004:** circuit breaker, retry с backoff, distributed tracing,
-  mTLS — осознанно отложены «до продакшена». (gRPC deadlines на
-  клиентах — закрыты, см. C-1.)
-- **ADR-006:** SOPS + age. ✅ Внедрено (2026-10-06). `.env.enc` коммитятся в git, CD расшифровывает через `SOPS_AGE_KEY` из GitHub Secrets.
+- **ADR-004:** circuit breaker (Level B), retry с backoff (Level C),
+  distributed tracing (Level C), mTLS (Level C — только при выходе
+  из одной docker-сети). gRPC deadlines на клиентах — закрыты, см. C-1.
+- **ADR-006:** SOPS + age. ✅ Внедрено (2026-10-06). `.env.enc` коммитятся
+  в git, CD расшифровывает через `SOPS_AGE_KEY` из GitHub Secrets.
 
 ## Последствия
 

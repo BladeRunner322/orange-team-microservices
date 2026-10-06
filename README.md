@@ -377,13 +377,13 @@ orange-team-microservices/
 │   │   ├── .env.example              # шаблон переменных Exercises Service
 │   │   └── Dockerfile
 │   │
-│   ├── habits/                       # НОВЫЙ
+│   ├── habits/                       # 📋 В ПЛАНЕ (не реализован)
 │   │   └── ... (аналогично)
 │   │
-│   ├── workouts/                     # НОВЫЙ
+│   ├── workouts/                     # 📋 В ПЛАНЕ (не реализован)
 │   │   └── ... (аналогично)
 │   │
-│   └── leaderboard/                  # НОВЫЙ
+│   └── leaderboard/                  # 📋 В ПЛАНЕ (не реализован)
 │       └── ... (аналогично)
 │
 ├── docs/                             # Документация
