@@ -113,6 +113,7 @@ cp services/exercises/.env.example services/exercises/.env
 - `AUTH_GRPC_ADDR` — адрес Auth Service (по умолчанию `auth-service:50051`)
 - `PROFILES_GRPC_ADDR` — адрес Profiles Service (по умолчанию `profiles-service:50052`)
 - `EXERCISES_GRPC_ADDR` — адрес Exercises Service (по умолчанию `exercises-service:50053`)
+- `GRPC_CLIENT_TLS_MODE` — режим TLS для исходящих gRPC-соединений (`disabled` / `insecure` / `verify`). По умолчанию `insecure` — для self-signed сертификатов в dev/staging.
 - `REDIS_PASSWORD` — пароль для Redis (rate limiting, можно тот же или отдельный)
 - `TRUSTED_PROXIES` — CIDR-список доверенных прокси через запятую (опционально). Если пусто — заголовок `X-Forwarded-For` игнорируется, IP клиента берётся из `RemoteAddr`. Заполнять, только если перед Gateway стоит прокси (nginx, ALB).
 
@@ -1420,42 +1421,47 @@ curl http://<SERVER_HOST>:8083/ready    # Exercises → проверка Postgre
 - `profiles` — target `profiles:8080`
 - `exercises` — target `exercises:8080`
 
-### Обновление `.env` на сервере
+### Обновление `.env` на сервере (SOPS + age)
 
-В проекте **пять файлов `.env`**, и **ни один из них не хранится в git** (все добавлены в `.gitignore`). Они **не подтягиваются** при `git pull` на сервере. Это значит, что при добавлении новых переменных окружения (например, `REDIS_ADDR`, `REDIS_PASSWORD`, `RATE_LIMIT_ENABLED`, `PROFILES_GRPC_ADDR`, `EXERCISES_GRPC_ADDR`) их нужно **обновить вручную** в соответствующих файлах на сервере перед деплоем.
+Пять файлов `.env` (корневой + по одному на сервис) **не хранятся в git** (в `.gitignore`), но их **зашифрованные версии** (`.env.enc`) коммитятся. CD расшифровывает их при деплое. Никаких `nano` на сервере — все изменения проходят через git, ревью и CI/CD.
 
-Структура `.env` на сервере:
+**Структура в репозитории:**
 
 ```
-/root/projects/orange-team-microservices/
-├── .env                          # корневой (порты, Grafana)
+orange-team-microservices/
+├── .env.enc                          # зашифрованный корневой (порты, Grafana)
 └── services/
-    ├── auth/.env                 # Auth Service
-    ├── gateway/.env              # Gateway Service
-    ├── profiles/.env             # Profiles Service
-    └── exercises/.env            # Exercises Service
+    ├── auth/.env.enc
+    ├── gateway/.env.enc
+    ├── profiles/.env.enc
+    └── exercises/.env.enc
 ```
 
-Порядок действий при добавлении новых переменных:
+**Как отредактировать переменную:**
 
-1. На **локальной машине** обнови соответствующий `.env.example` (шаблон) и закоммить в репозиторий.
-2. Подключись к серверу:
+1. Локально:
    ```bash
-   ssh root@<SERVER_HOST>
-   cd /root/projects/orange-team-microservices
+   task sops:edit -- services/auth/.env.enc
    ```
-3. Обнови нужные `.env` файлы через `nano`:
-   ```bash
-   nano .env                          # если меняются порты или Grafana
-   nano services/auth/.env            # если меняются переменные Auth
-   nano services/gateway/.env         # если меняются переменные Gateway
-   nano services/profiles/.env        # если меняются переменные Profiles
-   nano services/exercises/.env       # если меняются переменные Exercises
-   ```
-4. Сохрани (`Ctrl+O`, Enter, `Ctrl+X`).
-5. После этого — вливай PR в `main`. CD задеплоит сервисы, и они корректно подхватят новые переменные.
+   SOPS расшифрует файл, откроет `$EDITOR`, при сохранении зашифрует обратно.
+2. Закоммить изменения `.env.enc` и запушь в `main`.
+3. CD расшифрует `.env.enc` на раннере и зальёт `.env` на сервер.
 
-> ⚠️ Если забыть обновить хотя бы один из `.env` на сервере, соответствующий сервис упадёт при старте с ошибкой вида `envconfig: required env var REDIS_ADDR not set`.
+**Что делает CD (deploy job):**
+
+1. Устанавливает `sops`, расшифровывает `.env.enc` → `.env` (используя `SOPS_AGE_KEY` из GitHub Secrets).
+2. Заливает `.env` на сервер через `scp-action`.
+3. Валидирует `.env` против `.env.example` — падает с явной ошибкой, если чего-то не хватает.
+4. `docker compose pull` + `up -d --no-build`.
+
+**Ручные команды (для локальной настройки):**
+
+```bash
+task sops:encrypt   # .env → .env.enc (все 5 файлов)
+task sops:decrypt   # .env.enc → .env (например, на новой машине)
+```
+
+> ⚠️ **Приватный age-ключ** хранится в GitHub Secrets (`SOPS_AGE_KEY`) и локально. Если он утечёт — все `.env.enc` скомпрометированы. См. [ADR-006](docs/adr/006-secrets-management.md).
 
 ## Мониторинг и логирование
 

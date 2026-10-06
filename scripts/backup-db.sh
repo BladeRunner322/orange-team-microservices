@@ -21,19 +21,19 @@ RETENTION_DAYS="${RETENTION_DAYS:-7}"
 DATE=$(date +%Y-%m-%d_%H-%M-%S)
 TARGET_DIR="${BACKUP_DIR}/${DATE}"
 
-# Docker container name → database name
-declare -A DATABASES=(
-  [auth-postgres]=auth_db
-  [profiles-postgres]=profiles_db
-  [exercises-postgres]=exercises_db
-)
+# Список сервисов, у которых есть PostgreSQL.
+# Контейнер называется <service>-postgres, БД — <service>_db.
+# При добавлении нового сервиса (Habits, Workouts, Leaderboard) —
+# просто дописать имя в массив.
+SERVICES=(auth profiles exercises)
 
 mkdir -p "${TARGET_DIR}"
 
 echo "[$(date)] Backup started → ${TARGET_DIR}"
 
-for container in "${!DATABASES[@]}"; do
-  db="${DATABASES[$container]}"
+for svc in "${SERVICES[@]}"; do
+  container="${svc}-postgres"
+  db="${svc}_db"
   echo "[$(date)] Dumping ${db} from ${container}"
 
   if ! docker exec "${container}" pg_dump -U test -d "${db}" | gzip > "${TARGET_DIR}/${db}.sql.gz"; then
