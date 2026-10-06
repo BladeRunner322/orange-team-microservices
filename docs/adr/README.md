@@ -25,6 +25,7 @@
 - [ADR-011: Naming conventions и Code style](011-naming-and-code-style.md)
 - [ADR-012: Оптимизация CI/CD](012-ci-cd-optimization.md)
 - [ADR-013: Требования к инфраструктуре](013-infrastructure-requirements.md)
+- [ADR-014: Бэкапы и DR](014-backups-and-dr.md)
 
 ## Как добавить
 
