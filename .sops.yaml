@@ -1,0 +1,15 @@
+creation_rules:
+  - path_regex: services/auth/\.env$
+    age: age1u6jul3vw6fezhqhkhatyxqtznr99qqeajknrx2gzdrw5wn830e8sn4tay9
+
+  - path_regex: services/gateway/\.env$
+    age: age1u6jul3vw6fezhqhkhatyxqtznr99qqeajknrx2gzdrw5wn830e8sn4tay9
+
+  - path_regex: services/profiles/\.env$
+    age: age1u6jul3vw6fezhqhkhatyxqtznr99qqeajknrx2gzdrw5wn830e8sn4tay9
+
+  - path_regex: services/exercises/\.env$
+    age: age1u6jul3vw6fezhqhkhatyxqtznr99qqeajknrx2gzdrw5wn830e8sn4tay9
+
+  - path_regex: ^\.env$
+    age: age1u6jul3vw6fezhqhkhatyxqtznr99qqeajknrx2gzdrw5wn830e8sn4tay9
