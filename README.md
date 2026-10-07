@@ -409,7 +409,8 @@ orange-team-microservices/
 │       ├── 012-ci-cd-optimization.md
 │       ├── 013-infrastructure-requirements.md
 │       ├── 014-backups-and-dr.md
-│       └── 015-https-caddy.md
+│       ├── 015-https-caddy.md
+│       └── 016-network-security.md
 │
 ├── scripts/                          # скрипты (бэкапы, вспомогательное)
 │   ├── backup-db.sh                  # дамп БД + выгрузка в S3
@@ -658,6 +659,7 @@ orange-team-microservices/
 - **Мониторинг:** Prometheus (9090), Grafana (3000)
 - **Логи:** Loki (3100), Promtail (9080)
 - **HTTPS:** Caddy (80, 443) — TLS-терминация для Gateway, см. [ADR-015](docs/adr/015-https-caddy.md)
+- **Сетевая безопасность:** внутренние порты привязаны к `127.0.0.1`, ufw (только 22/80/443), fail2ban на SSH — см. [ADR-016](docs/adr/016-network-security.md)
 
 ### План (после реализации остальных сервисов)
 
@@ -1395,6 +1397,101 @@ docker logs caddy --tail 50
 
 Caddy автоматически выпустит новый сертификат, старый перестанет использоваться.
 
+## Сетевая безопасность
+
+Полностью — в [ADR-016](docs/adr/016-network-security.md). Ниже — что нужно знать при работе с проектом.
+
+### Что открыто снаружи
+
+Только три порта доступны из интернета:
+
+| Порт | Сервис | Назначение |
+|---|---|---|
+| 22 | SSH | Ручной доступ + CD (`appleboy/ssh-action`) |
+| 80 | Caddy | HTTP → HTTPS redirect |
+| 443 | Caddy | HTTPS |
+
+**Всё остальное закрыто** — на двух уровнях:
+
+1. **Docker bind.** В `docker-compose.yml` внутренние порты привязаны к `127.0.0.1`:
+   ```
+   ports:
+     - "127.0.0.1:${AUTH_GRPC_PORT}:50051"
+   ```
+   Порт доступен только с самого сервера, снаружи — нет. Caddy — исключение, у него `0.0.0.0:80` и `0.0.0.0:443`.
+
+2. **ufw.** Файрвол дропает всё, кроме 22/80/443:
+   ```
+   ufw status
+   # Status: active
+   # 22/tcp  ALLOW
+   # 80/tcp  ALLOW
+   # 443/tcp ALLOW
+   ```
+
+**Двойная защита:** если один слой сломается (баг в Docker, случайная правка compose без `127.0.0.1`), второй закроет.
+
+### fail2ban на SSH
+
+Установлен `fail2ban` с кастомным `/etc/fail2ban/jail.local`:
+
+```
+[DEFAULT]
+bantime = 1h
+findtime = 10m
+maxretry = 5
+
+[sshd]
+enabled = true
+```
+
+**Как работает:** после 5 неудачных SSH-попыток с одного IP — бан на час. Боты, перебирающие пароли, отсекаются. Логи `/var/log/auth.log` чистые.
+
+**Проверить статус:**
+```bash
+fail2ban-client status sshd
+```
+
+Увидишь список забаненных IP (`Banned IP list`). Скорее всего, там будут IP из Ирана/Нидерландов/Китая — это фоновые боты, которые сканируют весь интернет.
+
+**Разбанить вручную (если попал свой IP):**
+```bash
+fail2ban-client set sshd unbanip <IP>
+```
+
+### gRPC между сервисами — `insecure` (осознанно)
+
+Gateway ходит к Auth/Profiles/Exercises с `GRPC_CLIENT_TLS_MODE=insecure`. Сертификаты не проверяются.
+
+**Почему так:**
+- Все 4 сервиса в одной docker-сети, gRPC-порты закрыты снаружи.
+- MITM возможен только тем, кто уже внутри — то есть уже скомпрометировал систему.
+- Переход на `verify` требует нормальных сертификатов с SAN (`auth-service`, `profiles-service`) — это 2–3 часа работы без реальной выгоды сейчас.
+
+**Триггеры для перехода на `verify` + mTLS:**
+- Сервисы выйдут из одной docker-сети.
+- Появится внешний gRPC-потребитель.
+- Compliance/аудит.
+
+Детали — в [ADR-016](docs/adr/016-network-security.md).
+
+### Проверка периметра
+
+С локальной машины (не с сервера):
+```bash
+nmap -Pn -p 22,80,443,3000,3100,50051,50052,50053,5432,5433,5434,6379,6380,8080,8081,8082,8083,9090 136.234.4.93
+```
+
+Ожидаемо: `open` только для 22, 80, 443. Остальные — `filtered`.
+
+### Ручная работа с сервером
+
+Если нужен доступ к внутренним сервисам (посмотреть метрики, зайти в psql):
+- **PostgreSQL:** `docker compose exec postgres-auth psql -U test -d auth_db`
+- **Redis:** `docker compose exec redis-auth redis-cli -a $REDIS_PASSWORD`
+- **Метрики:** `curl http://localhost:8080/metrics` (с самого сервера)
+- **Prometheus UI:** через SSH-туннель: `ssh -L 9090:localhost:9090 root@136.234.4.93`, потом `http://localhost:9090` в браузере.
+
 ## CI/CD и деплой
 
 Проект использует **GitHub Actions** для автоматической проверки, сборки и деплоя сервисов.
@@ -2082,5 +2179,6 @@ task <service-name>:migrate-version
 - [ADR-013: Требования к инфраструктуре](docs/adr/013-infrastructure-requirements.md) — сколько RAM/CPU/диска нужно на каждом этапе
 - [ADR-014: Бэкапы и DR](docs/adr/014-backups-and-dr.md) — off-site бэкапы в Selectel S3
 - [ADR-015: HTTPS через Caddy](docs/adr/015-https-caddy.md) — TLS-терминация, Let's Encrypt, DuckDNS
+- [ADR-016: Сетевая безопасность](docs/adr/016-network-security.md) — bind на 127.0.0.1, ufw, fail2ban, insecure gRPC
 
 Подробнее — в [docs/adr/README.md](docs/adr/README.md).
