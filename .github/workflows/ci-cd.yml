@@ -155,7 +155,7 @@ jobs:
           sudo install -m 755 /tmp/sops /usr/local/bin/sops
           sops --version
 
-      - name: Decrypt .env files
+      - name: Decrypt .env and rclone.conf files
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
         run: |
@@ -164,14 +164,15 @@ jobs:
           sops --decrypt --input-type dotenv --filename-override services/gateway/.env services/gateway/.env.enc > services/gateway/.env
           sops --decrypt --input-type dotenv --filename-override services/profiles/.env services/profiles/.env.enc > services/profiles/.env
           sops --decrypt --input-type dotenv --filename-override services/exercises/.env services/exercises/.env.enc > services/exercises/.env
+          sops --decrypt --input-type binary --filename-override scripts/rclone.conf scripts/rclone.conf.enc > scripts/rclone.conf
 
-      - name: Upload .env files to server
+      - name: Upload .env and rclone.conf files to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          source: ".env,services/auth/.env,services/gateway/.env,services/profiles/.env,services/exercises/.env"
+          source: ".env,services/auth/.env,services/gateway/.env,services/profiles/.env,services/exercises/.env,scripts/rclone.conf"
           target: "/root/projects/orange-team-microservices"
           overwrite: true
 
@@ -188,6 +189,15 @@ jobs:
 
             if [ ! -d "$PROJECT_DIR" ]; then
               git clone https://github.com/${{ github.repository }} $PROJECT_DIR
+            fi
+
+            # Разложить rclone.conf по дефолтному пути, чтобы cron и скрипт
+            # backup-db.sh находили его без --config.
+            if [ -f "$PROJECT_DIR/scripts/rclone.conf" ]; then
+              mkdir -p /root/.config/rclone
+              mv "$PROJECT_DIR/scripts/rclone.conf" /root/.config/rclone/rclone.conf
+              chmod 600 /root/.config/rclone/rclone.conf
+              echo "→ rclone.conf installed to ~/.config/rclone/"
             fi
 
             cd $PROJECT_DIR

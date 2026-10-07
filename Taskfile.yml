@@ -61,24 +61,26 @@ tasks:
   # ============================================================
 
   sops:encrypt:
-    desc: Encrypt all .env files to .env.enc (SOPS + age)
+    desc: Encrypt all .env and rclone.conf files to .enc (SOPS + age)
     cmds:
       - sops --encrypt --input-type dotenv --filename-override .env .env > .env.enc
       - sops --encrypt --input-type dotenv --filename-override services/auth/.env services/auth/.env > services/auth/.env.enc
       - sops --encrypt --input-type dotenv --filename-override services/gateway/.env services/gateway/.env > services/gateway/.env.enc
       - sops --encrypt --input-type dotenv --filename-override services/profiles/.env services/profiles/.env > services/profiles/.env.enc
       - sops --encrypt --input-type dotenv --filename-override services/exercises/.env services/exercises/.env > services/exercises/.env.enc
-      - 'echo "✅ Encrypted: .env + services/*/.env → .env.enc + services/*/.env.enc"'
+      - sops --encrypt --input-type binary --filename-override scripts/rclone.conf scripts/rclone.conf > scripts/rclone.conf.enc
+      - 'echo "✅ Encrypted: .env + services/*/.env + scripts/rclone.conf → *.enc"'
 
   sops:decrypt:
-    desc: Decrypt all .env.enc to .env (for local setup on a new machine)
+    desc: Decrypt all .enc files to plain (for local setup on a new machine)
     cmds:
       - sops --decrypt --input-type dotenv --filename-override .env .env.enc > .env
       - sops --decrypt --input-type dotenv --filename-override services/auth/.env services/auth/.env.enc > services/auth/.env
       - sops --decrypt --input-type dotenv --filename-override services/gateway/.env services/gateway/.env.enc > services/gateway/.env
       - sops --decrypt --input-type dotenv --filename-override services/profiles/.env services/profiles/.env.enc > services/profiles/.env
       - sops --decrypt --input-type dotenv --filename-override services/exercises/.env services/exercises/.env.enc > services/exercises/.env
-      - 'echo "✅ Decrypted: .env.enc + services/*/.env.enc → .env + services/*/.env"'
+      - sops --decrypt --input-type binary --filename-override scripts/rclone.conf scripts/rclone.conf.enc > scripts/rclone.conf
+      - 'echo "✅ Decrypted: *.enc → plain files (.env + services/*/.env + scripts/rclone.conf)"'
 
   sops:edit:
     desc: 'Edit an encrypted .env (usage - task sops:edit -- services/auth/.env.enc)'
