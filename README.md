@@ -1620,15 +1620,40 @@ Redis **не бэкапится** — там только refresh-токены (
 
 Раз в сутки в 03:00 UTC. Логи — в `/var/log/backup.log`.
 
-### Где лежат бэкапы
+**Где лежат бэкапы**
 
-**Локально на сервере:** `/root/backups/YYYY-MM-DD_HH-MM-SS/`.
+**Локально на сервере:** `/root/backups/YYYY-MM-DD_HH-MM-SS/`. Ротация — 7 дней.
 
-**Off-site:** пока не настроено. Планируется копирование в S3-совместимое хранилище (Yandex Object Storage / Selectel / Backblaze B2) раз в сутки.
+**Off-site (S3):** `s3://orange-team-backups/` в Selectel Object Storage (см. [ADR-014](docs/adr/014-backups-and-dr.md)). Структура:
 
-> ⚠️ **Локальные бэкапы не защищают от смерти диска или удаления сервера.** Off-site — обязательное дополнение. Пока его нет, потеря сервера = потеря всего.
+```
+s3://orange-team-backups/
+├── auth/2026-10-07_03-48-09/auth_db.sql.gz
+├── profiles/2026-10-07_03-48-09/profiles_db.sql.gz
+└── exercises/2026-10-07_03-48-09/exercises_db.sql.gz
+```
 
-### Восстановление
+Ротация — 30 дней. Трафик между VDS и S3 внутри Selectel не тарифицируется.
+
+**Как посмотреть, что в S3:**
+
+```bash
+rclone lsf -R selectel:orange-team-backups
+```
+
+**Переменные (в `scripts/backup-db.sh`):**
+
+| Переменная | По умолчанию | Назначение |
+|---|---|---|
+| `RCLONE_REMOTE` | `selectel` | Имя remote в `~/.config/rclone/rclone.conf`. Пустое — off-site отключается. |
+| `S3_BUCKET` | `orange-team-backups` | Имя бакета. |
+| `S3_RETENTION_DAYS` | `30` | Срок хранения в S3. |
+
+**Конфиг rclone:** `~/.config/rclone/rclone.conf` на сервере. Расшифровывается из `scripts/rclone.conf.enc` (SOPS + age) при деплое через CD. См. [ADR-006](docs/adr/006-secrets-management.md).
+
+> ⚠️ **Локальные бэкапы не защищают от смерти диска или удаления сервера.** Off-site — обязательное дополнение, реализовано в [ADR-014](docs/adr/014-backups-and-dr.md).
+
+### Восстановление из локального бэкапа
 
 **1. Распаковать дамп:**
 
@@ -1661,6 +1686,30 @@ docker exec -it auth-postgres psql -U test -d auth_restore -c "SELECT COUNT(*) F
 
 Бэкап без проверки восстановления — **не бэкап**. Классическая ошибка: cron годами
 пишет дампы, при первом инциденте выясняется, что они побитые.
+
+### Восстановление из S3 (off-site)
+
+Если сервер потерян полностью — сначала восстановить проект на новом сервере (клонировать репо, развернуть через CD, чтобы `.env` и `rclone.conf` расшифровались), потом:
+
+```bash
+# 1. Список доступных дампов
+rclone lsf selectel:orange-team-backups/auth/
+
+# 2. Скачать нужный дамп
+rclone copy selectel:orange-team-backups/auth/2026-10-07_03-48-09/auth_db.sql.gz /tmp/restore/
+
+# 3. Распаковать
+gunzip -c /tmp/restore/auth_db.sql.gz > /tmp/restore/auth_db.sql
+
+# 4. Восстановить в чистую БД
+docker exec -it auth-postgres psql -U test -d postgres -c "CREATE DATABASE auth_restore;"
+docker exec -i auth-postgres psql -U test -d auth_restore < /tmp/restore/auth_db.sql
+
+# 5. Проверить, что данные на месте
+docker exec -it auth-postgres psql -U test -d auth_restore -c "SELECT COUNT(*) FROM auth.users;"
+```
+
+Полная процедура и цели RPO/RTO — в [ADR-014](docs/adr/014-backups-and-dr.md).
 
 ### Настройка cron (одноразово, при первом деплое)
 

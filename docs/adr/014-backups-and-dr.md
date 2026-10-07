@@ -186,4 +186,11 @@ docker exec -it auth-postgres psql -U test -d auth_restore -c "SELECT COUNT(*) F
 
 ## Статус
 
-**Принято.** Реализация — отдельным PR (`chore/offsite-backups`).
+**Реализовано** (2026-10-07).
+
+- Бакет `orange-team-backups` создан в Selectel Object Storage (ru-1, холодное хранение).
+- Сервисный пользователь `rclone-backup` с ролью `s3.user` на проект.
+- Политика доступа в бакете разрешает `rclone-backup`: `ListBucket`, `GetObject`, `PutObject`, `DeleteObject`.
+- `scripts/rclone.conf.enc` расшифровывается в CD, раскладывается в `~/.config/rclone/rclone.conf` на сервере.
+- `backup-db.sh` выгружает дампы в S3 после локального бэкапа.
+- Проверено вручную: три базы загружены в `s3://orange-team-backups/<svc>/<ts>/`.

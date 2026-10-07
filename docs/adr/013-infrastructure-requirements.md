@@ -112,8 +112,7 @@ Database per Service (ADR-004) требует отдельный Postgres для
 (`auth_db`, `profiles_db`, `exercises_db`), сжимает и ротирует по 7 дней.
 Запускается через cron на сервере.
 
-**Off-site — ADR-014.** Решение принято (Selectel Object Storage, rclone).
-Реализация — отдельным PR. До реализации бэкапы лежат только локально.
+**Off-site — ADR-014.** ✅ Реализовано (2026-10-07). Бэкапы выгружаются в Selectel Object Storage (`s3://orange-team-backups/`) через rclone. Ротация в S3 — 30 дней, локально — 7 дней. RPO = 24 ч, RTO = 2 ч.
 
 Redis не бэкапится — там только refresh-токены и rate-limit-вёдра с TTL,
 потеря некритична.
