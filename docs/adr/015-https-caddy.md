@@ -14,7 +14,7 @@
 
 ### Провайдер домена: DuckDNS (временно)
 
-Бесплатный поддомен `solevolevingms.duckdns.org` через [duckdns.org](https://www.duckdns.org).
+Бесплатный поддомен `sololevelingms.duckdns.org` через [duckdns.org](https://www.duckdns.org).
 
 **Почему временно и почему DuckDNS:**
 
@@ -58,8 +58,8 @@ Caddy — reverse proxy с автоматическим Let's Encrypt.
 
 Caddy использует **HTTP-01 challenge** Let's Encrypt. Как работает:
 
-1. Caddy просит у Let's Encrypt сертификат для `solevolevingms.duckdns.org`.
-2. Let's Encrypt стучится на `http://solevolevingms.duckdns.org/.well-known/acme-challenge/<token>`.
+1. Caddy просит у Let's Encrypt сертификат для `sololevelingms.duckdns.org`.
+2. Let's Encrypt стучится на `http://sololevelingms.duckdns.org/.well-known/acme-challenge/<token>`.
 3. Caddy отвечает случайным токеном.
 4. Let's Encrypt проверяет токен и выдаёт сертификат.
 
@@ -91,7 +91,7 @@ Caddy продлевает сертификат **автоматически**, 
 - Ноль зависимостей от certbot и cron.
 - Конфиг — 3 строки, читается моментально.
 - HTTP → HTTPS редирект из коробки.
-- Человекочитаемый адрес `solevolevingms.duckdns.org`.
+- Человекочитаемый адрес `sololevelingms.duckdns.org`.
 
 **Минусы:**
 
@@ -111,7 +111,7 @@ Caddy продлевает сертификат **автоматически**, 
 
 В `.env`:
 
-- `DOMAIN=solevolevingms.duckdns.org` — публичный домен, на который Caddy выпускает сертификат.
+- `DOMAIN=sololevelingms.duckdns.org` — публичный домен, на который Caddy выпускает сертификат.
 
 Токен DuckDNS **не нужен** при HTTP-challenge. Храним на будущее вне `.env` (в блокноте / password manager).
 
@@ -123,4 +123,10 @@ Caddy продлевает сертификат **автоматически**, 
 
 ## Статус
 
-**Принято.** Реализация — PR `feat/caddy-https`.
+**Реализовано** (2026-10-07).
+
+- Caddy в `docker-compose.yml` (стандартный образ `caddy:2-alpine`), порты 80/443.
+- Конфиг — `Caddyfile` в корне репо.
+- Домен `sololevelingms.duckdns.org` резолвится на `136.234.4.93`, сертификат Let's Encrypt получен.
+- CD перезапускает Caddy вместе с остальными сервисами.
+- Проверено через `curl`: `https://sololevelingms.duckdns.org/health` → `200 OK`, сертификат валиден.

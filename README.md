@@ -102,6 +102,7 @@ cp services/exercises/.env.example services/exercises/.env
 **В корневом `.env`:**
 
 - `GRAFANA_PASSWORD` — пароль администратора Grafana (по умолчанию `admin`)
+- `DOMAIN` — публичный домен для Caddy (например, `sololevelingms.duckdns.org`). См. [ADR-015](docs/adr/015-https-caddy.md)
 
 **В `services/auth/.env`:**
 
@@ -323,6 +324,7 @@ orange-team-microservices/
 │   │   │           ├── middleware/   # аутентификация, RBAC, rate limit, логирование, request_id
 │   │   │           └── httputil/     # утилиты (SendJSON, SendError, GrpcErrorToHTTP)
 │   │   ├── .env.example              # шаблон переменных Gateway Service
+│   │   ├── .env.enc                  # зашифрованный .env (SOPS + age)
 │   │   └── Dockerfile
 │   │
 │   ├── auth/                         # ✅ ГОТОВ — Auth Service (регистрация, логин, валидация JWT)
@@ -342,6 +344,7 @@ orange-team-microservices/
 │   │   │       └── authgrpc/         # gRPC-сервер (обработчики AuthService)
 │   │   ├── migrations/               # SQL-миграции для auth_db
 │   │   ├── .env.example              # шаблон переменных Auth Service
+│   │   ├── .env.enc                  # зашифрованный .env (SOPS + age)
 │   │   └── Dockerfile
 │   │
 │   ├── profiles/                     # ✅ ГОТОВ — Profiles Service (профили пользователей)
@@ -359,6 +362,7 @@ orange-team-microservices/
 │   │   │       └── profilesgrpc/     # gRPC-сервер (обработчики ProfilesService)
 │   │   ├── migrations/               # SQL-миграции для profiles_db
 │   │   ├── .env.example              # шаблон переменных Profiles Service
+│   │   ├── .env.enc                  # зашифрованный .env (SOPS + age)
 │   │   └── Dockerfile
 │   │
 │   ├── exercises/                    # ✅ ГОТОВ — Exercises Service (справочник упражнений)
@@ -376,6 +380,7 @@ orange-team-microservices/
 │   │   │       └── exercisesgrpc/    # gRPC-сервер (обработчики ExercisesService)
 │   │   ├── migrations/               # SQL-миграции для exercises_db
 │   │   ├── .env.example              # шаблон переменных Exercises Service
+│   │   ├── .env.enc                  # зашифрованный .env (SOPS + age)
 │   │   └── Dockerfile
 │   │
 │   ├── habits/                       # 📋 В ПЛАНЕ (не реализован)
@@ -402,9 +407,18 @@ orange-team-microservices/
 │       ├── 010-shared-infrastructure-packages.md
 │       ├── 011-naming-and-code-style.md
 │       ├── 012-ci-cd-optimization.md
-│       └── 013-infrastructure-requirements.md
+│       ├── 013-infrastructure-requirements.md
+│       ├── 014-backups-and-dr.md
+│       └── 015-https-caddy.md
+│
+├── scripts/                          # скрипты (бэкапы, вспомогательное)
+│   ├── backup-db.sh                  # дамп БД + выгрузка в S3
+│   ├── rclone.conf.example           # шаблон конфига rclone
+│   └── rclone.conf.enc               # зашифрованный rclone.conf (SOPS)
 │
 ├── .env.example                      # шаблон корневого .env (порты, Grafana)
+├── .env.enc                          # зашифрованный корневой .env (SOPS + age)
+├── .sops.yaml                        # конфиг SOPS (публичный age-ключ)
 ├── .dockerignore                     # исключения для Docker-контекста
 ├── .gitignore                        # исключения для Git
 ├── .github/                          # GitHub Actions
@@ -423,6 +437,7 @@ orange-team-microservices/
 │
 ├── logs/                             # файлы логов (в .gitignore)
 │
+├── Caddyfile                         # конфиг Caddy (HTTPS-терминация)
 ├── docker-compose.yml                # все контейнеры
 ├── Taskfile.yml                      # задачи для разработки
 ├── prometheus.yml                    # конфигурация Prometheus
@@ -438,11 +453,21 @@ orange-team-microservices/
 Актуально на текущий момент работают четыре сервиса: **Auth**, **Gateway**, **Profiles** и **Exercises**. Остальные (Habits, Workouts, Leaderboard) — в плане.
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          КЛИЕНТЫ (Внешние)                                  │
-│                    Браузер / Мобильное приложение                           │
-└────────────────────────────────┬────────────────────────────────────────────┘
-                                 │ HTTP (REST API)
+┌────────────────────────────────────────────────────────────────────────────┐
+│                          КЛИЕНТЫ (Внешние)                                 │
+│                    Браузер / Мобильное приложение                          │
+└────────────────────────────────┬───────────────────────────────────────────┘
+                                 │ HTTPS (443)
+                                 ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│                      CADDY  (✅ ГОТОВ)                                     │
+│                    (TLS-терминация + reverse proxy)                        │
+│                                                                            │
+│  • Слушает 80 (redirect) и 443 (HTTPS)                                     │
+│  • Автоматический сертификат Let's Encrypt (HTTP-challenge)                │
+│  • Проксирует в gateway:8081 внутри docker-сети                            │
+└────────────────────────────────┬───────────────────────────────────────────┘
+                                 │ HTTP (внутри docker-сети)
                                  ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
 │                         API GATEWAY  (✅ ГОТОВ)                            │
@@ -511,11 +536,21 @@ orange-team-microservices/
 (Статусы: ✅ — реализован, 📋 — в плане. Описана полная архитектура проекта — то, к чему идём.)
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          КЛИЕНТЫ (Внешние)                                  │
-│                    Браузер / Мобильное приложение                           │
-└────────────────────────────────┬────────────────────────────────────────────┘
-                                 │ HTTP (REST API)
+┌────────────────────────────────────────────────────────────────────────────┐
+│                          КЛИЕНТЫ (Внешние)                                 │
+│                    Браузер / Мобильное приложение                          │
+└────────────────────────────────┬───────────────────────────────────────────┘
+                                 │ HTTPS (443)
+                                 ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│                      CADDY  (✅ ГОТОВ)                                     │
+│                    (TLS-терминация + reverse proxy)                        │
+│                                                                            │
+│  • Слушает 80 (redirect) и 443 (HTTPS)                                     │
+│  • Автоматический сертификат Let's Encrypt (HTTP-challenge)                │
+│  • Проксирует в gateway:8081 внутри docker-сети                            │
+└────────────────────────────────┬───────────────────────────────────────────┘
+                                 │ HTTP (внутри docker-сети)
                                  ▼
 ┌────────────────────────────────────────────────────────────────────────────┐
 │                         API GATEWAY                                        │
@@ -622,6 +657,7 @@ orange-team-microservices/
 - **Миграции:** `migrate-auth` → для `auth_db`; `migrate-profiles` → для `profiles_db`; `migrate-exercises` → для `exercises_db`
 - **Мониторинг:** Prometheus (9090), Grafana (3000)
 - **Логи:** Loki (3100), Promtail (9080)
+- **HTTPS:** Caddy (80, 443) — TLS-терминация для Gateway, см. [ADR-015](docs/adr/015-https-caddy.md)
 
 ### План (после реализации остальных сервисов)
 
@@ -644,6 +680,11 @@ orange-team-microservices/
 │  ┌──────────────────────────────────────────────────────────────┐   │
 │  │  redis-auth        (порт 6379)  → refresh-токены (Auth)      │   │
 │  │  redis-gateway     (порт 6380)  → rate limiting (Gateway)    │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                     │
+│  🔷 HTTPS-терминация:                                               │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  Caddy (порты 80, 443) → TLS + reverse proxy на Gateway      │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                     │
 │  🔷 Мониторинг и логирование:                                       │
@@ -685,6 +726,8 @@ orange-team-microservices/
 | **Prometheus** | Метрики | HTTP | `9090` | `9090` | — | Только в Docker |
 | **Grafana** | Визуализация | HTTP | `3000` | `3000` | — | Только в Docker |
 | **Loki** | Логи | HTTP | `3100` | `3100` | — | Только в Docker |
+| **Caddy** | HTTPS | HTTPS | `443` | `443` | — | TLS-терминация, см. [ADR-015](docs/adr/015-https-caddy.md) |
+| **Caddy** | HTTP (redirect) | HTTP | `80` | `80` | — | Только редирект на HTTPS |
 
 ### Логика смещения портов
 
@@ -1312,7 +1355,7 @@ curl -X POST http://localhost:8081/exercises \
 
 ## HTTPS
 
-Клиент ходит на **`https://solevolevingms.duckdns.org`** (DuckDNS-поддомен, см. [ADR-015](docs/adr/015-https-caddy.md)). TLS-терминация — **Caddy** перед Gateway.
+Клиент ходит на **`https://sololevelingms.duckdns.org`** (DuckDNS-поддомен, см. [ADR-015](docs/adr/015-https-caddy.md)). TLS-терминация — **Caddy** перед Gateway.
 
 ### Схема
 
@@ -1330,11 +1373,11 @@ curl -X POST http://localhost:8081/exercises \
 
 ```bash
 # HTTPS + healthcheck
-curl https://solevolevingms.duckdns.org/health
+curl https://sololevelingms.duckdns.org/health
 # → {"status":"ok","service":"gateway"}
 
 # HTTP → HTTPS редирект
-curl -I http://solevolevingms.duckdns.org/health
+curl -I http://sololevelingms.duckdns.org/health
 # → 308 Permanent Redirect
 
 # Логи Caddy (успешная выдача сертификата)
@@ -1358,8 +1401,8 @@ Caddy автоматически выпустит новый сертифика�
 
 ### Требования к серверу
 
-Стек состоит из 15+ контейнеров (4 сервиса, 3×PostgreSQL, 2×Redis,
-Prometheus, Grafana, Loki, Promtail). Для комфортной работы нужен
+Стек состоит из 16+ контейнеров (4 сервиса, 3×PostgreSQL, 2×Redis,
+Prometheus, Grafana, Loki, Promtail, Caddy). Для комфортной работы нужен
 сервер со следующими характеристиками:
 
 | Параметр | Минимум | Комфортно |
@@ -1414,8 +1457,8 @@ Docker Compose v2.20+, SSH-доступ для деплоя.
 4. По SSH выполняется деплой на продакшен-сервер (только если `any_changed == 'true'`):
    - Обновление кода (`git pull origin main`).
    - Логин в GHCR.
-   - `docker compose pull auth gateway profiles exercises` — скачивание свежих образов.
-   - `docker compose up -d --no-build auth gateway profiles exercises` — перезапуск.
+   - `docker compose pull auth gateway profiles exercises caddy` — скачивание свежих образов.
+   - `docker compose up -d --no-build auth gateway profiles exercises caddy` — перезапуск.
 
 Используется **Docker layer caching** (`type=gha`) — повторные сборки быстрее в 2-3 раза. Подробнее — [ADR-012](docs/adr/012-ci-cd-optimization.md).
 
@@ -1934,7 +1977,7 @@ task <service-name>:migrate-version
 | `GRAFANA_PORT` | `3000` | Порт Grafana на хосте |
 | `GRAFANA_PASSWORD` | `admin` | Пароль администратора Grafana |
 | `LOKI_PORT` | `3100` | Порт Loki на хосте |
-| `DOMAIN` | `solevolevingms.duckdns.org` | Публичный домен для Caddy (см. [ADR-015](docs/adr/015-https-caddy.md)) |
+| `DOMAIN` | `sololevelingms.duckdns.org` | Публичный домен для Caddy (см. [ADR-015](docs/adr/015-https-caddy.md)) |
 
 ### `services/auth/.env`
 
@@ -2037,5 +2080,7 @@ task <service-name>:migrate-version
 - [ADR-011: Naming conventions и Code style](docs/adr/011-naming-and-code-style.md) — соглашения по именованию и стилю
 - [ADR-012: Оптимизация CI/CD](docs/adr/012-ci-cd-optimization.md) — matrix + docker cache
 - [ADR-013: Требования к инфраструктуре](docs/adr/013-infrastructure-requirements.md) — сколько RAM/CPU/диска нужно на каждом этапе
+- [ADR-014: Бэкапы и DR](docs/adr/014-backups-and-dr.md) — off-site бэкапы в Selectel S3
+- [ADR-015: HTTPS через Caddy](docs/adr/015-https-caddy.md) — TLS-терминация, Let's Encrypt, DuckDNS
 
 Подробнее — в [docs/adr/README.md](docs/adr/README.md).
