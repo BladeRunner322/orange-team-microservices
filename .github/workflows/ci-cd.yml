@@ -83,13 +83,15 @@ jobs:
         uses: tj-actions/changed-files@v44
         with:
           files: |
-            services/auth/**
-            services/gateway/**
-            services/profiles/**
-            services/exercises/**
+            services/**
             scripts/**
-            .github/workflows/ci-cd.yml
             pkg/**
+            .github/workflows/ci-cd.yml
+            docker-compose.yml
+            Caddyfile
+            prometheus.yml
+            promtail-config.yml
+            Taskfile.yml
             go.mod
             go.sum
   
@@ -223,8 +225,8 @@ jobs:
               fi
             done
 
-            docker compose pull auth gateway profiles exercises caddy
+            docker compose pull
 
-            docker compose up -d --no-build auth gateway profiles exercises caddy
+            docker compose up -d --no-build
 
             docker image prune -f
