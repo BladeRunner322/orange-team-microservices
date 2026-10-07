@@ -138,7 +138,7 @@ Gateway ходит к Auth/Profiles/Exercises с `GRPC_CLIENT_TLS_MODE=insecure`
 - [ADR-004: Паттерны микросервисов](004-microservices-patterns.md) — mTLS как Level C, API Gateway как единая точка входа.
 - [ADR-005: Распределение портов](005-port-allocation.md) — какие порты занимает каждый сервис.
 - [ADR-007: Известные проблемы](007-known-issues.md) — B-3, C-3.
-- [ADR-015: HTTPS через Caddy](015-https-caddy.md) — Caddy как единственный публичный сервис.
+- [ADR-015: HTTPS через Caddy](015-https-caddy.md)
 
 ## Статус
 
