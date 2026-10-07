@@ -8,7 +8,7 @@ services:
     env_file:
       - ./services/auth/.env
     ports:
-      - "${AUTH_POSTGRES_PORT}:5432"
+      - "127.0.0.1:${AUTH_POSTGRES_PORT}:5432"
     volumes:
       - pgdata-auth:/var/lib/postgresql
     restart: unless-stopped
@@ -27,7 +27,7 @@ services:
     env_file:
       - ./services/auth/.env
     ports:
-      - "${AUTH_REDIS_PORT}:6379"
+      - "127.0.0.1:${AUTH_REDIS_PORT}:6379"
     volumes:
       - redisdata-auth:/data
     command: sh -c 'redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"'
@@ -69,8 +69,8 @@ services:
     env_file:
       - ./services/auth/.env
     ports:
-      - "${AUTH_GRPC_PORT}:50051"
-      - "${AUTH_HTTP_PORT}:8080"
+      - "127.0.0.1:${AUTH_GRPC_PORT}:50051"
+      - "127.0.0.1:${AUTH_HTTP_PORT}:8080"
     environment:
       - POSTGRES_HOST=postgres-auth
       - TLS_CERT_FILE=/app/certs/server.crt
@@ -99,7 +99,7 @@ services:
     env_file:
       - ./services/gateway/.env
     ports:
-      - "${GATEWAY_REDIS_PORT}:6379"
+      - "127.0.0.1:${GATEWAY_REDIS_PORT}:6379"
     volumes:
       - redisdata-gateway:/data
     command: sh -c 'redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"'
@@ -122,7 +122,7 @@ services:
     env_file:
       - ./services/gateway/.env
     ports:
-      - "${GATEWAY_HTTP_PORT}:8081"
+      - "127.0.0.1:${GATEWAY_HTTP_PORT}:8081"
     depends_on:
       auth:
         condition: service_healthy
@@ -149,7 +149,7 @@ services:
     env_file:
       - ./services/profiles/.env
     ports:
-      - "${PROFILES_POSTGRES_PORT}:5432"
+      - "127.0.0.1:${PROFILES_POSTGRES_PORT}:5432"
     volumes:
       - pgdata-profiles:/var/lib/postgresql
     restart: unless-stopped
@@ -190,8 +190,8 @@ services:
     env_file:
       - ./services/profiles/.env
     ports:
-      - "${PROFILES_GRPC_PORT}:50052"
-      - "${PROFILES_HTTP_PORT}:8080"
+      - "127.0.0.1:${PROFILES_GRPC_PORT}:50052"
+      - "127.0.0.1:${PROFILES_HTTP_PORT}:8080"
     environment:
       - POSTGRES_HOST=postgres-profiles
       - TLS_CERT_FILE=/app/certs/server.crt
@@ -218,7 +218,7 @@ services:
     env_file:
       - ./services/exercises/.env
     ports:
-      - "${EXERCISES_POSTGRES_PORT}:5432"
+      - "127.0.0.1:${EXERCISES_POSTGRES_PORT}:5432"
     volumes:
       - pgdata-exercises:/var/lib/postgresql
     restart: unless-stopped
@@ -259,8 +259,8 @@ services:
     env_file:
       - ./services/exercises/.env
     ports:
-      - "${EXERCISES_GRPC_PORT}:50053"
-      - "${EXERCISES_HTTP_PORT}:8080"
+      - "127.0.0.1:${EXERCISES_GRPC_PORT}:50053"
+      - "127.0.0.1:${EXERCISES_HTTP_PORT}:8080"
     environment:
       - POSTGRES_HOST=postgres-exercises
       - TLS_CERT_FILE=/app/certs/server.crt
@@ -305,7 +305,7 @@ services:
     image: prom/prometheus:latest
     container_name: auth-prometheus
     ports:
-      - "${PROMETHEUS_PORT}:9090"
+      - "127.0.0.1:${PROMETHEUS_PORT}:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     depends_on:
@@ -323,7 +323,7 @@ services:
     image: grafana/grafana:latest
     container_name: auth-grafana
     ports:
-      - "${GRAFANA_PORT}:3000"
+      - "127.0.0.1:${GRAFANA_PORT}:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
     volumes:
@@ -337,7 +337,7 @@ services:
     image: grafana/loki:latest
     container_name: auth-loki
     ports:
-      - "${LOKI_PORT}:3100"
+      - "127.0.0.1:${LOKI_PORT}:3100"
     restart: unless-stopped
 
   promtail:
