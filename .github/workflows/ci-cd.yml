@@ -223,8 +223,8 @@ jobs:
               fi
             done
 
-            docker compose pull auth gateway profiles exercises
+            docker compose pull auth gateway profiles exercises caddy
 
-            docker compose up -d --no-build auth gateway profiles exercises
+            docker compose up -d --no-build auth gateway profiles exercises caddy
 
             docker image prune -f

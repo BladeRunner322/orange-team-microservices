@@ -26,6 +26,7 @@
   - [Refresh tokens flow](#refresh-tokens-flow)
   - [Rate Limiting flow](#rate-limiting-flow)
   - [RBAC flow](#rbac-flow)
+- [HTTPS](#https)
 - [CI/CD и деплой](#cicd-и-деплой)
 - [Мониторинг и логирование](#мониторинг-и-логирование)
 - [Бэкапы](#бэкапы)
@@ -1309,6 +1310,48 @@ curl -X POST http://localhost:8081/exercises \
 - Роль `admin` назначается вручную через БД (отдельной ручки смены роли пока нет).
 - Когда появится больше ролей — расширить `RequireRole("admin", "moderator", ...)`.
 
+## HTTPS
+
+Клиент ходит на **`https://solevolevingms.duckdns.org`** (DuckDNS-поддомен, см. [ADR-015](docs/adr/015-https-caddy.md)). TLS-терминация — **Caddy** перед Gateway.
+
+### Схема
+
+```
+Клиент → HTTPS :443 → Caddy → HTTP gateway:8081 (внутри docker-сети) → Auth/Profiles/Exercises
+       → HTTP  :80  → Caddy → 308 Redirect → HTTPS
+```
+
+- **Порты 80 и 443** — единственные открытые наружу. Всё остальное — внутри docker-сети.
+- **Caddy** сам получает и продлевает сертификаты Let's Encrypt (HTTP-challenge, без плагинов).
+- **Конфиг** — `Caddyfile` в корне репо, 3 строки.
+- **Сертификаты** хранятся в volume `caddy_data`, переживают перезапуск контейнера.
+
+### Проверка
+
+```bash
+# HTTPS + healthcheck
+curl https://solevolevingms.duckdns.org/health
+# → {"status":"ok","service":"gateway"}
+
+# HTTP → HTTPS редирект
+curl -I http://solevolevingms.duckdns.org/health
+# → 308 Permanent Redirect
+
+# Логи Caddy (успешная выдача сертификата)
+docker logs caddy --tail 50
+```
+
+### Переезд на платный домен
+
+15 минут:
+
+1. Купить домен у регистратора.
+2. Настроить A-запись на `136.234.4.93`.
+3. Поменять `DOMAIN=` в `.env` на новый домен.
+4. `task sops:encrypt`, закоммитить, задеплоить.
+
+Caddy автоматически выпустит новый сертификат, старый перестанет использоваться.
+
 ## CI/CD и деплой
 
 Проект использует **GitHub Actions** для автоматической проверки, сборки и деплоя сервисов.
@@ -1891,6 +1934,7 @@ task <service-name>:migrate-version
 | `GRAFANA_PORT` | `3000` | Порт Grafana на хосте |
 | `GRAFANA_PASSWORD` | `admin` | Пароль администратора Grafana |
 | `LOKI_PORT` | `3100` | Порт Loki на хосте |
+| `DOMAIN` | `solevolevingms.duckdns.org` | Публичный домен для Caddy (см. [ADR-015](docs/adr/015-https-caddy.md)) |
 
 ### `services/auth/.env`
 

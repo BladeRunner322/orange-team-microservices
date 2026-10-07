@@ -279,6 +279,26 @@ services:
     restart: unless-stopped
 
   # ============================================================
+  #  CADDY — HTTPS-терминация + reverse proxy на Gateway
+  # ============================================================
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      - .env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      gateway:
+        condition: service_healthy
+
+  # ============================================================
   #  МОНИТОРИНГ (Prometheus + Grafana)
   # ============================================================
   prometheus:
@@ -344,3 +364,7 @@ volumes:
 
   # Grafana
   grafana-storage:
+
+  # Caddy
+  caddy_data:
+  caddy_config:

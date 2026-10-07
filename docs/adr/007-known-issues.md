@@ -132,6 +132,7 @@ retry-проблем: прокси, load balancer или клиент может
 Сейчас в `.env.example` и дефолтах — `insecure` (TLS без проверки сертификата). Для прода это не подходит — нужен `verify` с валидным сертификатом. Требование не зафиксировано.
 **Что делать:** после установки HTTPS/Caddy — выставить `GRPC_CLIENT_TLS_MODE=verify`. Зафиксировать в README и `.env.example` комментарием.
 **Приоритет:** до прода (вместе с Caddy).
+**Статус:** частично закрыто (2026-10-07) — Caddy установлен (ADR-015), HTTPS работает. `GRPC_CLIENT_TLS_MODE` всё ещё `insecure` — сменить после стабилизации и проверки сертификатов.
 
 ### Наблюдаемость
 
@@ -232,6 +233,7 @@ exists» вместо «slug already exists»).
 
 ### Отложено из ранее принятых ADR
 
+- **ADR-015:** закрытие прямого проброса Gateway наружу (`:8081`), `GRPC_CLIENT_TLS_MODE=verify` — после стабилизации Caddy. Firewall (ufw) — отдельным PR.
 - **ADR-004:** circuit breaker (Level B), retry с backoff (Level C),
   distributed tracing (Level C), mTLS (Level C — только при выходе
   из одной docker-сети). gRPC deadlines на клиентах — закрыты, см. C-1.
@@ -252,7 +254,7 @@ exists» вместо «slug already exists»).
 
 ## Приоритеты
 
-1. **До продакшена:** ✅ ADR-006 (SOPS + age) — внедрено (2026-10-06). ✅ Off-site бэкапы в S3 — внедрено (2026-10-07, см. ADR-014). Осталось: HTTPS через Caddy.
+1. **До продакшена:** ✅ ADR-006 (SOPS + age) — внедрено (2026-10-06). ✅ Off-site бэкапы в S3 — внедрено (2026-10-07, см. ADR-014). ✅ HTTPS через Caddy — внедрено (2026-10-07, см. ADR-015). Осталось: `GRPC_CLIENT_TLS_MODE=verify`, firewall на сервере.
 2. **Средний:** — (закрыто).
 3. **Низкий:**
    - **F-2** — открыт (Profiles, Exercises).
