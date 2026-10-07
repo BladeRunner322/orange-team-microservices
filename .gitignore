@@ -4,6 +4,7 @@
 .env
 .env.local
 .env.*.local
+scripts/rclone.conf
 
 # Секреты внутри сервисов (per-service .env)
 services/*/.env

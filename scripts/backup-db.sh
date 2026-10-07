@@ -21,6 +21,11 @@ RETENTION_DAYS="${RETENTION_DAYS:-7}"
 DATE=$(date +%Y-%m-%d_%H-%M-%S)
 TARGET_DIR="${BACKUP_DIR}/${DATE}"
 
+# Off-site (ADR-014). Пустое значение RCLONE_REMOTE — off-site отключается.
+RCLONE_REMOTE="${RCLONE_REMOTE:-selectel}"
+S3_BUCKET="${S3_BUCKET:-orange-team-backups}"
+S3_RETENTION_DAYS="${S3_RETENTION_DAYS:-30}"
+
 # Список сервисов, у которых есть PostgreSQL.
 # Контейнер называется <service>-postgres, БД — <service>_db.
 # При добавлении нового сервиса (Habits, Workouts, Leaderboard) —
@@ -50,6 +55,33 @@ for svc in "${SERVICES[@]}"; do
 done
 
 echo "[$(date)] Dumps complete"
+
+# Off-site upload (ADR-014). Ошибка выгрузки НЕ фейлит локальный бэкап —
+# локальный успех важнее. Пишем WARN и продолжаем.
+if [ -n "${RCLONE_REMOTE}" ] && command -v rclone >/dev/null 2>&1; then
+  echo "[$(date)] Uploading to s3://${S3_BUCKET} (remote: ${RCLONE_REMOTE})"
+
+  for svc in "${SERVICES[@]}"; do
+    db="${svc}_db"
+    remote_path="${RCLONE_REMOTE}:${S3_BUCKET}/${svc}/${DATE}/"
+
+    if rclone copy "${TARGET_DIR}/${db}.sql.gz" "${remote_path}" \
+         --s3-no-check-bucket --quiet; then
+      echo "[$(date)] Uploaded ${db}.sql.gz → ${remote_path}"
+    else
+      echo "[$(date)] WARN: failed to upload ${db}.sql.gz to S3" >&2
+    fi
+  done
+
+  # Ротация в S3: удаляем папки старше S3_RETENTION_DAYS.
+  for svc in "${SERVICES[@]}"; do
+    rclone delete --min-age "${S3_RETENTION_DAYS}d" \
+      "${RCLONE_REMOTE}:${S3_BUCKET}/${svc}/" --quiet \
+      || echo "[$(date)] WARN: S3 rotation failed for ${svc}" >&2
+  done
+else
+  echo "[$(date)] Off-site disabled (RCLONE_REMOTE empty or rclone not installed)"
+fi
 
 # Rotate: remove directories older than RETENTION_DAYS
 if [ -d "${BACKUP_DIR}" ]; then
