@@ -1,6 +1,6 @@
 [selectel]
 type = s3
-provider = Other
+provider = Selectel
 endpoint = https://s3.ru-1.storage.selcloud.ru
 access_key_id = YOUR_ACCESS_KEY
 secret_access_key = YOUR_SECRET_KEY
