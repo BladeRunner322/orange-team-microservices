@@ -51,11 +51,20 @@
 
 ### Секреты
 
-- **`TELEGRAM_BOT_TOKEN`** — секрет, шифруется через SOPS (`pkg`-конвенция ADR-006).
+- **`TELEGRAM_BOT_TOKEN`** — секрет, шифруется через SOPS (по конвенции ADR-006).
 - **`TELEGRAM_CHAT_ID`** — не секрет, но тоже в `.env.enc` для единообразия.
-- **`ALERTMANAGER_PORT`** — порт на хосте, открытые значения.
-- Токен и chat_id подставляются в `alertmanager.yml` через переменные окружения (Alertmanager поддерживает `${VAR}` в конфиге).
-- `alertmanager.yml` монтируется в контейнер только для чтения.
+- **`ALERTMANAGER_PORT`** — порт на хосте, открытое значение.
+
+**Как секреты попадают в Alertmanager.** Alertmanager НЕ подставляет `${VAR}` в конфиг (в отличие от docker-compose). Попытка использовать `bot_token: '${TELEGRAM_BOT_TOKEN}'` приводит к падению контейнера на этапе парсинга YAML.
+
+Решение — file-based secrets:
+
+- В конфиге используются `bot_token_file` и `chat_id_file` — Alertmanager читает значения из файлов.
+- CD в deploy job создаёт файлы `./secrets/bot_token` и `./secrets/chat_id` на сервере из расшифрованного `.env`.
+- Директория `./secrets` смонтирована в контейнер как `/etc/alertmanager/secrets:ro`.
+- `secrets/` в `.gitignore` и `.dockerignore` — в git не попадает.
+
+Это официальный механизм Alertmanager для передачи секретов.
 
 ## Последствия
 

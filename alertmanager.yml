@@ -11,8 +11,11 @@ route:
 receivers:
   - name: telegram
     telegram_configs:
-      - bot_token: '${TELEGRAM_BOT_TOKEN}'
-        chat_id: ${TELEGRAM_CHAT_ID}
+      # bot_token_file / chat_id_file — читают секреты из отдельных файлов.
+      # Alertmanager НЕ подставляет ${VAR} в конфиг (в отличие от docker-compose).
+      # Файлы создаёт CD на сервере из расшифрованного .env, в git не попадают.
+      - bot_token_file: /etc/alertmanager/secrets/bot_token
+        chat_id_file: /etc/alertmanager/secrets/chat_id
         parse_mode: 'HTML'
         send_resolved: true
         message: |

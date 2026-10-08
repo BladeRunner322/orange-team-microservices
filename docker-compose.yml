@@ -329,9 +329,8 @@ services:
       - "127.0.0.1:${ALERTMANAGER_PORT}:9093"
     volumes:
       - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./secrets:/etc/alertmanager/secrets:ro
       - alertmanager_data:/alertmanager
-    env_file:
-      - .env
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
