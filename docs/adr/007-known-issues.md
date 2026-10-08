@@ -151,7 +151,15 @@ Gateway считает себя готовым, но защищённые зап
 
 **O-2. `x-request-id` не пробрасывается между сервисами.**
 Gateway генерирует `request_id` и кладёт в response header, но не добавляет его в gRPC metadata при вызове downstream. В логах Auth/Profiles/Exercises нет `request_id` — связать запрос через все сервисы по логам нельзя.
-**Что делать:** в `pkg/grpc/interceptors` добавить interceptor, который кладёт `x-request-id` из context в outgoing metadata. В server interceptor — читать из incoming metadata и класть в context. `LoggingInterceptor` логирует с этим полем.
+**Что делать:** сквозной `request_id` между сервисами. Конкретно:
+
+- **Ключ context переезжает в `pkg/`.** Сейчас `ctxKeyRequestID` объявлен в `services/gateway/internal/interfaces/http/middleware/request_id.go` как приватный тип — из `pkg/grpc/interceptors` его не достать. Переносим в `pkg/grpc/authctx` (или отдельный `pkg/requestctx` по аналогии) вместе с `WithRequestID` / `RequestIDFromContext`.
+- **`RequestIDMiddleware` начинает подхватывать входящий `X-Request-ID`.** Текущее поведение — всегда генерировать новый UUID, игнорируя заголовок клиента (зафиксировано тестом `request_id_test.go` / «не перезаписывает существующий X-Request-ID клиента»). Для сквозного трейса это надо изменить: если клиент прислал `X-Request-ID` — используем его, если нет — генерируем. Иначе каждый сервис в цепочке будет со своим id.
+- **Client interceptor** (`pkg/grpc/interceptors`) кладёт `x-request-id` из context в outgoing metadata рядом с `x-user-id` / `x-user-role`.
+- **Server interceptor** читает `x-request-id` из incoming metadata и кладёт в context.
+- **`LoggingInterceptor`** логирует `request_id` вместе с `method`, `duration_ms`, `code`.
+- **Promtail** извлекает `request_id` в labels (дополнительно к `level`, `method`).
+
 **Приоритет:** средний. Триггер — реальная отладка инцидента через несколько сервисов.
 
 ### CI/CD
@@ -234,6 +242,32 @@ exists» вместо «slug already exists»).
 и Profiles одновременно.
 **Приоритет:** низкий. Триггер — появление второго unique-индекса
 в любой таблице любого сервиса.
+
+**S-6. Рассинхрон валидации `full_name` между Gateway и Auth.**
+
+`services/gateway/internal/interfaces/http/handlers/auth/dto.go`:
+
+```go
+FullName string `json:"full_name" validate:"required,min=2,max=50"`
+```
+
+`services/auth/internal/domain/value_objects.go`:
+
+```go
+if len(trimmed) < 2 || len(trimmed) > 100 {
+    return "", ErrInvalidFullName
+}
+```
+
+Gateway режет на 50, домен — на 100. Запрос с `full_name` длиной 51–100 проходит Gateway-валидацию, но падает в Auth с `ErrInvalidFullName` — клиент видит `400 invalid full name` без подсказки про допустимую длину.
+
+**Что делать:** привести к одному значению. Варианты:
+- Gateway — `max=100` (выровнять по домену).
+- Домен — `max=50` (выровнять по DTO). Потребует миграции CHECK-констрейнта в `auth.users`, если такие значения уже лежат в БД.
+
+Предпочтительный — первый: домен остаётся источником истины, DTO не ограничивает сверх домена.
+
+**Приоритет:** низкий, не блокер.
 
 ### Отложено из ранее принятых ADR
 
