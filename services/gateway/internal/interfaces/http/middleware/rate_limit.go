@@ -151,14 +151,17 @@ func isTrusted(ipStr string, trusted []*net.IPNet) bool {
 
 // clientIP возвращает IP клиента для rate limit.
 //
-// Если RemoteAddr входит в список trusted-прокси — доверяем
-// X-Forwarded-For и берём первый адрес оттуда. Иначе XFF
-// игнорируется полностью (клиент может его подделать).
+// Если RemoteAddr не входит в trusted-прокси — это клиент напрямую,
+// XFF игнорируется (клиент может его подделать).
 //
-// Простой «взять первый XFF» корректен только когда прокси
-// ЗАМЕНЯЕТ XFF, а не добавляет. При «добавляющем» прокси
-// (nginx по умолчанию) понадобится обход XFF с конца. У нас
-// прокси не используется — trusted пустой, XFF игнорируется.
+// Если RemoteAddr trusted — обходим X-Forwarded-For справа налево
+// и возвращаем первый не-trusted IP. Это стандартный алгоритм
+// trusted proxy (как в nginx real_ip): правый элемент XFF — ближайший
+// прокси, каждый следующий влево — предыдущий. Клиент может подделать
+// левые элементы, но не может подделать правые — их дописывает прокси.
+//
+// Если XFF пуст или все его элементы trusted/невалидны — fall back
+// на RemoteAddr (безопасный дефолт).
 func clientIP(r *http.Request, trusted []*net.IPNet) string {
 	remoteIP := r.RemoteAddr
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
@@ -169,9 +172,23 @@ func clientIP(r *http.Request, trusted []*net.IPNet) string {
 		return remoteIP
 	}
 
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		return strings.TrimSpace(parts[0])
+	xff := r.Header.Get("X-Forwarded-For")
+	if xff == "" {
+		return remoteIP
+	}
+
+	parts := strings.Split(xff, ",")
+	for i := len(parts) - 1; i >= 0; i-- {
+		candidate := strings.TrimSpace(parts[i])
+		if candidate == "" {
+			continue
+		}
+		if net.ParseIP(candidate) == nil {
+			continue
+		}
+		if !isTrusted(candidate, trusted) {
+			return candidate
+		}
 	}
 
 	return remoteIP
