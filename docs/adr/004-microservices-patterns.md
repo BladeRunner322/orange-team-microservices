@@ -27,6 +27,11 @@ Gateway умеет агрегировать данные из нескольки
 **Health Check API.**
 У каждого сервиса `/health` (liveness) и `/ready` (readiness с проверкой зависимостей). Используется docker-compose и Prometheus.
 
+**Docker healthcheck — какой эндпоинт использовать:**
+
+- Auth, Profiles, Exercises — `/ready`. Каждый сервис зависит только от своей БД, `service_healthy` гарантирует, что сервис не отдаёт трафик до готовности БД.
+- **Gateway — `/health`, осознанное исключение.** `/ready` Gateway проверяет Redis + Auth + Profiles + Exercises. Если healthcheck Gateway смотрит на `/ready`, то при недоступности любого downstream Gateway становится `unhealthy`, а Caddy (`depends_on: gateway: service_healthy`) не стартует. Получается каскадный отказ на старте: Auth лежит → Gateway не поднимается → HTTPS недоступен. `/health` разрывает этот цикл: Gateway стартует всегда, а `/ready` остаётся доступен для внешнего балансировщика, если он появится.
+
 **Idempotency.**
 Операции, которые могут быть вызваны дважды (register, lazy-create), идемпотентны через `ON CONFLICT DO NOTHING`.
 
@@ -35,6 +40,12 @@ Gateway умеет агрегировать данные из нескольки
 
 **Centralized Logging & Metrics.**
 Prometheus для метрик, Loki + Promtail для логов, Grafana для визуализации. У каждого сервиса `/metrics`.
+
+**Метрики есть только на серверной стороне gRPC.** `MetricsInterceptor` в `pkg/grpc/interceptors` собирает `grpc_requests_total` и `grpc_request_duration_ms` для входящих вызовов. Исходящие gRPC-вызовы (Gateway → Auth/Profiles/Exercises) не инструментированы: latency и error rate на клиентской стороне не видны. Это gap в observability — при инциденте непонятно, тормозит ли сам сервис, или сеть между Gateway и сервисом.
+
+**Что делать:** client-side gRPC interceptor с метриками `grpc_client_requests_total` (по target, method, status) и `grpc_client_request_duration_ms`. Регистрируется в `pkg/grpc/client` рядом с `TimeoutInterceptor` и `UserIDClientInterceptor`. Естественно добавляется вместе с O-2.
+
+**Приоритет:** средний. Триггер — реальная отладка latency-проблем в цепочке Gateway → downstream.
 
 ### Не используем (осознанно)
 
