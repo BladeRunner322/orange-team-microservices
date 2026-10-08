@@ -308,6 +308,7 @@ services:
       - "127.0.0.1:${PROMETHEUS_PORT}:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./alerts.yml:/etc/prometheus/alerts.yml:ro
     depends_on:
       auth:
         condition: service_healthy
@@ -317,6 +318,23 @@ services:
         condition: service_healthy
       exercises:
         condition: service_healthy
+      alertmanager:
+        condition: service_started
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    ports:
+      - "127.0.0.1:${ALERTMANAGER_PORT}:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    env_file:
+      - .env
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
     restart: unless-stopped
 
   grafana:
@@ -368,3 +386,6 @@ volumes:
   # Caddy
   caddy_data:
   caddy_config:
+
+  # Alertmanager
+  alertmanager_data:
