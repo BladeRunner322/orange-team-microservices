@@ -197,6 +197,21 @@ jobs:
               git clone https://github.com/${{ github.repository }} $PROJECT_DIR
             fi
 
+            # Создать файлы с секретами для Alertmanager из расшифрованного .env.
+            # Alertmanager не умеет ${VAR} в конфиге — читает значения из файлов
+            # через bot_token_file / chat_id_file.
+            if [ -f "$PROJECT_DIR/.env" ]; then
+              set -a
+              . "$PROJECT_DIR/.env"
+              set +a
+
+              mkdir -p "$PROJECT_DIR/secrets"
+              printf '%s' "$TELEGRAM_BOT_TOKEN" > "$PROJECT_DIR/secrets/bot_token"
+              printf '%s' "$TELEGRAM_CHAT_ID"   > "$PROJECT_DIR/secrets/chat_id"
+              chmod 644 "$PROJECT_DIR/secrets/bot_token" "$PROJECT_DIR/secrets/chat_id"
+              echo "→ Alertmanager secrets written to $PROJECT_DIR/secrets/"
+            fi
+
             # Разложить rclone.conf по дефолтному пути, чтобы cron и скрипт
             # backup-db.sh находили его без --config.
             if [ -f "$PROJECT_DIR/scripts/rclone.conf" ]; then
