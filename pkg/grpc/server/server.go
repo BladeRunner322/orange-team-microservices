@@ -33,7 +33,7 @@ type Config struct {
 
 // New создаёт gRPC-сервер с цепочкой интерсепторов:
 //
-//	Metrics → Recovery → [UserID] → Logging
+//	Metrics → Recovery → [UserID] → RequestID → Logging
 //
 // UserID добавляется в цепочку, если cfg.WithUserID == true.
 // Если cfg.EnableTLS — подгружает сертификаты.
@@ -52,7 +52,10 @@ func New(cfg Config) (*grpc.Server, error) {
 		interceptorsList = append(interceptorsList, interceptors.UserIDServerInterceptor())
 	}
 
-	interceptorsList = append(interceptorsList, interceptors.LoggingInterceptor(cfg.Logger))
+	interceptorsList = append(interceptorsList,
+		interceptors.RequestIDServerInterceptor(),
+		interceptors.LoggingInterceptor(cfg.Logger),
+	)
 
 	opts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(interceptorsList...),
