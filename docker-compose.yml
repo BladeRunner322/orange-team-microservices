@@ -334,6 +334,8 @@ services:
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
+    depends_on:
+      - warp
     restart: unless-stopped
 
   grafana:
@@ -368,6 +370,26 @@ services:
     depends_on:
       - loki
     restart: unless-stopped
+
+  # Cloudflare WARP — SOCKS5-прокси для обхода блокировок
+  warp:
+    image: caomingjun/warp:latest
+    container_name: warp
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1080:1080"
+    environment:
+      - WARP_SLEEP=2
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    dns:
+      - 1.1.1.1
+      - 1.0.0.1
 
 volumes:
   # PostgreSQL
