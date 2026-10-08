@@ -1,0 +1,44 @@
+groups:
+  - name: services
+    interval: 30s
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~"auth|gateway|profiles|exercises"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Сервис {{ $labels.job }} недоступен"
+          description: "Prometheus не может scrape {{ $labels.job }} более 2 минут."
+
+  - name: http
+    interval: 30s
+    rules:
+      - alert: HighHTTPErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum(rate(http_requests_total[5m]))
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая доля 5xx в Gateway"
+          description: "Более 5% HTTP-запросов возвращают 5xx за последние 5 минут."
+
+  - name: grpc
+    interval: 30s
+    rules:
+      - alert: HighGRPCErrorRate
+        expr: |
+          sum(rate(grpc_requests_total{status!="ok"}[5m])) by (job)
+          /
+          sum(rate(grpc_requests_total[5m])) by (job)
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая доля ошибок в gRPC-сервисе {{ $labels.job }}"
+          description: "Более 5% gRPC-запросов в {{ $labels.job }} возвращают не-OK за последние 5 минут."

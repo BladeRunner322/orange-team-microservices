@@ -93,6 +93,8 @@ jobs:
             Caddyfile
             prometheus.yml
             promtail-config.yml
+            alertmanager.yml
+            alerts.yml
             Taskfile.yml
             go.mod
             go.sum

@@ -28,6 +28,7 @@
 - [ADR-014: Бэкапы и DR](014-backups-and-dr.md)
 - [ADR-015: HTTPS через Caddy](015-https-caddy.md)
 - [ADR-016: Сетевая безопасность](016-network-security.md)
+- [ADR-017: Alerting (Alertmanager + Telegram)](017-alerting.md)
 
 ## Как добавить
 

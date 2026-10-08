@@ -3,6 +3,16 @@ global:
   # 5s — только для локальной отладки (быстрая обратная связь по метрикам).
   scrape_interval: 15s
 
+# Правила алертов. Файл монтируется в контейнер через docker-compose.
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+# Alertmanager — получатель алертов. Внутри docker-сети, по имени сервиса.
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
 scrape_configs:
   - job_name: 'auth'
     static_configs:
@@ -11,7 +21,7 @@ scrape_configs:
   - job_name: 'gateway'
     static_configs:
       - targets: ['gateway:8081']
-  
+
   - job_name: 'profiles'
     static_configs:
       - targets: ['profiles:8080']

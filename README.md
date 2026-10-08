@@ -442,6 +442,8 @@ orange-team-microservices/
 ├── docker-compose.yml                # все контейнеры
 ├── Taskfile.yml                      # задачи для разработки
 ├── prometheus.yml                    # конфигурация Prometheus
+├── alerts.yml                        # правила алертов (Prometheus)
+├── alertmanager.yml                  # конфигурация Alertmanager (Telegram)
 ├── promtail-config.yml               # конфигурация Promtail
 ├── go.mod
 ├── go.sum
@@ -1651,6 +1653,7 @@ task sops:decrypt   # .env.enc → .env (например, на новой ма�
 В проекте настроен полный стек для мониторинга и логирования:
 
 - **Prometheus** — сбор метрик
+- **Alertmanager** — маршрутизация алертов в Telegram
 - **Loki** — агрегация логов
 - **Grafana** — визуализация
 
@@ -2074,6 +2077,9 @@ task <service-name>:migrate-version
 | `GRAFANA_PORT` | `3000` | Порт Grafana на хосте |
 | `GRAFANA_PASSWORD` | `admin` | Пароль администратора Grafana |
 | `LOKI_PORT` | `3100` | Порт Loki на хосте |
+| `ALERTMANAGER_PORT` | `9093` | Порт Alertmanager на хосте |
+| `TELEGRAM_BOT_TOKEN` | — | Токен Telegram-бота (от `@BotFather`). Секрет, в `.env.enc` |
+| `TELEGRAM_CHAT_ID` | — | chat_id получателя уведомлений. Узнать: `https://api.telegram.org/bot<TOKEN>/getUpdates` |
 | `DOMAIN` | `sololevelingms.duckdns.org` | Публичный домен для Caddy (см. [ADR-015](docs/adr/015-https-caddy.md)) |
 
 ### `services/auth/.env`
@@ -2180,5 +2186,6 @@ task <service-name>:migrate-version
 - [ADR-014: Бэкапы и DR](docs/adr/014-backups-and-dr.md) — off-site бэкапы в Selectel S3
 - [ADR-015: HTTPS через Caddy](docs/adr/015-https-caddy.md) — TLS-терминация, Let's Encrypt, DuckDNS
 - [ADR-016: Сетевая безопасность](docs/adr/016-network-security.md) — bind на 127.0.0.1, ufw, fail2ban, insecure gRPC
+- [ADR-017: Alerting](docs/adr/017-alerting.md) — Alertmanager + Telegram, правила алертов
 
 Подробнее — в [docs/adr/README.md](docs/adr/README.md).
