@@ -83,6 +83,8 @@ jobs:
         uses: tj-actions/changed-files@v44
         with:
           files: |
+            api/**
+            internal/gen/**
             services/**
             scripts/**
             pkg/**
