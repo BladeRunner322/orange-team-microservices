@@ -97,15 +97,23 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	r.Use(chimid.Recoverer)
 	r.Use(middleware.HTTPMetricsMiddleware)
 
-	// 9. Публичные маршруты (rate limit по IP/email)
+	// 9. Служебные эндпоинты (без rate limit).
+	//
+	// /health, /ready и /metrics опрашиваются инфраструктурой (Docker
+	// healthcheck, Prometheus, внешний LB) с фиксированной частотой.
+	// Rate limit на них смысла не имеет: клиента за ними нет, а
+	// лишние обращения к Redis замедляют healthcheck.
+	r.Group(func(r chi.Router) {
+		r.Get("/health", health.HealthHandler("gateway"))
+		r.Get("/ready", health.ReadyHandler(readinessChecks))
+		r.Handle("/metrics", health.MetricsHandler())
+	})
+
+	// 10. Публичные маршруты (rate limit по IP/email).
 	rateLimitPublic := middleware.RateLimitMiddleware(limiter, trustedProxies, cfg.RateLimit, log)
 
 	r.Group(func(r chi.Router) {
 		r.Use(rateLimitPublic)
-
-		r.Get("/health", health.HealthHandler("gateway"))
-		r.Get("/ready", health.ReadyHandler(readinessChecks))
-		r.Handle("/metrics", health.MetricsHandler())
 
 		r.Post("/register", authhandlers.RegisterHandler(authClient))
 		r.Post("/login", authhandlers.LoginHandler(authClient))
@@ -113,7 +121,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Post("/logout", authhandlers.LogoutHandler(authClient))
 	})
 
-	// 10. Защищённые маршруты (обычные пользователи, без RBAC)
+	// 11. Защищённые маршруты (обычные пользователи, без RBAC)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(authClient))
 		r.Use(middleware.RateLimitMiddleware(limiter, trustedProxies, cfg.RateLimit, log))
@@ -150,7 +158,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Get("/leaderboard/monthly", proxy.Handler)
 	})
 
-	// 11. Admin-only маршруты (RBAC: role == admin)
+	// 12. Admin-only маршруты (RBAC: role == admin)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(authClient))
 		r.Use(middleware.RateLimitMiddleware(limiter, trustedProxies, cfg.RateLimit, log))
@@ -162,7 +170,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Delete("/exercises/{exerciseId}", exerciseshandlers.DeleteExerciseHandler(exercisesClient))
 	})
 
-	// 12. HTTP-сервер
+	// 13. HTTP-сервер
 	httpSrv := &http.Server{
 		Addr:         cfg.HTTPPort,
 		Handler:      r,
