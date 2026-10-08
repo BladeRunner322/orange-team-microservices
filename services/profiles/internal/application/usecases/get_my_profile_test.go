@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/BladeRunner322/orange-team-microservices/pkg/grpc/authctx"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/ctxkeys"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
 	"github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/domain"
 )
@@ -18,7 +18,7 @@ func TestGetMyProfile_Execute(t *testing.T) {
 	t.Run("успешно возвращает профиль из context", func(t *testing.T) {
 		// Arrange
 		userID := uuid.New()
-		ctx := authctx.WithUserID(context.Background(), userID.String())
+		ctx := ctxkeys.WithUserID(context.Background(), userID.String())
 		profile := domain.NewEmptyProfile(userID)
 		repo := newMockRepository()
 		_ = repo.Upsert(ctx, profile)
@@ -35,7 +35,7 @@ func TestGetMyProfile_Execute(t *testing.T) {
 	t.Run("lazy-create, если профиля нет", func(t *testing.T) {
 		// Arrange
 		userID := uuid.New()
-		ctx := authctx.WithUserID(context.Background(), userID.String())
+		ctx := ctxkeys.WithUserID(context.Background(), userID.String())
 		repo := newMockRepository()
 		uc := NewGetMyProfile(repo, logger.NewTestLogger())
 
@@ -50,7 +50,7 @@ func TestGetMyProfile_Execute(t *testing.T) {
 
 	t.Run("нет user_id в context — ErrUnauthenticated", func(t *testing.T) {
 		// Arrange
-		ctx := context.Background() // ← без authctx.WithUserID
+		ctx := context.Background() // ← без ctxkeys.WithUserID
 		repo := newMockRepository()
 		uc := NewGetMyProfile(repo, logger.NewTestLogger())
 
@@ -64,7 +64,7 @@ func TestGetMyProfile_Execute(t *testing.T) {
 
 	t.Run("невалидный user_id в context — ErrUnauthenticated", func(t *testing.T) {
 		// Arrange
-		ctx := authctx.WithUserID(context.Background(), "not-a-uuid")
+		ctx := ctxkeys.WithUserID(context.Background(), "not-a-uuid")
 		repo := newMockRepository()
 		uc := NewGetMyProfile(repo, logger.NewTestLogger())
 
@@ -79,7 +79,7 @@ func TestGetMyProfile_Execute(t *testing.T) {
 	t.Run("ошибка репозитория — пробрасывается", func(t *testing.T) {
 		// Arrange
 		userID := uuid.New()
-		ctx := authctx.WithUserID(context.Background(), userID.String())
+		ctx := ctxkeys.WithUserID(context.Background(), userID.String())
 		repo := newMockRepository()
 		repo.err = errors.New("db is down")
 		uc := NewGetMyProfile(repo, logger.NewTestLogger())

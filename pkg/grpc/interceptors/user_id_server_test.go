@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/BladeRunner322/orange-team-microservices/pkg/grpc/authctx"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/ctxkeys"
 )
 
 // echoHandler сохраняет context наружу через замыкание.
@@ -34,14 +34,14 @@ func TestUserIDServerInterceptor(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		_, ok := authctx.UserIDFromContext(captured)
+		_, ok := ctxkeys.UserIDFromContext(captured)
 		assert.False(t, ok)
 	})
 
 	t.Run("user_id и role из metadata", func(t *testing.T) {
 		md := metadata.Pairs(
-			authctx.MetadataUserID, "user-123",
-			authctx.MetadataRole, "admin",
+			ctxkeys.MetadataUserID, "user-123",
+			ctxkeys.MetadataRole, "admin",
 		)
 		ctx := metadata.NewIncomingContext(context.Background(), md)
 
@@ -49,28 +49,28 @@ func TestUserIDServerInterceptor(t *testing.T) {
 		_, err := interceptor(ctx, nil, info, echoHandler(&captured))
 		require.NoError(t, err)
 
-		userID, ok := authctx.UserIDFromContext(captured)
+		userID, ok := ctxkeys.UserIDFromContext(captured)
 		assert.True(t, ok)
 		assert.Equal(t, "user-123", userID)
 
-		role, ok := authctx.RoleFromContext(captured)
+		role, ok := ctxkeys.RoleFromContext(captured)
 		assert.True(t, ok)
 		assert.Equal(t, "admin", role)
 	})
 
 	t.Run("только user_id, без role", func(t *testing.T) {
-		md := metadata.Pairs(authctx.MetadataUserID, "user-456")
+		md := metadata.Pairs(ctxkeys.MetadataUserID, "user-456")
 		ctx := metadata.NewIncomingContext(context.Background(), md)
 
 		var captured context.Context
 		_, err := interceptor(ctx, nil, info, echoHandler(&captured))
 		require.NoError(t, err)
 
-		userID, ok := authctx.UserIDFromContext(captured)
+		userID, ok := ctxkeys.UserIDFromContext(captured)
 		assert.True(t, ok)
 		assert.Equal(t, "user-456", userID)
 
-		_, ok = authctx.RoleFromContext(captured)
+		_, ok = ctxkeys.RoleFromContext(captured)
 		assert.False(t, ok)
 	})
 }

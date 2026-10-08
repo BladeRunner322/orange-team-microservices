@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/BladeRunner322/orange-team-microservices/pkg/grpc/authctx"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/ctxkeys"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
 	"github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/domain"
 )
@@ -18,7 +18,7 @@ func TestDeleteMyProfile_Execute(t *testing.T) {
 	t.Run("успешно удаляет профиль", func(t *testing.T) {
 		// Arrange
 		userID := uuid.New()
-		ctx := authctx.WithUserID(context.Background(), userID.String())
+		ctx := ctxkeys.WithUserID(context.Background(), userID.String())
 		profile := domain.NewEmptyProfile(userID)
 		repo := newMockRepository()
 		_ = repo.Upsert(ctx, profile)
@@ -38,7 +38,7 @@ func TestDeleteMyProfile_Execute(t *testing.T) {
 	t.Run("профиль не найден — ErrProfileNotFound", func(t *testing.T) {
 		// Arrange
 		userID := uuid.New()
-		ctx := authctx.WithUserID(context.Background(), userID.String())
+		ctx := ctxkeys.WithUserID(context.Background(), userID.String())
 		repo := newMockRepository()
 		uc := NewDeleteMyProfile(repo, logger.NewTestLogger())
 
@@ -67,7 +67,7 @@ func TestDeleteMyProfile_Execute(t *testing.T) {
 	t.Run("ошибка репозитория — пробрасывается", func(t *testing.T) {
 		// Arrange
 		userID := uuid.New()
-		ctx := authctx.WithUserID(context.Background(), userID.String())
+		ctx := ctxkeys.WithUserID(context.Background(), userID.String())
 		repo := newMockRepository()
 		repo.err = errors.New("db is down")
 		uc := NewDeleteMyProfile(repo, logger.NewTestLogger())

@@ -6,14 +6,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/BladeRunner322/orange-team-microservices/pkg/grpc/authctx"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/ctxkeys"
 )
 
 // UserIDServerInterceptor извлекает user_id и роль из входящих gRPC metadata
 // и кладёт их в context.Context.
 //
 // Gateway передаёт эти данные в metadata после валидации JWT.
-// Downstream-сервисы используют authctx.UserIDFromContext для доступа к ним.
+// Downstream-сервисы используют ctxkeys.UserIDFromContext для доступа к ним.
 //
 // Если metadata отсутствует (сервис вызван напрямую без Gateway),
 // интерсептор пропускает запрос — context остаётся без user_id.
@@ -29,11 +29,11 @@ func UserIDServerInterceptor() grpc.UnaryServerInterceptor {
 			return handler(ctx, req)
 		}
 
-		if userIDs := md.Get(authctx.MetadataUserID); len(userIDs) > 0 {
-			ctx = authctx.WithUserID(ctx, userIDs[0])
+		if userIDs := md.Get(ctxkeys.MetadataUserID); len(userIDs) > 0 {
+			ctx = ctxkeys.WithUserID(ctx, userIDs[0])
 		}
-		if roles := md.Get(authctx.MetadataRole); len(roles) > 0 {
-			ctx = authctx.WithRole(ctx, roles[0])
+		if roles := md.Get(ctxkeys.MetadataRole); len(roles) > 0 {
+			ctx = ctxkeys.WithRole(ctx, roles[0])
 		}
 
 		return handler(ctx, req)

@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/BladeRunner322/orange-team-microservices/pkg/grpc/authctx"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/ctxkeys"
 )
 
 // captureInvoker сохраняет context, с которым вызывается invoker,
@@ -51,73 +51,73 @@ func TestUserIDClientInterceptor(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assert.Empty(t, outgoingValues(t, captured, authctx.MetadataUserID))
-		assert.Empty(t, outgoingValues(t, captured, authctx.MetadataRole))
+		assert.Empty(t, outgoingValues(t, captured, ctxkeys.MetadataUserID))
+		assert.Empty(t, outgoingValues(t, captured, ctxkeys.MetadataRole))
 	})
 
 	t.Run("только user_id", func(t *testing.T) {
-		ctx := authctx.WithUserID(context.Background(), "user-123")
+		ctx := ctxkeys.WithUserID(context.Background(), "user-123")
 
 		var captured context.Context
 		err := interceptor(ctx, method, nil, nil, nil, captureInvoker(&captured))
 		require.NoError(t, err)
 
-		values := outgoingValues(t, captured, authctx.MetadataUserID)
+		values := outgoingValues(t, captured, ctxkeys.MetadataUserID)
 		require.Len(t, values, 1)
 		assert.Equal(t, "user-123", values[0])
 
-		assert.Empty(t, outgoingValues(t, captured, authctx.MetadataRole))
+		assert.Empty(t, outgoingValues(t, captured, ctxkeys.MetadataRole))
 	})
 
 	t.Run("user_id и role", func(t *testing.T) {
-		ctx := authctx.WithUserID(context.Background(), "user-123")
-		ctx = authctx.WithRole(ctx, "admin")
+		ctx := ctxkeys.WithUserID(context.Background(), "user-123")
+		ctx = ctxkeys.WithRole(ctx, "admin")
 
 		var captured context.Context
 		err := interceptor(ctx, method, nil, nil, nil, captureInvoker(&captured))
 		require.NoError(t, err)
 
-		userIDs := outgoingValues(t, captured, authctx.MetadataUserID)
+		userIDs := outgoingValues(t, captured, ctxkeys.MetadataUserID)
 		require.Len(t, userIDs, 1)
 		assert.Equal(t, "user-123", userIDs[0])
 
-		roles := outgoingValues(t, captured, authctx.MetadataRole)
+		roles := outgoingValues(t, captured, ctxkeys.MetadataRole)
 		require.Len(t, roles, 1)
 		assert.Equal(t, "admin", roles[0])
 	})
 
 	t.Run("пустой user_id не добавляется", func(t *testing.T) {
-		ctx := authctx.WithUserID(context.Background(), "")
+		ctx := ctxkeys.WithUserID(context.Background(), "")
 
 		var captured context.Context
 		err := interceptor(ctx, method, nil, nil, nil, captureInvoker(&captured))
 		require.NoError(t, err)
 
-		assert.Empty(t, outgoingValues(t, captured, authctx.MetadataUserID))
+		assert.Empty(t, outgoingValues(t, captured, ctxkeys.MetadataUserID))
 	})
 
 	t.Run("пустой role не добавляется", func(t *testing.T) {
-		ctx := authctx.WithRole(context.Background(), "")
+		ctx := ctxkeys.WithRole(context.Background(), "")
 
 		var captured context.Context
 		err := interceptor(ctx, method, nil, nil, nil, captureInvoker(&captured))
 		require.NoError(t, err)
 
-		assert.Empty(t, outgoingValues(t, captured, authctx.MetadataRole))
+		assert.Empty(t, outgoingValues(t, captured, ctxkeys.MetadataRole))
 	})
 
 	t.Run("дополняет существующую outgoing metadata", func(t *testing.T) {
 		// Предзаполняем metadata чем-то другим (например, трассировка)
 		existing := metadata.Pairs("x-trace-id", "trace-abc")
 		ctx := metadata.NewOutgoingContext(context.Background(), existing)
-		ctx = authctx.WithUserID(ctx, "user-42")
+		ctx = ctxkeys.WithUserID(ctx, "user-42")
 
 		var captured context.Context
 		err := interceptor(ctx, method, nil, nil, nil, captureInvoker(&captured))
 		require.NoError(t, err)
 
 		// user_id добавился
-		userIDs := outgoingValues(t, captured, authctx.MetadataUserID)
+		userIDs := outgoingValues(t, captured, ctxkeys.MetadataUserID)
 		require.Len(t, userIDs, 1)
 		assert.Equal(t, "user-42", userIDs[0])
 
@@ -128,7 +128,7 @@ func TestUserIDClientInterceptor(t *testing.T) {
 	})
 
 	t.Run("invoker вызывается ровно один раз", func(t *testing.T) {
-		ctx := authctx.WithUserID(context.Background(), "user-1")
+		ctx := ctxkeys.WithUserID(context.Background(), "user-1")
 
 		calls := 0
 		invoker := func(

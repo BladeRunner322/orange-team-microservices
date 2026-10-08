@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/BladeRunner322/orange-team-microservices/pkg/grpc/authctx"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/ctxkeys"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/nullable"
 	"github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/domain"
@@ -19,7 +19,7 @@ func TestPatchMyProfile_Execute(t *testing.T) {
 	t.Run("успешно устанавливает вес", func(t *testing.T) {
 		// Arrange
 		userID := uuid.New()
-		ctx := authctx.WithUserID(context.Background(), userID.String())
+		ctx := ctxkeys.WithUserID(context.Background(), userID.String())
 		profile := domain.NewEmptyProfile(userID)
 		repo := newMockRepository()
 		_ = repo.Upsert(ctx, profile)
@@ -47,7 +47,7 @@ func TestPatchMyProfile_Execute(t *testing.T) {
 	t.Run("убирает вес (Set: true, Value: nil)", func(t *testing.T) {
 		// Arrange
 		userID := uuid.New()
-		ctx := authctx.WithUserID(context.Background(), userID.String())
+		ctx := ctxkeys.WithUserID(context.Background(), userID.String())
 
 		weight, err := domain.NewWeightFromKilograms(80.5)
 		require.NoError(t, err)
@@ -84,7 +84,7 @@ func TestPatchMyProfile_Execute(t *testing.T) {
 	t.Run("профиль не найден — ErrProfileNotFound", func(t *testing.T) {
 		// Arrange
 		userID := uuid.New()
-		ctx := authctx.WithUserID(context.Background(), userID.String())
+		ctx := ctxkeys.WithUserID(context.Background(), userID.String())
 		repo := newMockRepository()
 		uc := NewPatchMyProfile(repo, logger.NewTestLogger())
 
@@ -127,7 +127,7 @@ func TestPatchMyProfile_Execute(t *testing.T) {
 	t.Run("ошибка репозитория — пробрасывается", func(t *testing.T) {
 		// Arrange
 		userID := uuid.New()
-		ctx := authctx.WithUserID(context.Background(), userID.String())
+		ctx := ctxkeys.WithUserID(context.Background(), userID.String())
 		repo := newMockRepository()
 		repo.err = errors.New("db is down")
 		uc := NewPatchMyProfile(repo, logger.NewTestLogger())
