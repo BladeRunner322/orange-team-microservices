@@ -79,10 +79,9 @@ func TestRequestIDMiddleware(t *testing.T) {
 		assert.Empty(t, got)
 	})
 
-	t.Run("не перезаписывает существующий X-Request-ID клиента", func(t *testing.T) {
-		// Проверяем текущее поведение: middleware всегда генерирует новый ID,
-		// игнорируя заголовок от клиента. Если поведение изменится — тест упадёт,
-		// и это будет осознанное решение, а не случайность.
+	t.Run("подхватывает X-Request-ID от клиента", func(t *testing.T) {
+		// Сквозной трейс: если клиент прислал X-Request-ID —
+		// используем его значение как есть, не генерируем новый.
 		mw := RequestIDMiddleware
 
 		var gotID string
@@ -96,7 +95,26 @@ func TestRequestIDMiddleware(t *testing.T) {
 
 		mw(next).ServeHTTP(rec, req)
 
-		assert.NotEqual(t, "client-provided-id", gotID)
-		assert.NotEmpty(t, gotID)
+		assert.Equal(t, "client-provided-id", gotID)
+		assert.Equal(t, "client-provided-id", rec.Header().Get("X-Request-ID"))
+	})
+
+	t.Run("пустой X-Request-ID от клиента — генерируем UUID", func(t *testing.T) {
+		mw := RequestIDMiddleware
+
+		var gotID string
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotID = GetRequestID(r.Context())
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("X-Request-ID", "")
+		rec := httptest.NewRecorder()
+
+		mw(next).ServeHTTP(rec, req)
+
+		_, err := uuid.Parse(gotID)
+		assert.NoError(t, err, "при пустом заголовке должен быть сгенерирован UUID")
+		assert.Equal(t, gotID, rec.Header().Get("X-Request-ID"))
 	})
 }

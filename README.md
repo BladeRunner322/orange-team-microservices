@@ -295,10 +295,10 @@ orange-team-microservices/
 │           └── leaderboard/
 │
 ├── pkg/                              # общие пакеты
+│   ├── ctxkeys/                      # ключи context, пропагируемые между сервисами (user_id, role, request_id)
 │   ├── grpc/
-│   │   ├── authctx/                  # user_id/role в context + gRPC metadata
 │   │   ├── client/                   # конструктор gRPC-клиентов (TLS + interceptor)
-│   │   ├── interceptors/             # gRPC-интерсепторы (логирование, метрики, recovery, user_id)
+│   │   ├── interceptors/             # gRPC-интерсепторы (логирование, метрики, recovery, user_id, request_id)
 │   │   └── server/                   # конструктор gRPC-сервера (interceptors + TLS + reflection)
 │   ├── health/                       # HTTP-хендлеры /health, /ready, /metrics для всех сервисов
 │   ├── logger/                       # структурированное логирование (slog)

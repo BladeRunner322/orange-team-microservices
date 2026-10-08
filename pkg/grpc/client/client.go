@@ -37,6 +37,7 @@ func New(ctx context.Context, cfg Config) (*grpc.ClientConn, error) {
 		grpc.WithChainUnaryInterceptor(
 			interceptors.TimeoutInterceptor(cfg.Timeout),
 			interceptors.UserIDClientInterceptor(),
+			interceptors.RequestIDClientInterceptor(),
 		),
 	}
 

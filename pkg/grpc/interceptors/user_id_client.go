@@ -6,7 +6,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/BladeRunner322/orange-team-microservices/pkg/grpc/authctx"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/ctxkeys"
 )
 
 // UserIDClientInterceptor кладёт user_id и role из context
@@ -26,11 +26,11 @@ func UserIDClientInterceptor() grpc.UnaryClientInterceptor {
 	) error {
 		var pairs []string
 
-		if userID, ok := authctx.UserIDFromContext(ctx); ok && userID != "" {
-			pairs = append(pairs, authctx.MetadataUserID, userID)
+		if userID, ok := ctxkeys.UserIDFromContext(ctx); ok && userID != "" {
+			pairs = append(pairs, ctxkeys.MetadataUserID, userID)
 		}
-		if role, ok := authctx.RoleFromContext(ctx); ok && role != "" {
-			pairs = append(pairs, authctx.MetadataRole, role)
+		if role, ok := ctxkeys.RoleFromContext(ctx); ok && role != "" {
+			pairs = append(pairs, ctxkeys.MetadataRole, role)
 		}
 
 		if len(pairs) > 0 {

@@ -60,7 +60,8 @@ s, err := grpcserver.New(grpcserver.Config{
 **Уже вынесено (для контекста):**
 - `pkg/postgres`, `pkg/redis`, `pkg/ratelimit`
 - `pkg/logger`, `pkg/metrics`
-- `pkg/grpc/client`, `pkg/grpc/interceptors`, `pkg/grpc/authctx`
+- `pkg/grpc/client`, `pkg/grpc/interceptors`
+- `pkg/ctxkeys` — ключи контекста, которые пропагируются между сервисами через HTTP-заголовки и gRPC metadata (`user_id`, `role`, `request_id`)
 - `pkg/nullable`
 
 ### 2. Не выносим (остаётся в сервисе)

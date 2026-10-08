@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/BladeRunner322/orange-team-microservices/pkg/grpc/authctx"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/ctxkeys"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -26,7 +26,7 @@ func TestRequireRole(t *testing.T) {
 	t.Run("роль user — 403 на admin", func(t *testing.T) {
 		mw := RequireRole("admin")
 
-		ctx := authctx.WithRole(context.Background(), "user")
+		ctx := ctxkeys.WithRole(context.Background(), "user")
 		req := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 		rec := httptest.NewRecorder()
 
@@ -43,7 +43,7 @@ func TestRequireRole(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		ctx := authctx.WithRole(context.Background(), "admin")
+		ctx := ctxkeys.WithRole(context.Background(), "admin")
 		req := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 		rec := httptest.NewRecorder()
 
@@ -63,7 +63,7 @@ func TestRequireRole(t *testing.T) {
 					called = true
 				})
 
-				ctx := authctx.WithRole(context.Background(), role)
+				ctx := ctxkeys.WithRole(context.Background(), role)
 				req := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 				rec := httptest.NewRecorder()
 
@@ -77,7 +77,7 @@ func TestRequireRole(t *testing.T) {
 	t.Run("пустая роль — 403", func(t *testing.T) {
 		mw := RequireRole("admin")
 
-		ctx := authctx.WithRole(context.Background(), "")
+		ctx := ctxkeys.WithRole(context.Background(), "")
 		req := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 		rec := httptest.NewRecorder()
 
@@ -89,7 +89,7 @@ func TestRequireRole(t *testing.T) {
 	t.Run("без списка ролей — всё запрещено", func(t *testing.T) {
 		mw := RequireRole()
 
-		ctx := authctx.WithRole(context.Background(), "admin")
+		ctx := ctxkeys.WithRole(context.Background(), "admin")
 		req := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(ctx)
 		rec := httptest.NewRecorder()
 

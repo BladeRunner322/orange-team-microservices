@@ -153,14 +153,15 @@ Gateway считает себя готовым, но защищённые зап
 Gateway генерирует `request_id` и кладёт в response header, но не добавляет его в gRPC metadata при вызове downstream. В логах Auth/Profiles/Exercises нет `request_id` — связать запрос через все сервисы по логам нельзя.
 **Что делать:** сквозной `request_id` между сервисами. Конкретно:
 
-- **Ключ context переезжает в `pkg/`.** Сейчас `ctxKeyRequestID` объявлен в `services/gateway/internal/interfaces/http/middleware/request_id.go` как приватный тип — из `pkg/grpc/interceptors` его не достать. Переносим в `pkg/grpc/authctx` (или отдельный `pkg/requestctx` по аналогии) вместе с `WithRequestID` / `RequestIDFromContext`.
-- **`RequestIDMiddleware` начинает подхватывать входящий `X-Request-ID`.** Текущее поведение — всегда генерировать новый UUID, игнорируя заголовок клиента (зафиксировано тестом `request_id_test.go` / «не перезаписывает существующий X-Request-ID клиента»). Для сквозного трейса это надо изменить: если клиент прислал `X-Request-ID` — используем его, если нет — генерируем. Иначе каждый сервис в цепочке будет со своим id.
-- **Client interceptor** (`pkg/grpc/interceptors`) кладёт `x-request-id` из context в outgoing metadata рядом с `x-user-id` / `x-user-role`.
-- **Server interceptor** читает `x-request-id` из incoming metadata и кладёт в context.
-- **`LoggingInterceptor`** логирует `request_id` вместе с `method`, `duration_ms`, `code`.
-- **Promtail** извлекает `request_id` в labels (дополнительно к `level`, `method`).
+- ~~**Ключ context переезжает в `pkg/`.**~~ Сделано: `pkg/ctxkeys` (заменил `pkg/grpc/authctx`). В нём три ключа — `user_id`, `role`, `request_id` — с общим стилем `WithX` / `XFromContext` и публичными константами для имён заголовков/metadata.
+- ~~**`RequestIDMiddleware` подхватывает входящий `X-Request-ID`.**~~ Сделано: если заголовок есть — используется как есть, если нет — генерируется UUID.
+- ~~**Client interceptor** кладёт `x-request-id` в outgoing metadata.~~ Сделано: `RequestIDClientInterceptor` в `pkg/grpc/interceptors`.
+- ~~**Server interceptor** читает `x-request-id` из incoming metadata.~~ Сделано: `RequestIDServerInterceptor`, включён в цепочку `pkg/grpc/server` всегда.
+- ~~**`LoggingInterceptor`** логирует `request_id`.~~ Сделано: добавлено поле в лог, если ключ есть в context.
+- **Promtail** извлекает `request_id` в labels — **открыто**, отдельная задача (`promtail-config.yml`).
 
 **Приоритет:** средний. Триггер — реальная отладка инцидента через несколько сервисов.
+**Статус:** ✅ Закрыто (2026-10-08). Реализовано в PR по O-2.
 
 ### CI/CD
 
