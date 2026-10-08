@@ -18,6 +18,9 @@ receivers:
         chat_id_file: /etc/alertmanager/secrets/chat_id
         parse_mode: 'HTML'
         send_resolved: true
+        # Telegram API заблокирован для РФ-серверов. Ходим через WARP.
+        http_config:
+          proxy_url: 'socks5://warp:1080'
         message: |
           {{ if eq .Status "firing" }}🔴{{ else }}🟢{{ end }} <b>[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}</b>
           {{ range .Alerts }}
