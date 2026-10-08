@@ -16,7 +16,7 @@
 
 ### Компоненты
 
-- **Alertmanager** — принимает алерты от Prometheus, группирует, маршрутизирует, отправляет получателям.
+- **Alertmanager** — принимает алерты от Prometheus, группирует, маршрутизирует, отправляет получателям. Образ: `prom/alertmanager:v0.34.1`.
 - **Prometheus `rule_files`** — правила алертов в `alerts.yml` в корне репо.
 - **Telegram** — канал доставки.
 
@@ -55,11 +55,13 @@
 - **`TELEGRAM_CHAT_ID`** — не секрет, но тоже в `.env.enc` для единообразия.
 - **`ALERTMANAGER_PORT`** — порт на хосте, открытое значение.
 
-**Как секреты попадают в Alertmanager.** Alertmanager НЕ подставляет `${VAR}` в конфиг (в отличие от docker-compose). Попытка использовать `bot_token: '${TELEGRAM_BOT_TOKEN}'` приводит к падению контейнера на этапе парсинга YAML.
+**Как секреты попадают в Alertmanager.** Alertmanager НЕ подставляет `${VAR}` в конфиг (в отличие от docker-compose). Попытка использовать `${VAR}` в полях `bot_token` и `chat_id` приводит к падению контейнера на этапе парсинга YAML: значение приходит в виде буквальной строки `${TELEGRAM_CHAT_ID}`, а поле ожидает `int64`.
 
-Решение — file-based secrets:
+Решение — file-based secrets для обоих полей:
 
-- В конфиге используются `bot_token_file` и `chat_id_file` — Alertmanager читает значения из файлов.
+- `bot_token_file` — секрет, значение читается из файла (поддерживается с Alertmanager v0.26).
+- `chat_id_file` — не секрет, но для единообразия тоже из файла (поддерживается с Alertmanager **v0.31.0**).
+- Минимальная версия Alertmanager — **v0.31.0**. Используется **v0.34.1** (актуальная стабильная на 2026-10).
 - CD в deploy job создаёт файлы `./secrets/bot_token` и `./secrets/chat_id` на сервере из расшифрованного `.env`.
 - Директория `./secrets` смонтирована в контейнер как `/etc/alertmanager/secrets:ro`.
 - `secrets/` в `.gitignore` и `.dockerignore` — в git не попадает.
