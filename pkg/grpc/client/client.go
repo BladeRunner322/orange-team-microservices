@@ -17,6 +17,24 @@ import (
 
 const defaultTimeout = 5 * time.Second
 
+// Дефолты Circuit Breaker. Применяются в applyDefaults(),
+// если CBEnabled=true и соответствующее поле оставлено нулевым.
+const (
+	defaultCBMaxRequests uint32        = 1
+	defaultCBInterval    time.Duration = 60 * time.Second
+	defaultCBTimeout     time.Duration = 30 * time.Second
+	defaultCBMinRequests uint32        = 10
+	defaultCBErrorRate   float64       = 0.5
+)
+
+// Дефолты Retry. Применяются в applyDefaults(),
+// если RetryEnabled=true и соответствующее поле оставлено нулевым.
+const (
+	defaultRetryMaxAttempts uint32        = 3
+	defaultRetryBaseDelay   time.Duration = 100 * time.Millisecond
+	defaultRetryMaxDelay    time.Duration = 1 * time.Second
+)
+
 // New создаёт gRPC-соединение с указанным конфигом.
 //
 // Все клиенты в проекте должны создаваться через этот конструктор —
