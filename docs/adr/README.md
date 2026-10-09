@@ -31,6 +31,7 @@
 - [ADR-017: Alerting (Alertmanager + Telegram)](017-alerting.md)
 - [ADR-018: Retention метрик и логов](018-storage-retention.md)
 - [ADR-019: Эволюция в сторону микросервисов](019-microservices-evolution.md)
+- [ADR-020: Circuit Breaker и Retry для gRPC-клиентов](020-circuit-breaker-and-retry.md)
 
 ## Как добавить
 

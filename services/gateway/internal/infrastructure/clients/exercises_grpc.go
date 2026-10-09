@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
@@ -21,20 +20,17 @@ type ExercisesClient struct {
 
 // NewExercisesClient создаёт gRPC-клиент к Exercises Service.
 //
-// Использует общий pkg/grpc/client для соединения:
-//   - TLSModeInsecure (Exercises использует self-signed сертификат);
-//   - Timeout из аргумента — ограничивает каждый вызов;
-//   - автоматическое прокидывание user_id из context в metadata.
+// Принимает готовый grpcclient.Config — bootstrap заполняет его
+// из config.Config Gateway (Target + TLSMode + Timeout + CB + Retry).
 //
-// TLS-режим приходит из config (GRPC_CLIENT_TLS_MODE).
-// "insecure" — для self-signed сертификатов в dev/staging;
-// "verify" — для прода; "disabled" — только для локальной разработки.
-func NewExercisesClient(ctx context.Context, addr string, timeout time.Duration, tlsMode string) (*ExercisesClient, error) {
-	conn, err := grpcclient.New(ctx, grpcclient.Config{
-		Target:  addr,
-		TLSMode: grpcclient.TLSMode(tlsMode),
-		Timeout: timeout,
-	})
+// Использует общий pkg/grpc/client для соединения:
+//   - единый TLS-режим (GRPC_CLIENT_TLS_MODE);
+//   - таймаут на каждый вызов;
+//   - Circuit Breaker (ADR-020);
+//   - Retry для read-only методов (whitelist в config);
+//   - автоматическое прокидывание user_id из context в metadata.
+func NewExercisesClient(ctx context.Context, cfg grpcclient.Config) (*ExercisesClient, error) {
+	conn, err := grpcclient.New(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("create exercises grpc client: %w", err)
 	}
