@@ -199,6 +199,34 @@ docker compose up -d --no-build --force-recreate alertmanager prometheus promtai
 - Появится SLA с пользователями, даунтайм 10 секунд станет недопустимым → blue-green или rolling.
 - Стек переедет в k8s → там ConfigMap-изменения триггерят rolling restart автоматически.
 
+## Уведомления о деплое в Telegram
+
+**Задача.** Знать результат деплоя без ручной проверки GitHub Actions — приходит ли уведомление в Telegram при успехе и при провале.
+
+**Решение.** Отдельный job `notify` в конце пайплайна:
+
+- `needs: [ci, changed-services, build-and-push, deploy, smoke-test]` — зависит от всех предыдущих.
+- `if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'` — выполняется всегда, даже если предыдущие упали. Но только на push в main, не на PR.
+- Смотрит на `needs.X.result` каждого job'а и формирует одно сообщение: `✅ success`, `❌ failed` (с указанием упавшего job'а) или `⏭️ nothing to deploy`.
+- Отправка — прямым `curl` к `api.telegram.org`.
+
+**Почему без WARP.** Job бежит на GitHub-раннере (`ubuntu-latest`), а не на продакшн-сервере. С GitHub-раннера Telegram доступен напрямую — блокировка российских провайдеров там не действует.
+
+**Секреты — через SOPS.** Токен и chat_id не дублируются в GitHub Secrets. В notify-джобе используется:
+
+```
+sops --decrypt --input-type dotenv --extract '["TELEGRAM_BOT_TOKEN"]' .env.enc
+```
+
+`--extract` вытаскивает одно значение, не создавая `.env` на диске. `SOPS_AGE_KEY` уже в GitHub Secrets — используется в deploy job.
+
+**Альтернатива, отвергнутая:** дублирование `TELEGRAM_BOT_TOKEN` и `TELEGRAM_CHAT_ID` в GitHub Secrets. Плюс — простота. Минусы — два источника истины, ротация в двух местах, две точки утечки.
+
+**Когда пересмотреть:**
+
+- Если уведомлений станет много (несколько окружений, отдельные каналы для успеха и ошибок) — разделить маршрутизацию.
+- Если понадобится отправлять в разные чаты по severity — отдельный ADR.
+
 ## Hot-reload как альтернатива рестарту
 
 Для Alertmanager и Prometheus есть hot-reload без пересоздания контейнера:
