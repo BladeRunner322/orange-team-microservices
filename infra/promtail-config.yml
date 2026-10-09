@@ -33,6 +33,25 @@ scrape_configs:
             level: level
             method: method
             msg: msg
+            # Сквозной request_id (pkg/ctxkeys + gRPC-интерсепторы, см. ADR-007 O-2).
+            # Приходит из Gateway и пробрасывается во все downstream.
+            request_id: request_id
+            # user_id — есть в логах, где контекст его содержит
+            # (Auth: register/login/refresh/validate; Profiles: lazy-create).
+            user_id: user_id
+      # level и method — labels. Низкая кардинальность, безопасно.
       - labels:
           level:
           method:
+      # request_id и user_id — structured metadata (Loki 3.x, schema v13).
+      #
+      # НЕ labels: request_id уникален на каждый запрос, user_id — по числу
+      # пользователей. В labels это дало бы миллионы серий в индексе Loki
+      # и уронило бы его. Structured metadata доступна для фильтрации
+      # через LogQL (| request_id="..."), но серий не создаёт.
+      #
+      # Пример запроса через всю цепочку Gateway → Auth → Profiles:
+      #   {service=~"gateway|auth|profiles"} | request_id="abc-123"
+      - structured_metadata:
+          request_id:
+          user_id:
