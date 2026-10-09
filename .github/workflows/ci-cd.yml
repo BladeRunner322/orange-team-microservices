@@ -334,8 +334,8 @@ jobs:
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
         run: |
-          echo "TELEGRAM_BOT_TOKEN=$(sops --decrypt --input-type dotenv --extract '[\"TELEGRAM_BOT_TOKEN\"]' .env.enc)" >> $GITHUB_ENV
-          echo "TELEGRAM_CHAT_ID=$(sops --decrypt --input-type dotenv --extract '[\"TELEGRAM_CHAT_ID\"]' .env.enc)" >> $GITHUB_ENV
+          echo "TELEGRAM_BOT_TOKEN=$(sops --decrypt --input-type dotenv --extract '["TELEGRAM_BOT_TOKEN"]' .env.enc)" >> $GITHUB_ENV
+          echo "TELEGRAM_CHAT_ID=$(sops --decrypt --input-type dotenv --extract '["TELEGRAM_CHAT_ID"]' .env.enc)" >> $GITHUB_ENV
 
       - name: Send notification
         env:
