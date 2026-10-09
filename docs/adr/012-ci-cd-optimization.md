@@ -214,6 +214,13 @@ export COMPOSE_ENV_FILES=.env
 
 **Про имя проекта.** Compose определяет имя проекта по имени директории с compose-файлом. Раньше файл был в корне (`orange-team-microservices/docker-compose.yml`) → проект `orange-team-microservices`, все volumes с префиксом `orange-team-microservices_`. После переноса в `infra/` Compose стал бы использовать `infra` как имя проекта → volumes `infra_pgdata-auth` и т. д. То есть **новые пустые volumes** вместо существующих.
 
+**Про относительные пути в compose.** Относительные пути резолвятся от директории compose-файла. После переноса в `infra/`:
+
+- Конфиги, переехавшие вместе с compose (`Caddyfile`, `alertmanager.yml`, `alerts.yml`, `prometheus.yml`, `loki-config.yml`, `promtail-config.yml`) — пути `./<file>`.
+- Ресурсы, оставшиеся в корне репозитория (`certs/`, `secrets/`, `backup-metrics/`, `services/*/.env`, `services/*/migrations/`, `.env` для Caddy) — пути `../<path>`.
+
+Замена всех `./` на `../` — типичная ошибка при переносе: Docker создаёт пустую директорию с именем файла и падает с `not a directory`.
+
 Решение — задать имя проекта явно в `infra/docker-compose.yml`:
 
 ```yaml
