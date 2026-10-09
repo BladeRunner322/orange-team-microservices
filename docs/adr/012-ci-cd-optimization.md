@@ -199,6 +199,15 @@ docker compose up -d --no-build --force-recreate alertmanager prometheus promtai
 - Появится SLA с пользователями, даунтайм 10 секунд станет недопустимым → blue-green или rolling.
 - Стек переедет в k8s → там ConfigMap-изменения триггерят rolling restart автоматически.
 
+**Про `COMPOSE_FILE` и SSH-деплой.** Переменные окружения GitHub Actions не пробрасываются на сервер через `appleboy/ssh-action` — SSH-скрипт выполняется в новой shell-сессии. `COMPOSE_FILE: infra/docker-compose.yml` в глобальном `env:` работает только для команд, запускаемых **на раннере**. В deploy job (SSH на сервер) их надо выставлять явно:
+
+```
+export COMPOSE_FILE=infra/docker-compose.yml
+export COMPOSE_ENV_FILES=.env
+```
+
+Тот же путь и `COMPOSE_ENV_FILES` — потому что Compose ищет top-level `.env` рядом с compose-файлом, а `.env` лежит в корне репозитория.
+
 ## Уведомления о деплое в Telegram
 
 **Задача.** Знать результат деплоя без ручной проверки GitHub Actions — приходит ли уведомление в Telegram при успехе и при провале.

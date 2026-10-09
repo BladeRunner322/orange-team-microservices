@@ -227,6 +227,11 @@ jobs:
             cd $PROJECT_DIR
             git pull origin main
 
+            # COMPOSE_FILE / COMPOSE_ENV_FILES не передаются с раннера
+            # через SSH — выставляем их явно в shell на сервере.
+            export COMPOSE_FILE=infra/docker-compose.yml
+            export COMPOSE_ENV_FILES=.env
+
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             # Validate .env files against .env.example before starting
