@@ -2240,5 +2240,6 @@ task <service-name>:migrate-version
 - [ADR-016: Сетевая безопасность](docs/adr/016-network-security.md) — bind на 127.0.0.1, ufw, fail2ban, insecure gRPC
 - [ADR-017: Alerting](docs/adr/017-alerting.md) — Alertmanager + Telegram, правила алертов
 - [ADR-018: Retention метрик и логов](docs/adr/018-storage-retention.md) — Prometheus 15 дней, Loki 30 дней
+- [ADR-019: Эволюция в сторону микросервисов](docs/adr/019-microservices-evolution.md) — roadmap: независимый деплой, failure isolation, event bus, tracing
 
 Подробнее — в [docs/adr/README.md](docs/adr/README.md).
