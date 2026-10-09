@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimid "github.com/go-chi/chi/v5/middleware"
 
+	grpcclient "github.com/BladeRunner322/orange-team-microservices/pkg/grpc/client"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/health"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/ratelimit"
@@ -37,25 +38,40 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	ctx := context.Background()
 
 	// 1. gRPC-клиент к Auth Service
-	authClient, err := clients.NewAuthClient(ctx, cfg.AuthGRPCAddr, cfg.Timeout, cfg.GRPCClientTLSMode)
+	authClient, err := clients.NewAuthClient(ctx, buildGRPCConfig(cfg.AuthGRPCAddr, cfg))
 	if err != nil {
 		return nil, fmt.Errorf("create auth client: %w", err)
 	}
-	log.Info("auth gRPC client created", "addr", cfg.AuthGRPCAddr, "timeout", cfg.Timeout)
+	log.Info("auth gRPC client created",
+		"addr", cfg.AuthGRPCAddr,
+		"timeout", cfg.Timeout,
+		"cb_enabled", cfg.CBEnabled,
+		"retry_enabled", cfg.RetryEnabled,
+	)
 
 	// 2. gRPC-клиент к Profiles Service
-	profilesClient, err := clients.NewProfilesClient(ctx, cfg.ProfilesGRPCAddr, cfg.Timeout, cfg.GRPCClientTLSMode)
+	profilesClient, err := clients.NewProfilesClient(ctx, buildGRPCConfig(cfg.ProfilesGRPCAddr, cfg))
 	if err != nil {
 		return nil, fmt.Errorf("create profiles client: %w", err)
 	}
-	log.Info("profiles gRPC client created", "addr", cfg.ProfilesGRPCAddr, "timeout", cfg.Timeout)
+	log.Info("profiles gRPC client created",
+		"addr", cfg.ProfilesGRPCAddr,
+		"timeout", cfg.Timeout,
+		"cb_enabled", cfg.CBEnabled,
+		"retry_enabled", cfg.RetryEnabled,
+	)
 
 	// 3. gRPC-клиент к Exercises Service
-	exercisesClient, err := clients.NewExercisesClient(ctx, cfg.ExercisesGRPCAddr, cfg.Timeout, cfg.GRPCClientTLSMode)
+	exercisesClient, err := clients.NewExercisesClient(ctx, buildGRPCConfig(cfg.ExercisesGRPCAddr, cfg))
 	if err != nil {
 		return nil, fmt.Errorf("create exercises client: %w", err)
 	}
-	log.Info("exercises gRPC client created", "addr", cfg.ExercisesGRPCAddr, "timeout", cfg.Timeout)
+	log.Info("exercises gRPC client created",
+		"addr", cfg.ExercisesGRPCAddr,
+		"timeout", cfg.Timeout,
+		"cb_enabled", cfg.CBEnabled,
+		"retry_enabled", cfg.RetryEnabled,
+	)
 
 	// 4. Redis-клиент для rate limiting
 	redisClient, err := redis.NewClient(ctx, redis.Config{
@@ -219,5 +235,35 @@ func (a *App) Close() {
 
 	if a.redisClient != nil {
 		_ = a.redisClient.Close()
+	}
+}
+
+// buildGRPCConfig собирает grpcclient.Config для одного downstream.
+//
+// CB/Retry-параметры общие для всех клиентов Gateway (одни
+// env-переменные), Target — разный для каждого сервиса.
+//
+// Bootstrap передаёт результат в clients.NewXxxClient, который
+// прокидывает его в pkg/grpc/client.New без изменений.
+func buildGRPCConfig(target string, cfg config.Config) grpcclient.Config {
+	return grpcclient.Config{
+		Target:  target,
+		TLSMode: grpcclient.TLSMode(cfg.GRPCClientTLSMode),
+		Timeout: cfg.Timeout,
+
+		// Circuit Breaker (ADR-020).
+		CBEnabled:     cfg.CBEnabled,
+		CBMaxRequests: cfg.CBMaxRequests,
+		CBInterval:    cfg.CBInterval,
+		CBTimeout:     cfg.CBTimeout,
+		CBMinRequests: cfg.CBMinRequests,
+		CBErrorRate:   cfg.CBErrorRate,
+
+		// Retry (ADR-020).
+		RetryEnabled:     cfg.RetryEnabled,
+		RetryMaxAttempts: cfg.RetryMaxAttempts,
+		RetryBaseDelay:   cfg.RetryBaseDelay,
+		RetryMaxDelay:    cfg.RetryMaxDelay,
+		RetryMethods:     cfg.RetryIdempotentMethods,
 	}
 }
