@@ -575,6 +575,7 @@ orange-team-microservices/
 │    2. Добавляет user_id в gRPC-метаданные                                  │
 │    3. Проксирует запрос в нужный сервис                                    │
 │  • Преобразует gRPC-ответы в HTTP-ответы                                   │
+│  • Circuit Breaker + Retry на gRPC-клиентах (ADR-020)                      │
 │  • Собирает метрики (Prometheus)                                           │
 │  • Логирует запросы (Loki)                                                 │
 │                                                                            │
@@ -2241,5 +2242,6 @@ task <service-name>:migrate-version
 - [ADR-017: Alerting](docs/adr/017-alerting.md) — Alertmanager + Telegram, правила алертов
 - [ADR-018: Retention метрик и логов](docs/adr/018-storage-retention.md) — Prometheus 15 дней, Loki 30 дней
 - [ADR-019: Эволюция в сторону микросервисов](docs/adr/019-microservices-evolution.md) — roadmap: независимый деплой, failure isolation, event bus, tracing
+- [ADR-020: Circuit Breaker и Retry для gRPC-клиентов](docs/adr/020-circuit-breaker-and-retry.md) — fail-fast, retry read-методов, client-side метрики
 
 Подробнее — в [docs/adr/README.md](docs/adr/README.md).
