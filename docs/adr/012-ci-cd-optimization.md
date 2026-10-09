@@ -159,6 +159,57 @@ strategy:
 
 Это дело Postman-коллекций и integration-тестов.
 
+## Пересоздание контейнеров при деплое
+
+**Проблема.** `docker compose up -d --no-build` пересоздаёт контейнер только если изменился его манифест в compose (образ, ports, volumes, env) или содержимое `.env`. Изменения **содержимого монтируемых конфиг-файлов** compose не отслеживает — для него это тот же volume, тот же путь.
+
+Сервисы, которые читают конфиг при старте и не перечитывают его автоматически:
+
+- `alertmanager` — `alertmanager.yml`
+- `prometheus` — `prometheus.yml`, `alerts.yml`
+- `promtail` — `promtail-config.yml`
+- `caddy` — `Caddyfile`
+
+Итог: правишь `alerts.yml` в PR, мержишь, CD зелёный, а прод работает на старых правилах. Первый инцидент — узнаешь, что алерт не срабатывает, потому что конфиг не применился.
+
+**Решение.** В deploy job добавлен `--force-recreate`:
+
+```
+docker compose up -d --no-build --force-recreate
+```
+
+Все контейнеры пересоздаются на каждом деплое, конфиги гарантированно актуальны.
+
+**Что это значит по факту:**
+
+- Postgres и Redis тоже пересоздаются. Данные не теряются (volumes), но соединения рвутся на 2–5 секунд. Клиенты переподключаются автоматически.
+- Downtime ~10 секунд на весь стек. Для solo-проекта без SLA — приемлемо.
+- CD-джоба теперь занимает на 5–10 секунд больше.
+
+**Альтернатива** — перечислять только сервисы с конфигами:
+
+```
+docker compose up -d --no-build --force-recreate alertmanager prometheus promtail caddy
+```
+
+Быстрее, но список надо поддерживать вручную при добавлении новых конфиг-сервисов. При первом забытом сервисе — та же проблема с неприменённым конфигом. Отвергнуто в пользу простоты.
+
+**Когда пересмотреть:**
+
+- Появится SLA с пользователями, даунтайм 10 секунд станет недопустимым → blue-green или rolling.
+- Стек переедет в k8s → там ConfigMap-изменения триггерят rolling restart автоматически.
+
+## Hot-reload как альтернатива рестарту
+
+Для Alertmanager и Prometheus есть hot-reload без пересоздания контейнера:
+
+- Alertmanager: `POST /-/reload` (флаг `--web.enable-lifecycle` включён в compose).
+- Prometheus: `POST /-/reload` (флаг `--web.enable-lifecycle` не включён, отдельная задача).
+
+Taskfile таргеты: `task alertmanager-reload`.
+
+Это не заменяет `--force-recreate` в CD (не все сервисы умеют reload), но удобно для локальной работы: правишь `alertmanager.yml` — `task alertmanager-reload` — проверяешь без рестарта.
+
 ## Rollback: стратегия
 
 **Решение (2026-10-08): Level 1 — post-deploy detection без auto-rollback.**

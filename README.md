@@ -1761,6 +1761,18 @@ Grafana доступна по адресу: `http://localhost:3000`
 task docker-up        # поднимает всё (приложение + мониторинг + логи)
 task monitoring-up    # только Prometheus + Grafana
 task logging-up       # только Loki + Promtail
+task alertmanager-up  # только Alertmanager
+```
+
+### Управление Alertmanager
+
+```bash
+task secrets:generate      # создать secrets/* из локального .env (автоматически в docker-up)
+task alertmanager-up       # запустить
+task alertmanager-down     # остановить
+task alertmanager-logs     # логи
+task alertmanager-restart  # пересоздать (для применения изменений alertmanager.yml)
+task alertmanager-reload   # hot-reload конфига без рестарта
 ```
 
 ### Проверка работы

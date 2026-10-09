@@ -437,9 +437,10 @@ tasks:
 
   docker-up:
     desc: Start all services (app + monitoring + logging)
+    deps: [secrets:generate]
     cmds:
       - docker compose up -d --build
-      - echo "✅ All services started! (postgres-auth, redis-auth, migrate-auth, auth, redis-gateway, gateway, postgres-profiles, migrate-profiles, profiles, postgres-exercises, migrate-exercises, exercises, prometheus, grafana, loki, promtail)"
+      - echo "✅ All services started! (postgres-auth, redis-auth, migrate-auth, auth, redis-gateway, gateway, postgres-profiles, migrate-profiles, profiles, postgres-exercises, migrate-exercises, exercises, prometheus, grafana, loki, promtail, alertmanager, warp)"
 
   docker-down:
     desc: Stop all services
@@ -518,3 +519,50 @@ tasks:
     desc: Show logs from Loki and Promtail
     cmds:
       - docker compose logs -f loki promtail
+
+  # ============================================================
+  #  ALERTING (Alertmanager)
+  # ============================================================
+
+  alertmanager-up:
+    desc: Start Alertmanager
+    cmds:
+      - docker compose up -d alertmanager
+
+  alertmanager-down:
+    desc: Stop Alertmanager
+    cmds:
+      - docker compose down alertmanager
+
+  alertmanager-logs:
+    desc: Show Alertmanager logs
+    cmds:
+      - docker compose logs -f alertmanager
+
+  alertmanager-restart:
+    desc: Restart Alertmanager with --force-recreate (picks up config changes)
+    cmds:
+      - docker compose up -d --force-recreate alertmanager
+
+  alertmanager-reload:
+    desc: Hot-reload Alertmanager config (no restart)
+    cmds:
+      - curl -s -X POST http://localhost:${ALERTMANAGER_PORT}/-/reload
+      - 'echo "✅ Alertmanager config reloaded"'
+
+  # ============================================================
+  #  SECRETS (локальная генерация файлов из .env)
+  # ============================================================
+
+  secrets:generate:
+    desc: Generate secrets files for local containers from .env
+    cmds:
+      - mkdir -p secrets
+      - |
+        set -a
+        . ./.env
+        set +a
+        printf '%s' "$TELEGRAM_BOT_TOKEN" > secrets/bot_token
+        printf '%s' "$TELEGRAM_CHAT_ID"   > secrets/chat_id
+        chmod 644 secrets/bot_token secrets/chat_id
+      - 'echo "✅ secrets/bot_token and secrets/chat_id generated"'

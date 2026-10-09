@@ -16,7 +16,7 @@
 
 ### Компоненты
 
-- **Alertmanager** — принимает алерты от Prometheus, группирует, маршрутизирует, отправляет получателям. Образ: `prom/alertmanager:v0.34.1`.
+- **Alertmanager** — принимает алерты от Prometheus, группирует, маршрутизирует, отправляет получателям. Образ: `prom/alertmanager:v0.34.1`. Hot-reload конфига через `POST /-/reload` работает по умолчанию, без дополнительных флагов (таргет `task alertmanager-reload`).
 - **Prometheus `rule_files`** — правила алертов в `alerts.yml` в корне репо.
 - **Telegram** — канал доставки.
 
@@ -67,6 +67,8 @@
 - `secrets/` в `.gitignore` и `.dockerignore` — в git не попадает.
 
 Это официальный механизм Alertmanager для передачи секретов.
+
+**Локальная разработка.** Таргет `task secrets:generate` создаёт `secrets/bot_token` и `secrets/chat_id` из локального `.env`. Встроен в `task docker-up` как зависимость. На сервере файлы создаёт CD в deploy job.
 
 ### Обход блокировки Telegram (Cloudflare WARP)
 
