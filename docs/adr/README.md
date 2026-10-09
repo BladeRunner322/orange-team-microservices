@@ -30,6 +30,7 @@
 - [ADR-016: Сетевая безопасность](016-network-security.md)
 - [ADR-017: Alerting (Alertmanager + Telegram)](017-alerting.md)
 - [ADR-018: Retention метрик и логов](018-storage-retention.md)
+- [ADR-019: Эволюция в сторону микросервисов](019-microservices-evolution.md)
 
 ## Как добавить
 
