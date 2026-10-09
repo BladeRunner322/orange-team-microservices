@@ -4,7 +4,7 @@ package auth
 type RegisterRequest struct {
 	Email    string `json:"email"     validate:"required,email"`
 	Password string `json:"password"  validate:"required,min=8"`
-	FullName string `json:"full_name" validate:"required,min=2,max=50"`
+	FullName string `json:"full_name" validate:"required,min=2,max=100"`
 }
 
 // LoginRequest — тело запроса POST /login.
