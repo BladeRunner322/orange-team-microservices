@@ -444,6 +444,7 @@ orange-team-microservices/
 ├── prometheus.yml                    # конфигурация Prometheus
 ├── alerts.yml                        # правила алертов (Prometheus)
 ├── alertmanager.yml                  # конфигурация Alertmanager (Telegram)
+├── loki-config.yml                   # конфигурация Loki (retention 30d)
 ├── promtail-config.yml               # конфигурация Promtail
 ├── go.mod
 ├── go.sum
@@ -1767,6 +1768,15 @@ Grafana доступна по адресу: `http://localhost:3000`
 
 > ⚠️ Дашборды Grafana не сохраняются при `task docker-down-v` (удаление volume `grafana-storage`). Для постоянного хранения настрой **provisioning** (папка `grafana/provisioning/`) или экспортируй дашборд в JSON и положи его в репозиторий.
 
+### Retention
+
+Данные мониторинга хранятся ограниченное время, чтобы не забивать диск:
+
+- **Prometheus** — 15 дней (`--storage.tsdb.retention.time=15d`).
+- **Loki** — 30 дней (`limits_config.retention_period: 720h`).
+
+Оба хранят данные в volume (`prometheus_data`, `loki_data`), которые переживают `docker compose down` и `--force-recreate`. См. [ADR-018](docs/adr/018-storage-retention.md).
+
 ### Запуск мониторинга
 
 Все команды доступны через Taskfile:
@@ -2227,5 +2237,6 @@ task <service-name>:migrate-version
 - [ADR-015: HTTPS через Caddy](docs/adr/015-https-caddy.md) — TLS-терминация, Let's Encrypt, DuckDNS
 - [ADR-016: Сетевая безопасность](docs/adr/016-network-security.md) — bind на 127.0.0.1, ufw, fail2ban, insecure gRPC
 - [ADR-017: Alerting](docs/adr/017-alerting.md) — Alertmanager + Telegram, правила алертов
+- [ADR-018: Retention метрик и логов](docs/adr/018-storage-retention.md) — Prometheus 15 дней, Loki 30 дней
 
 Подробнее — в [docs/adr/README.md](docs/adr/README.md).

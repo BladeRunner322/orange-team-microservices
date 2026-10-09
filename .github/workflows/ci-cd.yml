@@ -95,6 +95,7 @@ jobs:
             promtail-config.yml
             alertmanager.yml
             alerts.yml
+            loki-config.yml
             Taskfile.yml
             go.mod
             go.sum
