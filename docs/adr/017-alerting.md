@@ -42,10 +42,13 @@
 | `ServiceDown` | `up == 0` для auth/gateway/profiles/exercises | critical | 2m |
 | `HighHTTPErrorRate` | доля 5xx Gateway > 5% | warning | 5m |
 | `HighGRPCErrorRate` | доля не-OK gRPC > 5% по сервису | warning | 5m |
+| `HighCPU` | CPU хоста > 85% | warning | 5m |
+| `HighMemory` | RAM хоста > 85% | warning | 5m |
+| `DiskSpaceLow` | диск > 85% | warning | 5m |
+| `DiskSpaceCritical` | диск > 95% | critical | 2m |
 
 **Отложено до следующих сессий:**
 
-- CPU/RAM/диск — нужен `node-exporter` (сессия 2).
 - «Бэкап не появился > 36 ч» — нужна метрика от `backup-db.sh` через `textfile` collector (сессия 3).
 - Алерт на `/ready` — Gateway healthcheck использует `/health`, `/ready` регулярно не опрашивается. Нужен отдельный механизм.
 
@@ -69,6 +72,35 @@
 Это официальный механизм Alertmanager для передачи секретов.
 
 **Локальная разработка.** Таргет `task secrets:generate` создаёт `secrets/bot_token` и `secrets/chat_id` из локального `.env`. Встроен в `task docker-up` как зависимость. На сервере файлы создаёт CD в deploy job.
+
+### Алерты на ресурсы хоста (node-exporter)
+
+**Задача.** Алертить не только на «сервис упал», но и на исчерпание ресурсов: CPU, RAM, диск. Без этого переполнение диска или утечка памяти приводят к падению сервисов раньше, чем сработает любой из runtime-алертов.
+
+**Решение.** Контейнер `node-exporter` рядом с Prometheus:
+
+- Образ `prom/node-exporter:v1.8.2`.
+- Монтирует `/proc`, `/sys`, `/` (rootfs) — читает метрики хоста из хостовых namespace.
+- `--path.rootfs=/rootfs` — чтобы `node_filesystem_*` показывали реальный корневой диск, а не overlay-слой контейнера.
+- `--collector.filesystem.mount-points-exclude` — исключает виртуальные FS (tmpfs, squashfs, docker overlay).
+- Порт `127.0.0.1:9100` — только локально, как и остальные метрики.
+
+**Правила алертов:**
+
+| Алерт | Условие | Severity | Окно |
+|---|---|---|---|
+| `HighCPU` | CPU > 85% | warning | 5m |
+| `HighMemory` | RAM > 85% | warning | 5m |
+| `DiskSpaceLow` | Диск > 85% | warning | 5m |
+| `DiskSpaceCritical` | Диск > 95% | critical | 2m |
+
+Пороги намеренно консервативные: warning на 85% — время отреагировать, critical на 95% — время не запускать новые образы и чистить логи.
+
+**Когда пересмотреть:**
+
+- CPU-порог поднять до 90%, если 85% даёт ложные срабатывания на регулярных деплоях (`docker compose pull` + `--force-recreate` кратковременно грузит CPU).
+- Разделить `DiskSpaceLow` по mountpoint, если появятся дополнительные volumes (S3-кэш и т.п.) — сейчас сработает на любом non-виртуальном FS.
+- Добавить `node_systemd_*` алерты (fail2ban, docker daemon) — по мере появления таких сервисов.
 
 ### Обход блокировки Telegram (Cloudflare WARP)
 

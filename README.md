@@ -1667,6 +1667,7 @@ task sops:decrypt   # .env.enc → .env (например, на новой ма�
 
 - **Prometheus** — сбор метрик
 - **Alertmanager** — маршрутизация алертов в Telegram
+- **node-exporter** — метрики хоста (CPU, RAM, диск)
 - **Loki** — агрегация логов
 - **Grafana** — визуализация
 
@@ -2102,6 +2103,7 @@ task <service-name>:migrate-version
 | `GRAFANA_PORT` | `3000` | Порт Grafana на хосте |
 | `GRAFANA_PASSWORD` | `admin` | Пароль администратора Grafana |
 | `LOKI_PORT` | `3100` | Порт Loki на хосте |
+| `NODE_EXPORTER_PORT` | `9100` | Порт node-exporter на хосте (только локально) |
 | `ALERTMANAGER_PORT` | `9093` | Порт Alertmanager на хосте |
 | `TELEGRAM_BOT_TOKEN` | — | Токен Telegram-бота (от `@BotFather`). Секрет, в `.env.enc` |
 | `TELEGRAM_CHAT_ID` | — | chat_id получателя уведомлений. Узнать: `https://api.telegram.org/bot<TOKEN>/getUpdates` |
