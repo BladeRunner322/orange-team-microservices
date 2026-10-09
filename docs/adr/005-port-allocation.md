@@ -46,7 +46,7 @@
    - **Хост-порты** — в корневом `.env` (`AUTH_GRPC_PORT`, `AUTH_POSTGRES_PORT`, `AUTH_REDIS_PORT`, `PROFILES_GRPC_PORT`, `PROFILES_POSTGRES_PORT`, ...).
    - **Внутренние** — в сервисных `.env` (`GRPC_PORT`, `HTTP_PORT`, `POSTGRES_PORT`, ...). Значения `POSTGRES_PORT` и `REDIS_*` в сервисных `.env` — это порты **внутри контейнера**, не на хосте.
 
-> ⚠️ Имена переменных в корневом и сервисных `.env` различаются. Корневой — про хост-порты (`AUTH_POSTGRES_PORT`), сервисные — про внутренние (`POSTGRES_PORT`). `docker-compose.yml` пробрасывает `${AUTH_POSTGRES_PORT}:5432`, а сам сервис внутри контейнера ходит на `postgres-auth:5432`.
+> ⚠️ Имена переменных в корневом и сервисных `.env` различаются. Корневой — про хост-порты (`AUTH_POSTGRES_PORT`), сервисные — про внутренние (`POSTGRES_PORT`). `infra/docker-compose.yml` пробрасывает `${AUTH_POSTGRES_PORT}:5432`, а сам сервис внутри контейнера ходит на `postgres-auth:5432`.
 
 6. **Не полагаться на дефолты.** Всегда задавать значения явно — даже если они совпадают с дефолтом в коде.
 

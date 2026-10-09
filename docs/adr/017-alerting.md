@@ -17,13 +17,13 @@
 ### Компоненты
 
 - **Alertmanager** — принимает алерты от Prometheus, группирует, маршрутизирует, отправляет получателям. Образ: `prom/alertmanager:v0.34.1`. Hot-reload конфига через `POST /-/reload` работает по умолчанию, без дополнительных флагов (таргет `task alertmanager-reload`).
-- **Prometheus `rule_files`** — правила алертов в `alerts.yml` в корне репо.
+- **Prometheus `rule_files`** — правила алертов в `infra/alerts.yml`.
 - **Telegram** — канал доставки.
 
 ### Почему Alertmanager, а не Grafana Alerting
 
 - **Стандартная связка с Prometheus.** Alertmanager — официальный компонент экосистемы, документация и примеры совпадают с нашим стеком.
-- **Меньше конфигурации.** Правила в PromQL-файлах (`alerts.yml`), а не в UI Grafana. Всё в git, всё диффится в PR.
+- **Меньше конфигурации.** Правила в PromQL-файлах (`infra/alerts.yml`), а не в UI Grafana. Всё в git, всё диффится в PR.
 - **Silences и grouping из коробки.** Если упадёт несколько сервисов одновременно — придёт одно уведомление, а не 10.
 - **Не привязывает алертинг к Grafana.** Grafana может упасть, алертинг продолжит работать.
 
@@ -139,7 +139,7 @@
 
 **Решение.** Отдельный контейнер `warp` (`caomingjun/warp`) поднимает SOCKS5-прокси на `127.0.0.1:1080`, весь трафик до Telegram идёт через туннель Cloudflare.
 
-- В `alertmanager.yml` добавлен `http_config.proxy_url: 'socks5://warp:1080'` в блоке telegram-receiver.
+- В `infra/alertmanager.yml` добавлен `http_config.proxy_url: 'socks5://warp:1080'` в блоке telegram-receiver.
 - Alertmanager зависит от warp через `depends_on`.
 - WARP даёт зарубежный IP — Telegram доступен.
 
@@ -177,7 +177,7 @@
 - Если алертов станет много и они будут мешать — разделить маршрутизацию по severity (critical → личка, warning → отдельный чат).
 - Если появится дежурный / команда — добавить второй канал (SMS, PagerDuty).
 - Если Telegram упадёт критично — добавить резервный канал доставки.
-- Если правила станут сложными (dependency-алерты, inhibition) — пересмотреть структуру `alertmanager.yml`.
+- Если правила станут сложными (dependency-алерты, inhibition) — пересмотреть структуру `infra/alertmanager.yml`.
 
 ## Связанные решения
 

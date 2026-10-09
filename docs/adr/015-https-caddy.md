@@ -32,7 +32,7 @@ Caddy — reverse proxy с автоматическим Let's Encrypt.
 
 - **Автоматические сертификаты из коробки.** Не нужно ставить certbot, писать cron на `certbot renew`, парсить конфиги nginx.
 - **HTTP-challenge без плагинов.** Стандартный образ `caddy:2-alpine` умеет всё, что нужно.
-- **Конфиг — 3 строки.** `Caddyfile` читается за 10 секунд.
+- **Конфиг — 3 строки.** `infra/Caddyfile` читается за 10 секунд.
 - **HTTP/2 и HTTP/3 по умолчанию.**
 - **Автоматический редирект HTTP → HTTPS.**
 
@@ -125,8 +125,8 @@ Caddy продлевает сертификат **автоматически**, 
 
 **Реализовано** (2026-10-07).
 
-- Caddy в `docker-compose.yml` (стандартный образ `caddy:2-alpine`), порты 80/443.
-- Конфиг — `Caddyfile` в корне репо.
+- Caddy в `infra/docker-compose.yml` (стандартный образ `caddy:2-alpine`), порты 80/443.
+- Конфиг — `infra/Caddyfile`.
 - Домен `sololevelingms.duckdns.org` резолвится на `136.234.4.93`, сертификат Let's Encrypt получен.
 - CD перезапускает Caddy вместе с остальными сервисами.
 - Проверено через `curl`: `https://sololevelingms.duckdns.org/health` → `200 OK`, сертификат валиден.

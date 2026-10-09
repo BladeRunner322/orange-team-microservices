@@ -158,7 +158,7 @@ Gateway генерирует `request_id` и кладёт в response header, н
 - ~~**Client interceptor** кладёт `x-request-id` в outgoing metadata.~~ Сделано: `RequestIDClientInterceptor` в `pkg/grpc/interceptors`.
 - ~~**Server interceptor** читает `x-request-id` из incoming metadata.~~ Сделано: `RequestIDServerInterceptor`, включён в цепочку `pkg/grpc/server` всегда.
 - ~~**`LoggingInterceptor`** логирует `request_id`.~~ Сделано: добавлено поле в лог, если ключ есть в context.
-- **Promtail** извлекает `request_id` в labels — **открыто**, отдельная задача (`promtail-config.yml`).
+- **Promtail** извлекает `request_id` в labels — **открыто**, отдельная задача (`infra/promtail-config.yml`).
 
 **Приоритет:** средний. Триггер — реальная отладка инцидента через несколько сервисов.
 **Статус:** ✅ Закрыто (2026-10-08). Реализовано в PR по O-2.

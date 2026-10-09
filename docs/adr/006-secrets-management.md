@@ -4,7 +4,7 @@
 
 В проекте **5 файлов `.env`**:
 
-- Корневой `.env` — для `docker-compose.yml` (хост-порты, Grafana password).
+- Корневой `.env` — для `infra/docker-compose.yml` (хост-порты, Grafana password).
 - `services/auth/.env` — Auth Service.
 - `services/gateway/.env` — Gateway Service.
 - `services/profiles/.env` — Profiles Service.
