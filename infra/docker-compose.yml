@@ -1,3 +1,5 @@
+name: orange-team-microservices
+
 services:
   # ============================================================
   #  AUTH SERVICE – POSTGRES

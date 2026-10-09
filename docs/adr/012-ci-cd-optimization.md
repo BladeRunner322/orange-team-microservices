@@ -208,6 +208,16 @@ export COMPOSE_ENV_FILES=.env
 
 Тот же путь и `COMPOSE_ENV_FILES` — потому что Compose ищет top-level `.env` рядом с compose-файлом, а `.env` лежит в корне репозитория.
 
+**Про имя проекта.** Compose определяет имя проекта по имени директории с compose-файлом. Раньше файл был в корне (`orange-team-microservices/docker-compose.yml`) → проект `orange-team-microservices`, все volumes с префиксом `orange-team-microservices_`. После переноса в `infra/` Compose стал бы использовать `infra` как имя проекта → volumes `infra_pgdata-auth` и т. д. То есть **новые пустые volumes** вместо существующих.
+
+Решение — задать имя проекта явно в `infra/docker-compose.yml`:
+
+```yaml
+name: orange-team-microservices
+```
+
+Это top-level поле Compose (v2.20+). Без него перенос compose-файла в поддиректорию = потеря данных.
+
 ## Уведомления о деплое в Telegram
 
 **Задача.** Знать результат деплоя без ручной проверки GitHub Actions — приходит ли уведомление в Telegram при успехе и при провале.
