@@ -29,6 +29,7 @@
 - [ADR-015: HTTPS через Caddy](015-https-caddy.md)
 - [ADR-016: Сетевая безопасность](016-network-security.md)
 - [ADR-017: Alerting (Alertmanager + Telegram)](017-alerting.md)
+- [ADR-018: Retention метрик и логов](018-storage-retention.md)
 
 ## Как добавить
 
