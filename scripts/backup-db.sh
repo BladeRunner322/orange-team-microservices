@@ -21,6 +21,13 @@ RETENTION_DAYS="${RETENTION_DAYS:-7}"
 DATE=$(date +%Y-%m-%d_%H-%M-%S)
 TARGET_DIR="${BACKUP_DIR}/${DATE}"
 
+# Метрика последнего успешного бэкапа — читается node-exporter'ом
+# через textfile collector. Путь по умолчанию: <project>/backup-metrics/backup.prom.
+# Директория смонтирована в node-exporter, см. docker-compose.yml.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKUP_METRICS_DIR="${BACKUP_METRICS_DIR:-${SCRIPT_DIR}/../backup-metrics}"
+BACKUP_METRICS_FILE="${BACKUP_METRICS_FILE:-${BACKUP_METRICS_DIR}/backup.prom}"
+
 # Off-site (ADR-014). Пустое значение RCLONE_REMOTE — off-site отключается.
 RCLONE_REMOTE="${RCLONE_REMOTE:-selectel}"
 S3_BUCKET="${S3_BUCKET:-orange-team-backups}"
@@ -88,4 +95,16 @@ if [ -d "${BACKUP_DIR}" ]; then
   find "${BACKUP_DIR}" -mindepth 1 -maxdepth 1 -type d -mtime +"${RETENTION_DAYS}" -print -exec rm -rf {} +
 fi
 
-echo "[$(date)] Backup finished"
+# Записать метрику последнего успешного бэкапа для node-exporter textfile collector.
+# Атомарная замена (.tmp + mv): иначе node-exporter может прочитать наполовину
+# записанный файл в момент обновления.
+mkdir -p "$(dirname "${BACKUP_METRICS_FILE}")"
+NOW=$(date +%s)
+cat > "${BACKUP_METRICS_FILE}.tmp" <<EOF
+# HELP backup_last_success_timestamp Unix timestamp of last successful DB backup
+# TYPE backup_last_success_timestamp gauge
+backup_last_success_timestamp ${NOW}
+EOF
+mv "${BACKUP_METRICS_FILE}.tmp" "${BACKUP_METRICS_FILE}"
+
+echo "[$(date)] Backup finished (metric written to ${BACKUP_METRICS_FILE})"

@@ -1865,6 +1865,19 @@ rclone lsf -R selectel:orange-team-backups
 
 > ⚠️ **Локальные бэкапы не защищают от смерти диска или удаления сервера.** Off-site — обязательное дополнение, реализовано в [ADR-014](docs/adr/014-backups-and-dr.md).
 
+### Метрика бэкапа
+
+После успешного бэкапа скрипт пишет в `backup-metrics/backup.prom` Unix-timestamp последнего успешного запуска. Директория монтируется в node-exporter через `--collector.textfile.directory`, метрика `backup_last_success_timestamp` доступна Prometheus.
+
+Алерт `BackupTooOld` сработает, если бэкап старше 36 часов. Алерт `BackupMetricMissing` — если метрика пропала совсем. См. [ADR-017](docs/adr/017-alerting.md).
+
+Проверить метрику:
+```bash
+curl -s http://localhost:9100/metrics | grep backup_last_success_timestamp
+```
+(порт 9100 — node-exporter; снаружи закрыт, доступен через SSH-туннель или с самого сервера)
+
+
 ### Восстановление из локального бэкапа
 
 **1. Распаковать дамп:**

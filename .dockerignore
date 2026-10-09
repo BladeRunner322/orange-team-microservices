@@ -7,3 +7,4 @@ Taskfile.yml
 docker-compose.yml
 .env.example
 secrets/
+backup-metrics/
