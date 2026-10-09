@@ -46,11 +46,42 @@
 | `HighMemory` | RAM хоста > 85% | warning | 5m |
 | `DiskSpaceLow` | диск > 85% | warning | 5m |
 | `DiskSpaceCritical` | диск > 95% | critical | 2m |
+| `BackupTooOld` | бэкап > 36 ч | critical | 5m |
+| `BackupMetricMissing` | метрики бэкапа нет | warning | 15m |
 
 **Отложено до следующих сессий:**
 
-- «Бэкап не появился > 36 ч» — нужна метрика от `backup-db.sh` через `textfile` collector (сессия 3).
 - Алерт на `/ready` — Gateway healthcheck использует `/health`, `/ready` регулярно не опрашивается. Нужен отдельный механизм.
+
+### Алерт на устаревание бэкапа
+
+**Задача.** Cron-скрипт `backup-db.sh` может молча упасть ночью: диск полный, S3 недоступен, контейнер postgres не отвечает. Обнаружится только при попытке восстановиться из бэкапа — и может оказаться, что последний рабочий дамп недельной давности. ADR-014 явно фиксирует алертинг на «бэкап не появился» как необходимое дополнение к off-site бэкапам.
+
+**Решение.**
+
+- `backup-db.sh` в конце (после локального дампа, выгрузки в S3 и ротации) записывает в `backup-metrics/backup.prom`:
+  ```
+  # HELP backup_last_success_timestamp Unix timestamp of last successful DB backup
+  # TYPE backup_last_success_timestamp gauge
+  backup_last_success_timestamp <unix_time>
+  ```
+- Директория `backup-metrics/` монтируется в node-exporter как `/var/lib/node_exporter/textfile:ro`. node-exporter читает её через `--collector.textfile.directory` и отдаёт метрику Prometheus.
+- Правила:
+  - `BackupTooOld` — `time() - backup_last_success_timestamp > 36 * 3600`, `for: 5m`, critical.
+  - `BackupMetricMissing` — `absent(backup_last_success_timestamp)`, `for: 15m`, warning.
+
+**Почему 36 часов.** Cron раз в сутки в 03:00 МСК. 36 = 24 + 12 — запас, если один запуск упал, а второй ещё не произошёл. Сработает при **двух** пропусках подряд.
+
+**Почему два алерта.** Основной `BackupTooOld` молчит, если метрики нет вообще (скрипт удалили, cron сняли, файл повредили). `BackupMetricMissing` через `absent()` ловит этот случай.
+
+**Почему атомарная запись.** `backup.prom.tmp` + `mv` — иначе node-exporter может прочитать наполовину записанный файл в момент обновления.
+
+**Fail-open для S3.** По ADR-014 ошибка выгрузки в S3 не фейлит локальный бэкап. Значит метрика обновляется, даже если S3 недоступен. Отдельного алерта на «S3 отстаёт от локального» нет — это технический долг, отдельная задача.
+
+**Когда пересмотреть:**
+
+- Если cron переедет на более частый запуск (каждые 4–6 часов) — порог 36 часов пересчитать.
+- Если появится алерт на возраст S3-дампов — отдельная задача, отдельный ADR.
 
 ### Секреты
 

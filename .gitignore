@@ -6,6 +6,7 @@
 .env.*.local
 scripts/rclone.conf
 secrets/
+backup-metrics/
 
 # Секреты внутри сервисов (per-service .env)
 services/*/.env

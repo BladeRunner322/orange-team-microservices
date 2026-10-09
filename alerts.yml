@@ -87,3 +87,21 @@ groups:
         annotations:
           summary: "Критично мало места на диске ({{ $labels.mountpoint }})"
           description: "Диск {{ $labels.mountpoint }} заполнен более 95%."
+      
+      - alert: BackupTooOld
+        expr: time() - backup_last_success_timestamp > 36 * 3600
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Бэкап БД устарел"
+          description: "Последний успешный бэкап был более 36 часов назад ({{ $value | humanizeDuration }})."
+
+      - alert: BackupMetricMissing
+        expr: absent(backup_last_success_timestamp)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Метрика бэкапа отсутствует"
+          description: "backup_last_success_timestamp не обнаружена. Проверить cron на сервере и лог /var/log/backup.log."
