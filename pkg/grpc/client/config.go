@@ -6,6 +6,25 @@ import (
 	"time"
 )
 
+const (
+	// defaultTimeout — таймаут на каждый gRPC-вызов, если не задан в Config.
+	defaultTimeout = 5 * time.Second
+
+	// Дефолты Circuit Breaker (ADR-020). Применяются в applyDefaults(),
+	// если CBEnabled=true и соответствующее поле оставлено нулевым.
+	defaultCBMaxRequests uint32        = 1
+	defaultCBInterval    time.Duration = 60 * time.Second
+	defaultCBTimeout     time.Duration = 30 * time.Second
+	defaultCBMinRequests uint32        = 10
+	defaultCBErrorRate   float64       = 0.5
+
+	// Дефолты Retry (ADR-020). Применяются в applyDefaults(),
+	// если RetryEnabled=true и соответствующее поле оставлено нулевым.
+	defaultRetryMaxAttempts uint32        = 3
+	defaultRetryBaseDelay   time.Duration = 100 * time.Millisecond
+	defaultRetryMaxDelay    time.Duration = 1 * time.Second
+)
+
 // TLSMode определяет, как клиент устанавливает соединение с сервером.
 type TLSMode string
 
@@ -90,6 +109,49 @@ type Config struct {
 	RetryMethods []string
 }
 
+// applyDefaults применяет значения по умолчанию к нулевым полям.
+//
+// Для bool-полей дефолтов нет: включение CB/Retry — явное решение
+// вызывающего. Для числовых — дефолт применяется только если
+// соответствующая фича включена.
+//
+// Вызывается из client.New() до validate().
+func (c *Config) applyDefaults() {
+	if c.Timeout == 0 {
+		c.Timeout = defaultTimeout
+	}
+
+	if c.CBEnabled {
+		if c.CBMaxRequests == 0 {
+			c.CBMaxRequests = defaultCBMaxRequests
+		}
+		if c.CBInterval == 0 {
+			c.CBInterval = defaultCBInterval
+		}
+		if c.CBTimeout == 0 {
+			c.CBTimeout = defaultCBTimeout
+		}
+		if c.CBMinRequests == 0 {
+			c.CBMinRequests = defaultCBMinRequests
+		}
+		if c.CBErrorRate == 0 {
+			c.CBErrorRate = defaultCBErrorRate
+		}
+	}
+
+	if c.RetryEnabled {
+		if c.RetryMaxAttempts == 0 {
+			c.RetryMaxAttempts = defaultRetryMaxAttempts
+		}
+		if c.RetryBaseDelay == 0 {
+			c.RetryBaseDelay = defaultRetryBaseDelay
+		}
+		if c.RetryMaxDelay == 0 {
+			c.RetryMaxDelay = defaultRetryMaxDelay
+		}
+	}
+}
+
 func (c Config) validate() error {
 	if c.Target == "" {
 		return fmt.Errorf("grpc client target is empty")
@@ -101,6 +163,7 @@ func (c Config) validate() error {
 
 	switch c.TLSMode {
 	case TLSModeDisabled, TLSModeInsecure, TLSModeVerify:
+		// ok
 	default:
 		return fmt.Errorf("unknown tls mode %q", c.TLSMode)
 	}
@@ -159,49 +222,6 @@ func (c Config) validateRetry() error {
 		return fmt.Errorf("retry enabled but no methods in whitelist")
 	}
 	return nil
-}
-
-// applyDefaults применяет значения по умолчанию к нулевым полям.
-//
-// Для bool-полей дефолтов нет: включение CB/Retry — явное решение
-// вызывающего. Для числовых — дефолт применяется только если
-// соответствующая фича включена.
-//
-// Вызывается из client.New() до validate().
-func (c *Config) applyDefaults() {
-	if c.Timeout == 0 {
-		c.Timeout = defaultTimeout
-	}
-
-	if c.CBEnabled {
-		if c.CBMaxRequests == 0 {
-			c.CBMaxRequests = defaultCBMaxRequests
-		}
-		if c.CBInterval == 0 {
-			c.CBInterval = defaultCBInterval
-		}
-		if c.CBTimeout == 0 {
-			c.CBTimeout = defaultCBTimeout
-		}
-		if c.CBMinRequests == 0 {
-			c.CBMinRequests = defaultCBMinRequests
-		}
-		if c.CBErrorRate == 0 {
-			c.CBErrorRate = defaultCBErrorRate
-		}
-	}
-
-	if c.RetryEnabled {
-		if c.RetryMaxAttempts == 0 {
-			c.RetryMaxAttempts = defaultRetryMaxAttempts
-		}
-		if c.RetryBaseDelay == 0 {
-			c.RetryBaseDelay = defaultRetryBaseDelay
-		}
-		if c.RetryMaxDelay == 0 {
-			c.RetryMaxDelay = defaultRetryMaxDelay
-		}
-	}
 }
 
 // tlsConfig возвращает *tls.Config для данного режима.
