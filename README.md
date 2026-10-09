@@ -1570,6 +1570,19 @@ Docker Compose v2.20+, SSH-доступ для деплоя.
 | `SERVER_HOST` | IP или домен продакшен-сервера |
 | `SERVER_USER` | SSH-пользователь (обычно `root`) |
 | `SERVER_SSH_KEY` | Приватный SSH-ключ для доступа к серверу |
+| `SOPS_AGE_KEY` | Приватный age-ключ для расшифровки `.env.enc` |
+
+`TELEGRAM_BOT_TOKEN` и `TELEGRAM_CHAT_ID` **не дублируются в GitHub Secrets** — расшифровываются из `.env.enc` через `sops --extract` в notify job. См. [ADR-012](docs/adr/012-ci-cd-optimization.md).
+
+### Уведомления о деплое
+
+После деплоя (или провала) в Telegram приходит уведомление:
+
+- `✅ Deploy success` — все job'ы прошли успешно.
+- `❌ Deploy failed` — какой-то job упал, в сообщении указан упавший.
+- `⏭️ Nothing to deploy` — изменений нет, деплой пропущен.
+
+Уведомление отправляется с GitHub-раннера напрямую в Telegram (без WARP — блокировки на GitHub-раннере нет).
 
 ### Проверка после деплоя
 
