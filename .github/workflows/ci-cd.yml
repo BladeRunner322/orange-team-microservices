@@ -246,7 +246,12 @@ jobs:
 
             docker compose pull
 
-            docker compose up -d --no-build
+            # --force-recreate: docker compose не отслеживает изменения
+            # содержимого монтируемых конфигов (alertmanager.yml, prometheus.yml,
+            # Caddyfile, promtail-config.yml). Без флага контейнеры не
+            # пересоздаются, и правки конфигов не применяются до ручного
+            # вмешательства. См. ADR-012.
+            docker compose up -d --no-build --force-recreate
 
             docker image prune -f
 
