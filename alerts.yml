@@ -42,3 +42,48 @@ groups:
         annotations:
           summary: "Высокая доля ошибок в gRPC-сервисе {{ $labels.job }}"
           description: "Более 5% gRPC-запросов в {{ $labels.job }} возвращают не-OK за последние 5 минут."
+
+  - name: system
+    interval: 30s
+    rules:
+      - alert: HighCPU
+        expr: |
+          100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая загрузка CPU"
+          description: "CPU загружен более 85% последние 5 минут."
+
+      - alert: HighMemory
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокое использование RAM"
+          description: "RAM использована более 85% последние 5 минут."
+
+      - alert: DiskSpaceLow
+        expr: |
+          (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs",mountpoint!=""}
+                / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs",mountpoint!=""})) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Мало места на диске ({{ $labels.mountpoint }})"
+          description: "Диск {{ $labels.mountpoint }} заполнен более 85%."
+
+      - alert: DiskSpaceCritical
+        expr: |
+          (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs",mountpoint!=""}
+                / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs",mountpoint!=""})) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Критично мало места на диске ({{ $labels.mountpoint }})"
+          description: "Диск {{ $labels.mountpoint }} заполнен более 95%."
