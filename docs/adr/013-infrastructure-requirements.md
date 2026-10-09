@@ -87,7 +87,7 @@ Database per Service (ADR-004) требует отдельный Postgres для
 
 ### Версии monitoring-образов не закреплены
 
-В `docker-compose.yml` четыре сервиса мониторинга используют тег `:latest`:
+В `infra/docker-compose.yml` четыре сервиса мониторинга используют тег `:latest`:
 
 ```yaml
 prometheus:

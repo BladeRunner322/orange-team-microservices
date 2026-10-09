@@ -24,7 +24,7 @@ Prometheus и Loki собирают данные непрерывно: метр�
 
 ### Loki
 
-- Новый конфиг `loki-config.yml` в корне репозитория.
+- Новый конфиг `infra/loki-config.yml`.
 - Retention 30 дней (`limits_config.retention_period: 720h`).
 - Включён `compactor.retention_enabled: true` — без него retention игнорируется.
 - `reject_old_samples: true` + `reject_old_samples_max_age: 168h` — защита от заливки старых логов (случайной или через promtail).

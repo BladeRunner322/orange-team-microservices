@@ -165,12 +165,12 @@ strategy:
 
 Сервисы, которые читают конфиг при старте и не перечитывают его автоматически:
 
-- `alertmanager` — `alertmanager.yml`
-- `prometheus` — `prometheus.yml`, `alerts.yml`
-- `promtail` — `promtail-config.yml`
-- `caddy` — `Caddyfile`
+- `alertmanager` — `infra/alertmanager.yml`
+- `prometheus` — `infra/prometheus.yml`, `infra/alerts.yml`
+- `promtail` — `infra/promtail-config.yml`
+- `caddy` — `infra/Caddyfile`
 
-Итог: правишь `alerts.yml` в PR, мержишь, CD зелёный, а прод работает на старых правилах. Первый инцидент — узнаешь, что алерт не срабатывает, потому что конфиг не применился.
+Итог: правишь `infra/alerts.yml` в PR, мержишь, CD зелёный, а прод работает на старых правилах. Первый инцидент — узнаешь, что алерт не срабатывает, потому что конфиг не применился.
 
 **Решение.** В deploy job добавлен `--force-recreate`:
 
@@ -236,7 +236,7 @@ sops --decrypt --input-type dotenv --extract '["TELEGRAM_BOT_TOKEN"]' .env.enc
 
 Taskfile таргеты: `task alertmanager-reload`.
 
-Это не заменяет `--force-recreate` в CD (не все сервисы умеют reload), но удобно для локальной работы: правишь `alertmanager.yml` — `task alertmanager-reload` — проверяешь без рестарта.
+Это не заменяет `--force-recreate` в CD (не все сервисы умеют reload), но удобно для локальной работы: правишь `infra/alertmanager.yml` — `task alertmanager-reload` — проверяешь без рестарта.
 
 ## Rollback: стратегия
 

@@ -438,14 +438,16 @@ orange-team-microservices/
 │
 ├── logs/                             # файлы логов (в .gitignore)
 │
-├── Caddyfile                         # конфиг Caddy (HTTPS-терминация)
-├── docker-compose.yml                # все контейнеры
+├── infra/                            # инфраструктура (docker, monitoring, networking)
+│   ├── docker-compose.yml            # все контейнеры
+│   ├── Caddyfile                     # конфиг Caddy (HTTPS-терминация)
+│   ├── prometheus.yml                # конфигурация Prometheus
+│   ├── alerts.yml                    # правила алертов (Prometheus)
+│   ├── alertmanager.yml              # конфигурация Alertmanager (Telegram)
+│   ├── loki-config.yml               # конфигурация Loki (retention 30d)
+│   └── promtail-config.yml           # конфигурация Promtail
+│
 ├── Taskfile.yml                      # задачи для разработки
-├── prometheus.yml                    # конфигурация Prometheus
-├── alerts.yml                        # правила алертов (Prometheus)
-├── alertmanager.yml                  # конфигурация Alertmanager (Telegram)
-├── loki-config.yml                   # конфигурация Loki (retention 30d)
-├── promtail-config.yml               # конфигурация Promtail
 ├── go.mod
 ├── go.sum
 └── README.md
@@ -717,12 +719,12 @@ orange-team-microservices/
 | Сервис | Назначение | Протокол | Внутри контейнера (Docker) | Хост (Docker) | Локальная разработка | Примечание |
 |--------|------------|----------|----------------------------|---------------|----------------------|------------|
 | **Auth** | gRPC | gRPC | `50051` | `50051` | `50061` | Смещение +10 |
-| **Auth** | Health / Metrics | HTTP | `8080` | `8080` | `8090` | Смещение +10, переопределяется в `docker-compose.yml` |
+| **Auth** | Health / Metrics | HTTP | `8080` | `8080` | `8090` | Смещение +10, переопределяется в `infra/docker-compose.yml` |
 | **Gateway** | HTTP API | HTTP | `8081` | `8081` | `8091` | Смещение +10 |
 | **Profiles** | gRPC | gRPC | `50052` | `50052` | `50062` | Смещение +10 |
-| **Profiles** | Health / Ready / Metrics | HTTP | `8080` | `8082` | `8092` | Смещение +10, переопределяется в `docker-compose.yml`
+| **Profiles** | Health / Ready / Metrics | HTTP | `8080` | `8082` | `8092` | Смещение +10, переопределяется в `infra/docker-compose.yml`
 | **Exercises** | gRPC | gRPC | `50053` | `50053` | `50063` | Смещение +10 |
-| **Exercises** | Health / Ready / Metrics | HTTP | `8080` | `8083` | `8093` | Смещение +10, переопределяется в `docker-compose.yml` |
+| **Exercises** | Health / Ready / Metrics | HTTP | `8080` | `8083` | `8093` | Смещение +10, переопределяется в `infra/docker-compose.yml` |
 | **PostgreSQL (Auth)** | База данных | TCP | `5432` | `5432` | — | Используется через Docker, проброс на хост |
 | **PostgreSQL (Profiles)** | База данных | TCP | `5432` | `5433` | — | Используется через Docker, проброс на хост |
 | **PostgreSQL (Exercises)** | База данных | TCP | `5432` | `5434` | — | Используется через Docker, проброс на хост | |
@@ -1371,7 +1373,7 @@ curl -X POST http://localhost:8081/exercises \
 
 - **Порты 80 и 443** — единственные открытые наружу. Всё остальное — внутри docker-сети.
 - **Caddy** сам получает и продлевает сертификаты Let's Encrypt (HTTP-challenge, без плагинов).
-- **Конфиг** — `Caddyfile` в корне репо, 3 строки.
+- **Конфиг** — `infra/Caddyfile`, 3 строки.
 - **Сертификаты** хранятся в volume `caddy_data`, переживают перезапуск контейнера.
 
 ### Проверка
@@ -1416,7 +1418,7 @@ Caddy автоматически выпустит новый сертифика�
 
 **Всё остальное закрыто** — на двух уровнях:
 
-1. **Docker bind.** В `docker-compose.yml` внутренние порты привязаны к `127.0.0.1`:
+1. **Docker bind.** В `infra/docker-compose.yml` внутренние порты привязаны к `127.0.0.1`:
    ```
    ports:
      - "127.0.0.1:${AUTH_GRPC_PORT}:50051"
@@ -1795,7 +1797,7 @@ task secrets:generate      # создать secrets/* из локального 
 task alertmanager-up       # запустить
 task alertmanager-down     # остановить
 task alertmanager-logs     # логи
-task alertmanager-restart  # пересоздать (для применения изменений alertmanager.yml)
+task alertmanager-restart  # пересоздать (для применения изменений infra/alertmanager.yml)
 task alertmanager-reload   # hot-reload конфига без рестарта
 ```
 
@@ -2057,7 +2059,7 @@ task test-cover
 
 ## Управление миграциями
 
-> 💡 При запуске `task docker-up` миграции применяются **автоматически** (сервисы `migrate-auth`, `migrate-profiles` и `migrate-exercises` в `docker-compose.yml`). Ручные команды ниже нужны только для случаев, когда миграции запускаются отдельно (например, локальная разработка или откат).
+> 💡 При запуске `task docker-up` миграции применяются **автоматически** (сервисы `migrate-auth`, `migrate-profiles` и `migrate-exercises` в `infra/docker-compose.yml`). Ручные команды ниже нужны только для случаев, когда миграции запускаются отдельно (например, локальная разработка или откат).
 
 > ⚠️ Миграции **не создают базу данных** — они только создают таблицы и схему внутри существующей БД. Если база `auth_db` (или `profiles_db`) отсутствует, `task auth:migrate-up` (или `task profiles:migrate-up`) упадёт с ошибкой `database "..." does not exist`.
 
