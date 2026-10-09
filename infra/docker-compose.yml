@@ -293,7 +293,7 @@ services:
     env_file:
       - ../.env
     volumes:
-      - ../Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
@@ -309,8 +309,8 @@ services:
     ports:
       - "127.0.0.1:${PROMETHEUS_PORT}:9090"
     volumes:
-      - ../prometheus.yml:/etc/prometheus/prometheus.yml
-      - ../alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     command:
       # 15 дней хранения метрик. Покрывает типовые сценарии отладки
@@ -337,7 +337,7 @@ services:
     ports:
       - "127.0.0.1:${ALERTMANAGER_PORT}:9093"
     volumes:
-      - ../alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - ../secrets:/etc/alertmanager/secrets:ro
       - alertmanager_data:/alertmanager
     command:
@@ -386,7 +386,7 @@ services:
     ports:
       - "127.0.0.1:${LOKI_PORT}:3100"
     volumes:
-      - ../loki-config.yml:/etc/loki/loki-config.yml:ro
+      - ./loki-config.yml:/etc/loki/loki-config.yml:ro
       - loki_data:/loki
     command:
       - '-config.file=/etc/loki/loki-config.yml'
@@ -398,7 +398,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - ../promtail-config.yml:/etc/promtail/config.yml:ro
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
     command: -config.file=/etc/promtail/config.yml
     depends_on:
       - loki
