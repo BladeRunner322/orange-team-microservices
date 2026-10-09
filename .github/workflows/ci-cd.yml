@@ -90,14 +90,8 @@ jobs:
             services/**
             scripts/**
             pkg/**
+            infra/**
             .github/workflows/ci-cd.yml
-            docker-compose.yml
-            Caddyfile
-            prometheus.yml
-            promtail-config.yml
-            alertmanager.yml
-            alerts.yml
-            loki-config.yml
             Taskfile.yml
             go.mod
             go.sum
