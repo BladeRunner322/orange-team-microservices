@@ -27,6 +27,7 @@
   - [Rate Limiting flow](#rate-limiting-flow)
   - [RBAC flow](#rbac-flow)
 - [HTTPS](#https)
+- [Сетевая безопасность](#сетевая-безопасность)
 - [CI/CD и деплой](#cicd-и-деплой)
 - [Мониторинг и логирование](#мониторинг-и-логирование)
 - [Бэкапы](#бэкапы)
@@ -39,7 +40,7 @@
 
 - **Go** 1.26.7 или выше
 - **Docker** 24.0 или выше
-- **Docker Compose** v2.20 или выше (плагин `docker compose`, а не `docker-compose`)
+- **Docker Compose** v2.24 или выше (плагин `docker compose`, а не `docker-compose`). Требуется для `COMPOSE_ENV_FILES`.
 - **Task** (для управления задачами)
 - **grpcurl** (для тестирования gRPC)
 
@@ -410,7 +411,10 @@ orange-team-microservices/
 │       ├── 013-infrastructure-requirements.md
 │       ├── 014-backups-and-dr.md
 │       ├── 015-https-caddy.md
-│       └── 016-network-security.md
+│       ├── 016-network-security.md
+│       ├── 017-alerting.md
+│       ├── 018-storage-retention.md
+│       └── 019-microservices-evolution.md
 │
 ├── scripts/                          # скрипты (бэкапы, вспомогательное)
 │   ├── backup-db.sh                  # дамп БД + выгрузка в S3
@@ -661,9 +665,11 @@ orange-team-microservices/
 - **PostgreSQL:** `postgres-auth` (порт 5432) → `auth_db`; `postgres-profiles` (порт 5433) → `profiles_db`; `postgres-exercises` (порт 5434) → `exercises_db`
 - **Redis:** `redis-auth` (порт 6379) — refresh-токены; `redis-gateway` (порт 6380) — rate limiting
 - **Миграции:** `migrate-auth` → для `auth_db`; `migrate-profiles` → для `profiles_db`; `migrate-exercises` → для `exercises_db`
-- **Мониторинг:** Prometheus (9090), Grafana (3000)
-- **Логи:** Loki (3100), Promtail (9080)
+- **Мониторинг:** Prometheus (9090), Grafana (3000), Alertmanager (9093) — см. [ADR-017](docs/adr/017-alerting.md)
+- **Метрики хоста:** node-exporter (9100) — CPU, RAM, диск
+- **Логи:** Loki (3100), Promtail (9080), retention 30 дней — см. [ADR-018](docs/adr/018-storage-retention.md)
 - **HTTPS:** Caddy (80, 443) — TLS-терминация для Gateway, см. [ADR-015](docs/adr/015-https-caddy.md)
+- **Alerting:** Alertmanager → Telegram через Cloudflare WARP (обход блокировки РФ) — см. [ADR-017](docs/adr/017-alerting.md)
 - **Сетевая безопасность:** внутренние порты привязаны к `127.0.0.1`, ufw (только 22/80/443), fail2ban на SSH — см. [ADR-016](docs/adr/016-network-security.md)
 
 ### План (после реализации остальных сервисов)
@@ -1503,9 +1509,10 @@ nmap -Pn -p 22,80,443,3000,3100,50051,50052,50053,5432,5433,5434,6379,6380,8080,
 
 ### Требования к серверу
 
-Стек состоит из 16+ контейнеров (4 сервиса, 3×PostgreSQL, 2×Redis,
-Prometheus, Grafana, Loki, Promtail, Caddy). Для комфортной работы нужен
-сервер со следующими характеристиками:
+Стек состоит из 19+ контейнеров (4 сервиса, 3×PostgreSQL, 2×Redis,
+Prometheus, Alertmanager, node-exporter, Grafana, Loki, Promtail, Caddy,
+Cloudflare WARP). Для комфортной работы нужен сервер со следующими
+характеристиками:
 
 | Параметр | Минимум | Комфортно |
 |----------|---------|-----------|
@@ -1521,7 +1528,7 @@ Prometheus, Grafana, Loki, Promtail, Caddy). Для комфортной раб�
 > часть стека.
 
 **Требуется:** Ubuntu 22.04+ (или другой Linux с ядром 5.x+), Docker 24+,
-Docker Compose v2.20+, SSH-доступ для деплоя.
+Docker Compose v2.24+, SSH-доступ для деплоя.
 
 **Проверено на:** Selectel VDS (8 ГБ / 4 vCPU).
 Подходит любой VPS с указанными характеристиками.
@@ -1559,8 +1566,11 @@ Docker Compose v2.20+, SSH-доступ для деплоя.
 4. По SSH выполняется деплой на продакшен-сервер (только если `any_changed == 'true'`):
    - Обновление кода (`git pull origin main`).
    - Логин в GHCR.
-   - `docker compose pull auth gateway profiles exercises caddy` — скачивание свежих образов.
-   - `docker compose up -d --no-build auth gateway profiles exercises caddy` — перезапуск.
+   - Создание `secrets/bot_token` и `secrets/chat_id` из расшифрованного `.env` для Alertmanager.
+   - `docker compose pull` — скачивание свежих образов (с `COMPOSE_FILE=infra/docker-compose.yml`).
+   - `docker compose up -d --no-build --force-recreate` — перезапуск всего стека.
+5. Запускается `smoke-test` — три проверки против прода.
+6. Запускается `notify` — уведомление в Telegram (успех / провал / «нечего деплоить»).
 
 Используется **Docker layer caching** (`type=gha`) — повторные сборки быстрее в 2-3 раза. Подробнее — [ADR-012](docs/adr/012-ci-cd-optimization.md).
 
@@ -1591,36 +1601,26 @@ Docker Compose v2.20+, SSH-доступ для деплоя.
 
 После успешного CD проверь на сервере:
 
-**Health:**
+**Health (через домен):**
 
 ```bash
-curl http://<SERVER_HOST>:8081/health   # Gateway
-curl http://<SERVER_HOST>:8080/health   # Auth
-curl http://<SERVER_HOST>:8082/health   # Profiles
-curl http://<SERVER_HOST>:8083/health   # Exercises
+curl https://sololevelingms.duckdns.org/health   # Gateway
 ```
 
-Все четыре должны вернуть `{"status":"ok","service":"..."}`.
+Ожидаемо: `{"status":"ok","service":"gateway"}`.
 
-**Ready:**
+**Health остальных сервисов и Prometheus UI** — внутренние порты привязаны к `127.0.0.1`, снаружи закрыты. Доступ через SSH-туннель:
 
 ```bash
-curl http://<SERVER_HOST>:8081/ready    # Gateway → проверка Redis + Auth/Profiles/Exercises
-curl http://<SERVER_HOST>:8080/ready    # Auth → проверка Postgres + Redis
-curl http://<SERVER_HOST>:8082/ready    # Profiles → проверка Postgres
-curl http://<SERVER_HOST>:8083/ready    # Exercises → проверка Postgres
+ssh -L 9090:localhost:9090 -L 8080:localhost:8080 -L 8082:localhost:8082 -L 8083:localhost:8083 root@<SERVER_HOST>
 ```
 
-Должны вернуть `{"status":"ok","checks":{...}}`.
+Потом в отдельных терминалах или браузере:
 
-**Prometheus targets:**
-
-Открой `http://<SERVER_HOST>:9090` → **Status → Targets**. Все четыре job'а должны быть в статусе **UP**:
-
-- `auth` — target `auth:8080`
-- `gateway` — target `gateway:8081`
-- `profiles` — target `profiles:8080`
-- `exercises` — target `exercises:8080`
+- `http://localhost:8080/health` — Auth
+- `http://localhost:8082/health` — Profiles
+- `http://localhost:8083/health` — Exercises
+- `http://localhost:9090` — Prometheus UI (Status → Targets: `auth`, `gateway`, `profiles`, `exercises`, `node` — все `UP`)
 
 ### Обновление `.env` на сервере (SOPS + age)
 
