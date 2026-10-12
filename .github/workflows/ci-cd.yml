@@ -223,7 +223,7 @@ jobs:
 
             # COMPOSE_FILE / COMPOSE_ENV_FILES не передаются с раннера
             # через SSH — выставляем их явно в shell на сервере.
-            export COMPOSE_FILE=infra/docker-compose.yml
+            export COMPOSE_FILE=infra/compose.app.yml:infra/compose.infra.yml
             export COMPOSE_ENV_FILES=.env
 
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
