@@ -35,7 +35,7 @@ func TestDeleteMyProfile_Execute(t *testing.T) {
 		assert.ErrorIs(t, err, domain.ErrProfileNotFound)
 	})
 
-	t.Run("профиль не найден — ErrProfileNotFound", func(t *testing.T) {
+	t.Run("профиль не найден — не ошибка (идемпотентность)", func(t *testing.T) {
 		// Arrange
 		userID := uuid.New()
 		ctx := ctxkeys.WithUserID(context.Background(), userID.String())
@@ -45,9 +45,25 @@ func TestDeleteMyProfile_Execute(t *testing.T) {
 		// Act
 		err := uc.Execute(ctx)
 
-		// Assert
-		require.Error(t, err)
-		assert.ErrorIs(t, err, domain.ErrProfileNotFound)
+		// Assert — повторный DELETE не должен возвращать 404 (ADR-007 F-3)
+		require.NoError(t, err)
+	})
+
+	t.Run("идемпотентность: повторный DELETE не ошибка", func(t *testing.T) {
+		// Arrange
+		userID := uuid.New()
+		ctx := ctxkeys.WithUserID(context.Background(), userID.String())
+		profile := domain.NewEmptyProfile(userID)
+		repo := newMockRepository()
+		_ = repo.EnsureExists(ctx, profile)
+		uc := NewDeleteMyProfile(repo, logger.NewTestLogger())
+
+		// Act — два раза подряд
+		require.NoError(t, uc.Execute(ctx))
+		err := uc.Execute(ctx)
+
+		// Assert — второй тоже nil
+		assert.NoError(t, err, "повторный DELETE должен быть идемпотентен")
 	})
 
 	t.Run("нет user_id в context — ErrUnauthenticated", func(t *testing.T) {

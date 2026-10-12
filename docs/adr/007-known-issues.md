@@ -92,24 +92,27 @@ fixes), но остаётся список того, что нужно зала�
 |---|---|---|
 | `Auth.Logout` | идемпотентен | `services/auth/internal/application/usecases/logout.go` |
 | `Exercises.DeleteExercise` | **идемпотентен** | `services/exercises/internal/application/usecases/delete_exercise.go` |
-| `Profiles.DeleteMyProfile` | не идемпотентен → NotFound | `services/profiles/internal/application/usecases/delete_my_profile.go` |
+| `Profiles.DeleteMyProfile` | **идемпотентен** | `services/profiles/internal/application/usecases/delete_my_profile.go` |
 
 **Решение.** DELETE-подобные операции проектируем **идемпотентными**:
 повторный вызов возвращает успех, не NotFound. Это защищает от
 retry-проблем: прокси, load balancer или клиент может безопасно
 повторить запрос после network timeout, не получив ложный 404.
 
-- `Logout` — идемпотентен изначально, оставляем.
+- `Logout` — идемпотентен изначально.
 - `DeleteExercise` — идемпотентен: soft delete, повторный `MarkDeleted`
   даёт `0 rows affected`, usecase возвращает `nil`.
-- `DeleteMyProfile` — **отстаёт**, привести к идемпотентному стилю
-  при следующем касании Profiles.
+- `DeleteMyProfile` — **приведён к идемпотентному стилю** (2026-10-13):
+  при `ErrProfileNotFound` от репозитория usecase возвращает `nil`,
+  а не ошибку. Маппинг на `codes.NotFound` в gRPC-сервере оставлен
+  для совместимости (сработает, если usecase вернётся к прежней
+  семантике), но больше не активируется.
 
-**Приоритет:** низкий для `DeleteMyProfile` (рефакторинг Profiles),
-не блокер.
+**Приоритет:** низкий.
+**Статус:** ✅ Закрыто (2026-10-13).
 
-**Связанные контракты:** `DELETE /exercises/{id}` в Gateway после
-реализации должен возвращать `204` и на первый, и на повторный вызов.
+**Связанные контракты:** `DELETE /users/me` и `DELETE /exercises/{id}`
+в Gateway возвращают `204` и на первый, и на повторный вызов.
 
 ### Конфигурация
 
@@ -309,7 +312,7 @@ Gateway режет на 50, домен — на 100. Запрос с `full_name`
 2. **Средний:** — (закрыто).
 3. **Низкий:**
    - **F-2** — открыт (Profiles, Exercises).
-   - **F-3** — частично закрыт: Exercises идемпотентен ✅, Profiles — открыт.
+   - **F-3** — ✅ закрыт (2026-10-13).
    - **S-1** — ✅ закрыт (2026-10-13).
    - **S-3** — ✅ закрыт (2026-10-13).
    - **S-4** — ✅ закрыт (2026-10-13).
