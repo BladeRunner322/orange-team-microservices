@@ -23,6 +23,6 @@ func (uc *Validate) Execute(ctx context.Context, token string) (ports.UserInfo, 
 		log.Warn("invalid token", "error", err)
 		return ports.UserInfo{}, err
 	}
-	log.Info("token validated successfully", "user_id", info.UserID)
+
 	return info, nil
 }

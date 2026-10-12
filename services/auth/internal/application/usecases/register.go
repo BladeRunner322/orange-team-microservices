@@ -67,6 +67,5 @@ func (uc *Register) Execute(ctx context.Context, emailStr, password, fullNameStr
 		return domain.User{}, err
 	}
 
-	log.Info("user registered successfully", "user_id", user.ID().String())
 	return user, nil
 }

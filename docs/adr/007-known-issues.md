@@ -209,16 +209,16 @@ lazy-create, а не про «сохранить всё».
 
 **S-4. `log.Info` в usecase дублируется с `LoggingInterceptor`.**
 
-Все usecase (Auth, Profiles, Exercises) логируют `Info` в конце операции: `"user registered successfully"`, `"profile patched"`, `"exercise fetched"`. При этом `LoggingInterceptor` уже логирует каждый gRPC-вызов с method, status и duration. Получается две записи на один успешный запрос.
+Все usecase (Auth, Profiles, Exercises) логировали `Info` в конце операции: `"user registered successfully"`, `"profile patched"`, `"exercise fetched"`. При этом `LoggingInterceptor` уже логирует каждый gRPC-вызов с method, status и duration. Получалось две записи на один успешный запрос.
 
 Для мутаций (`CreateExercise`, `PatchExercise`, `DeleteExercise`, `Register`) `Info` иногда рассматривают как бизнес-аудит: «кто что сделал». Но в Exercises аудит неполный — сервис не знает `user_id` (его использует только Gateway), поэтому запись «упражнение X удалено» без «кем» ценности не несёт. Полные данные всегда можно получить из БД.
 
-**Решение (принято в PR по Exercises):**
-- **Exercises — вариант B.** `log.Info` в usecase убран полностью. Логирование успешных операций — только на уровне `LoggingInterceptor`. `log.Warn` и `log.Error` в usecase остаются: они несут информацию, которой у интерсептора нет (`invalid name` vs `invalid difficulty` vs `db is down`).
-- **Auth, Profiles — пока вариант A** (Info везде). Устаревший стиль, привести к B при следующем касании соответствующего usecase. Отдельным PR.
+**Решение (принято в PR по Exercises, финализировано для Auth/Profiles):**
+- **Все usecase — вариант B.** `log.Info` в usecase убран полностью. Логирование успешных операций — только на уровне `LoggingInterceptor`. `log.Warn` и `log.Error` в usecase остаются: они несут информацию, которой у интерсептора нет (`invalid name` vs `invalid difficulty` vs `db is down`).
 - **Правило для новых сервисов (Habits, Workouts, Leaderboard):** вариант B. `Info` в usecase не пишем с самого начала.
 
-**Приоритет:** низкий для Auth/Profiles (рефакторинг), не блокер.
+**Приоритет:** низкий (рефакторинг), не блокер.
+**Статус:** ✅ Закрыто (2026-10-13).
 
 **S-5. `pkg/postgres` не различает constraint при unique violation.**
 
@@ -304,7 +304,7 @@ Gateway режет на 50, домен — на 100. Запрос с `full_name`
    - **F-3** — частично закрыт: Exercises идемпотентен ✅, Profiles — открыт.
    - **S-1** — ✅ закрыт (2026-10-13).
    - **S-3** — открыт.
-   - **S-4** — частично закрыт: Exercises следует варианту B ✅, Auth и Profiles — открыты.
+   - **S-4** — ✅ закрыт (2026-10-13).
    - **S-5** — открыт.
    - **S-6** — ✅ закрыт (2026-10-10).
 4. **Документирование:** ✅ B-3 закрыто (2026-10-08, см. ADR-016).

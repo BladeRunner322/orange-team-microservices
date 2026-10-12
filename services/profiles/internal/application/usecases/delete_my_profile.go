@@ -40,7 +40,5 @@ func (uc *DeleteMyProfile) Execute(ctx context.Context) error {
 		return fmt.Errorf("delete profile: %w", err)
 	}
 
-	log.Info("profile deleted", "user_id", userID)
-
 	return nil
 }

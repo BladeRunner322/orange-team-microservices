@@ -27,7 +27,6 @@ func getOrCreateProfile(
 			return domain.Profile{}, fmt.Errorf("get profile: %w", err)
 		}
 
-		log.Info("profile not found, creating empty", "user_id", userID)
 		profile = domain.NewEmptyProfile(userID)
 		if err := repo.EnsureExists(ctx, profile); err != nil {
 			log.Error("failed to ensure profile exists", "error", err, "user_id", userID)
