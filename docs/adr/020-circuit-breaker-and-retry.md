@@ -356,16 +356,33 @@ rate(grpc_client_retry_attempts_total[5m])
 
 ## Статус
 
-**Planned.** Реализуется в PR `feat/circuit-breaker-retry`.
+**Реализовано** (2026-10-13).
 
-Что войдёт в PR:
+Что сделано:
 
-- `pkg/grpc/client` — расширенный `Config`, создание `gobreaker.CircuitBreaker`.
-- `pkg/grpc/interceptors` — `CircuitBreakerInterceptor`, `RetryInterceptor`,
-  `ClientMetricsInterceptor`.
+- `pkg/grpc/client` — расширенный `Config` (CB + Retry поля), `applyDefaults`, валидация (`validateCircuitBreaker`, `validateRetry`).
+- `pkg/grpc/interceptors` — `CircuitBreakerInterceptor`, `RetryInterceptor`, `ClientMetricsInterceptor`.
 - `pkg/metrics/grpc.go` — 6 новых клиентских метрик.
-- `services/gateway/config` — новые env-поля.
+- `pkg/grpc/client/client.go` — новая цепочка `CB → Retry → ClientMetrics → Timeout → UserID → RequestID`. `defaultTimeout` перенесён из `client.go` в `config.go`.
+- `services/gateway/config` — новые env-поля `GATEWAY_CB_*` и `GATEWAY_RETRY_*`.
 - `services/gateway/.env.example` — документация переменных.
-- `pkg/grpc/client/client.go` — новый порядок интерсепторов.
-- Тесты: unit для интерсепторов (mock invoker), integration для CB
-  (реальный gobreaker в тесте), unit для whitelist.
+- `services/gateway/internal/bootstrap` — `buildGRPCConfig(target, cfg)` собирает конфиг для каждого клиента.
+- `services/gateway/internal/infrastructure/clients` — три клиента принимают готовый `grpcclient.Config`.
+
+**Отличия от исходного плана.**
+
+- **Retry не ретраит `DeadlineExceeded`.** Библиотека `grpc_ecosystem/grpc-middleware/retry` не ретраит `DeadlineExceeded` автоматически без `WithPerRetryTimeout`. Оставили только `codes.Unavailable`. См. комментарий в `retry.go`.
+- **`WithMax` — количество попыток, не retry.** Несмотря на название параметра, библиотека принимает общее число попыток (1 initial + N-1 retry). Учтено в `RetryInterceptor`.
+
+**Что осталось (не в этом ADR).**
+
+- Алерты `CircuitBreakerOpen` и `HighRetryRate` — после недели наблюдений, когда накопится статистика порогов.
+- Bulkheads и fallback — отдельные задачи Уровня 2.
+
+**Открытые триггеры пересмотра** (из раздела «Когда пересмотреть»):
+
+- После недели наблюдений — скорректировать дефолты.
+- При появлении каскадных отказов даже с CB — Bulkheads.
+- При росте трафика — `CBMinRequests = 10` может быть мало.
+- При добавлении Workouts — конфиг может стать per-target.
+- При появлении event bus — whitelist пересматривается.
