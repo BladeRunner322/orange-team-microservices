@@ -299,7 +299,7 @@ jobs:
           overwrite: true
 
       - name: Deploy to production server
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.2
         env:
           AUTH_CHANGED:      ${{ needs.changed-services.outputs.auth_changed }}
           GATEWAY_CHANGED:   ${{ needs.changed-services.outputs.gateway_changed }}
