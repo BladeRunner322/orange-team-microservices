@@ -197,14 +197,17 @@ name: orange-team-microservices
 
 ## План внедрения
 
-Разбит на четыре сессии:
+Разбит на четыре подзадачи. Все закрыты в 2026-10-13:
 
-1. **Разделение compose** (пункт 4) — самая изолированная часть, делается первой.
-2. **Semver через `git tag`** (пункт 3).
-3. **CD собирает только изменённое** (пункт 1).
-4. **CD деплоит только изменённое** (пункт 2).
+1. ✅ **Разделение compose** — `infra/compose.app.yml` + `infra/compose.infra.yml`, имя проекта зафиксировано в обоих файлах.
+2. ✅ **Semver через `git tag`** — триггер `on: push: tags: ['v*']`, первый релиз `v0.1.0`.
+3. ✅ **CD собирает только изменённое** — matrix формируется из `changed-services.outputs.matrix`.
+4. ✅ **CD деплоит только изменённое** — `up -d --no-deps <services>`, отдельная ветка для `infra/**`.
 
-Каждая — отдельный коммит в ветке `feat/independent-deploy`. При желании — отдельные PR.
+**Сопутствующие фиксы, обнаруженные в процессе.**
+
+- **COMPOSE_FILE в SSH-скрипте.** При разделении compose обновили только `env:` в шапке workflow, но забыли строку `export COMPOSE_FILE=...` внутри SSH-скрипта deploy job. Первый CD после мёржа упал на `docker compose pull`. Отдельный PR: `fix(ci): use new compose files in ssh deploy script`.
+- **Каскадный пропуск deploy.** После добавления фильтрации matrix, если менялась только инфраструктура (`matrix=[]`), `build-and-push` пропускался, а GitHub Actions каскадно пропускал `deploy` и `smoke-test`. Отдельный PR: `fix(ci): run deploy when build-and-push is skipped` — добавили `!failure() && !cancelled()` в `if` у `deploy` и `smoke-test`.
 
 ## Связанные решения
 
@@ -215,4 +218,24 @@ name: orange-team-microservices
 
 ## Статус
 
-**Planned.** Реализуется в ветке `feat/independent-deploy`. Разбит на четыре сессии. Каждая подзадача коммитится отдельно.
+**Реализовано** (2026-10-13).
+
+Что сделано:
+
+- **Разделение compose.** `infra/compose.app.yml` (12 сервисов) и `infra/compose.infra.yml` (8 сервисов). Оба с `name: orange-team-microservices`. `COMPOSE_FILE=infra/compose.app.yml:infra/compose.infra.yml` в Taskfile и CI. Отдельные таргеты `app-up` / `infra-up` в Taskfile.
+- **Semver.** Триггер `on: push: tags: ['v*']`. Образы получают три тега: `:latest`, `:<sha>`, `:vX.Y.Z`. Первый релиз — `v0.1.0`.
+- **CD собирает только изменённое.** `changed-services` outputs: `auth_changed`, `gateway_changed`, `profiles_changed`, `exercises_changed`, `infra_changed`, `matrix` (JSON-массив сервисов). При изменении `pkg/**` — все 4 сервиса. При tag push — все 4.
+- **CD деплоит только изменённое.** Deploy job пересоздаёт только изменённые сервисы через `up -d --no-build --no-deps`. Для изменённых сервисов прогоняются миграции. Если менялась инфра — `--force-recreate` всех 8 инфра-контейнеров.
+
+**Проверено на проде.**
+
+- Обычный push в main с изменением одного сервиса → собирается 1 образ, деплоится 1 контейнер.
+- Push с изменениями только в `infra/**` → matrix пустая, сборка пропускается, деплой пересоздаёт инфру.
+- Tag `v0.1.0` → 4 образа с тремя тегами.
+
+**Что осталось (не в этом ADR).**
+
+- Автоматический rollback — Level 2 из ADR-012, триггер — дежурный / SLA.
+- Blue-green / canary — при появлении SLA.
+- Статический анализ импортов `pkg/**` — если начнёт меняться часто.
+- Переход на Ed25519 для `SERVER_SSH_KEY` — после апгрейда `appleboy/ssh-action` до v1.2.2 это стало возможным. Отдельная задача.
