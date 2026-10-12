@@ -1,0 +1,30 @@
+# Grafana datasources provisioning.
+#
+# Файл монтируется в контейнер Grafana через docker-compose
+# (см. infra/docker-compose.yml → grafana.volumes).
+#
+# Grafana при старте читает этот файл и автоматически создаёт
+# или обновляет datasources. Ручная настройка через UI не требуется
+# и перезаписывается при каждом рестарте контейнера.
+#
+# URL datasources — docker DNS-имена сервисов из infra/docker-compose.yml.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      # Совпадает со scrape_interval в infra/prometheus.yml.
+      # Используется в Grafana для выравнивания шага авто-выбора интервала.
+      timeInterval: 15s
+
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
