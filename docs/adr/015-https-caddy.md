@@ -125,8 +125,10 @@ Caddy продлевает сертификат **автоматически**, 
 
 **Реализовано** (2026-10-07).
 
-- Caddy в `infra/docker-compose.yml` (стандартный образ `caddy:2-alpine`), порты 80/443.
+- Caddy в `infra/compose.infra.yml` (стандартный образ `caddy:2-alpine`), порты 80/443.
 - Конфиг — `infra/Caddyfile`.
 - Домен `sololevelingms.duckdns.org` резолвится на `136.234.4.93`, сертификат Let's Encrypt получен.
 - CD перезапускает Caddy вместе с остальными сервисами.
 - Проверено через `curl`: `https://sololevelingms.duckdns.org/health` → `200 OK`, сертификат валиден.
+
+**Обновлено в ADR-021** (2026-10-13). Compose разделён: Caddy переехал в `infra/compose.infra.yml`. Логика не менялась.

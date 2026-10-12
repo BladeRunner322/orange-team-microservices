@@ -26,7 +26,7 @@
 
 ### Текущее состояние (4 сервиса)
 
-Контейнеры: 4 сервиса + 3 PostgreSQL + 2 Redis + Prometheus + Grafana + Loki + Promtail + Docker daemon + OS ≈ **15 контейнеров**.
+Контейнеры: 4 сервиса + 3 PostgreSQL + 2 Redis + Prometheus + Grafana + Loki + Promtail + Caddy + Alertmanager + node-exporter + WARP + Docker daemon + OS ≈ **20 контейнеров**.
 
 | Параметр | Минимум | Комфортно |
 |---|---|---|
@@ -38,7 +38,7 @@
 
 ### Полная архитектура (7 сервисов)
 
-Контейнеры: 7 сервисов + 7 PostgreSQL + 2 Redis + Prometheus + Grafana + Loki + Promtail + Docker daemon + OS ≈ **25 контейнеров**.
+Контейнеры: 7 сервисов + 7 PostgreSQL + 2 Redis + Prometheus + Grafana + Loki + Promtail + Caddy + Alertmanager + node-exporter + WARP + Docker daemon + OS ≈ **30 контейнеров**.
 
 | Параметр | Минимум | Комфортно | С запасом на прод |
 |---|---|---|---|
@@ -87,7 +87,7 @@ Database per Service (ADR-004) требует отдельный Postgres для
 
 ### Версии monitoring-образов не закреплены
 
-В `infra/docker-compose.yml` четыре сервиса мониторинга используют тег `:latest`:
+В `infra/compose.infra.yml` четыре сервиса мониторинга используют тег `:latest`:
 
 ```yaml
 prometheus:
