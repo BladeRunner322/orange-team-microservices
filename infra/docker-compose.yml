@@ -375,6 +375,9 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
     volumes:
       - grafana-storage:/var/lib/grafana
+      # Provisioning datasources (Prometheus, Loki) — читается при старте.
+      # См. infra/grafana/provisioning/datasources/datasources.yml.
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
     restart: unless-stopped
 
   # ============================================================

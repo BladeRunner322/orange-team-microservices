@@ -1755,7 +1755,7 @@ Grafana доступна по адресу: `http://localhost:3000`
 - Логин: `admin`
 - Пароль: `admin` (измените при первом входе)
 
-Источники данных (Prometheus и Loki) подключаются автоматически через provisioning.
+Источники данных (Prometheus и Loki) подключаются автоматически через provisioning — конфиг в `infra/grafana/provisioning/datasources/datasources.yml`, монтируется в контейнер через `infra/docker-compose.yml`.
 
 Дашборд нужно создать вручную: **+ → Create dashboard** → добавить панели с запросами к Prometheus (метрики) и Loki (логи). Пример запросов:
 
