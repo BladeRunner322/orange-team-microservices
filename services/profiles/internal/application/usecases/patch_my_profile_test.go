@@ -22,7 +22,7 @@ func TestPatchMyProfile_Execute(t *testing.T) {
 		ctx := ctxkeys.WithUserID(context.Background(), userID.String())
 		profile := domain.NewEmptyProfile(userID)
 		repo := newMockRepository()
-		_ = repo.Upsert(ctx, profile)
+		_ = repo.EnsureExists(ctx, profile)
 
 		weight, err := domain.NewWeightFromKilograms(80.5)
 		require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestPatchMyProfile_Execute(t *testing.T) {
 		require.NotNil(t, profile.Weight())
 
 		repo := newMockRepository()
-		_ = repo.Upsert(ctx, profile)
+		_ = repo.EnsureExists(ctx, profile)
 
 		// патч: убрать вес
 		patch := domain.NewProfilePatch(

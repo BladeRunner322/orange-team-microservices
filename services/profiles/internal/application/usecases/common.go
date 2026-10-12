@@ -29,9 +29,9 @@ func getOrCreateProfile(
 
 		log.Info("profile not found, creating empty", "user_id", userID)
 		profile = domain.NewEmptyProfile(userID)
-		if err := repo.Upsert(ctx, profile); err != nil {
-			log.Error("failed to upsert empty profile", "error", err, "user_id", userID)
-			return domain.Profile{}, fmt.Errorf("upsert empty profile: %w", err)
+		if err := repo.EnsureExists(ctx, profile); err != nil {
+			log.Error("failed to ensure profile exists", "error", err, "user_id", userID)
+			return domain.Profile{}, fmt.Errorf("ensure profile exists: %w", err)
 		}
 		return profile, nil
 	}

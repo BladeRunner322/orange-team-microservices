@@ -185,10 +185,13 @@ Docker на GitHub Actions доступен, Testcontainers работает.
 
 **S-1. `Upsert` в Profiles пишет только user_id + created_at.**
 `services/profiles/internal/infrastructure/postgres_repo/repository.go`.
-Остальные поля игнорируются. Имя вводит в заблуждение — оно про
+Остальные поля игнорируются. Имя вводило в заблуждение — оно про
 lazy-create, а не про «сохранить всё».
-**Что делать:** переименовать в `EnsureExists` или сделать полноценный upsert.
+
+**Что сделано:** метод переименован в `EnsureExists` (интерфейс, реализация, mock, integration test). Сигнатура и поведение не изменились.
+
 **Приоритет:** низкий.
+**Статус:** ✅ Закрыто (2026-10-13).
 
 **S-2. `test_logger.NewTestLogger` без `file`.**
 `pkg/logger/test_logger.go` создаёт `&Logger{Logger: ...}` без `file`.
@@ -299,7 +302,8 @@ Gateway режет на 50, домен — на 100. Запрос с `full_name`
 3. **Низкий:**
    - **F-2** — открыт (Profiles, Exercises).
    - **F-3** — частично закрыт: Exercises идемпотентен ✅, Profiles — открыт.
-   - **S-1, S-3** — открыты.
+   - **S-1** — ✅ закрыт (2026-10-13).
+   - **S-3** — открыт.
    - **S-4** — частично закрыт: Exercises следует варианту B ✅, Auth и Profiles — открыты.
    - **S-5** — открыт.
    - **S-6** — ✅ закрыт (2026-10-10).
