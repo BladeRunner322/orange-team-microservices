@@ -202,10 +202,14 @@ lazy-create, а не про «сохранить всё».
 
 **S-3. Две обёртки `ResponseWriter` в Gateway middleware.**
 `logger.go` (`responseWriterWrapper`) и `metrics.go`
-(`metricsResponseWriter`) вложены друг в друга. Работает, но хрупко —
+(`metricsResponseWriter`) были вложены друг в друга. Работало, но хрупко —
 при добавлении третьей легко рассинхронить статус.
-**Что делать:** одна общая обёртка в `httputil`.
+
+**Что сделано:** одна общая обёртка `StatusRecorder` в `httputil`.
+Обе middleware (`logger`, `metrics`) используют её.
+
 **Приоритет:** низкий.
+**Статус:** ✅ Закрыто (2026-10-13).
 
 **S-4. `log.Info` в usecase дублируется с `LoggingInterceptor`.**
 

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
+	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/httputil"
 )
 
 // LoggerMiddleware логирует каждый запрос с контекстными полями.
@@ -23,8 +24,8 @@ func LoggerMiddleware(log *logger.Logger) func(http.Handler) http.Handler {
 
 			entry.Info("request started")
 
-			// Обёртка для записи статуса
-			rw := &responseWriterWrapper{ResponseWriter: w, statusCode: http.StatusOK}
+			// Обёртка для записи статуса.
+			rw := httputil.NewStatusRecorder(w)
 			next.ServeHTTP(rw, r)
 
 			// После обработки проверяем, есть ли user_id
@@ -33,19 +34,9 @@ func LoggerMiddleware(log *logger.Logger) func(http.Handler) http.Handler {
 			}
 
 			entry.With(
-				"status", rw.statusCode,
+				"status", rw.Status(),
 				"duration_ms", time.Since(start).Milliseconds(),
 			).Info("request finished")
 		})
 	}
-}
-
-type responseWriterWrapper struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rw *responseWriterWrapper) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/BladeRunner322/orange-team-microservices/pkg/metrics"
+	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/httputil"
 )
 
 // HTTPMetricsMiddleware собирает HTTP-метрики Prometheus:
@@ -23,7 +24,7 @@ func HTTPMetricsMiddleware(next http.Handler) http.Handler {
 
 		start := time.Now()
 
-		rw := &metricsResponseWriter{ResponseWriter: w, status: http.StatusOK}
+		rw := httputil.NewStatusRecorder(w)
 		next.ServeHTTP(rw, r)
 
 		// RoutePattern доступен только после выполнения handler'а.
@@ -31,7 +32,7 @@ func HTTPMetricsMiddleware(next http.Handler) http.Handler {
 		duration := time.Since(start).Seconds()
 
 		metrics.HTTPRequestsTotal.
-			WithLabelValues(r.Method, path, strconv.Itoa(rw.status)).
+			WithLabelValues(r.Method, path, strconv.Itoa(rw.Status())).
 			Inc()
 		metrics.HTTPRequestDuration.
 			WithLabelValues(r.Method, path).
@@ -49,15 +50,4 @@ func normalizedPath(r *http.Request) string {
 		}
 	}
 	return r.URL.Path
-}
-
-// metricsResponseWriter перехватывает статус-код ответа.
-type metricsResponseWriter struct {
-	http.ResponseWriter
-	status int
-}
-
-func (rw *metricsResponseWriter) WriteHeader(code int) {
-	rw.status = code
-	rw.ResponseWriter.WriteHeader(code)
 }
