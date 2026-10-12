@@ -202,7 +202,7 @@ docker compose up -d --no-build --force-recreate alertmanager prometheus promtai
 **Про `COMPOSE_FILE` и SSH-деплой.** Переменные окружения GitHub Actions не пробрасываются на сервер через `appleboy/ssh-action` — SSH-скрипт выполняется в новой shell-сессии. `COMPOSE_FILE: infra/docker-compose.yml` в глобальном `env:` работает только для команд, запускаемых **на раннере**. В deploy job (SSH на сервер) их надо выставлять явно:
 
 ```
-export COMPOSE_FILE=infra/docker-compose.yml
+export COMPOSE_FILE=infra/compose.app.yml:infra/compose.infra.yml
 export COMPOSE_ENV_FILES=.env
 ```
 

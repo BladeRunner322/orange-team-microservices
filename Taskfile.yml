@@ -1,7 +1,7 @@
 version: '3'
 dotenv: ['.env']
 env:
-  COMPOSE_FILE: infra/docker-compose.yml
+  COMPOSE_FILE: infra/compose.app.yml:infra/compose.infra.yml
   COMPOSE_ENV_FILES: .env
 
 tasks:
@@ -569,3 +569,33 @@ tasks:
         printf '%s' "$TELEGRAM_CHAT_ID"   > secrets/chat_id
         chmod 644 secrets/bot_token secrets/chat_id
       - 'echo "✅ secrets/bot_token and secrets/chat_id generated"'
+
+  # ============================================================
+  #  COMPOSE FILE НАПРАВЛЕНИЯ (ADR-021)
+  # ============================================================
+  #
+  # app — 4 сервиса + БД + Redis + migrate.
+  # infra — Caddy + мониторинг + логи + WARP.
+  #
+  # docker-up / docker-down работают с обоими сразу (COMPOSE_FILE).
+  # Отдельные таргеты — для случаев, когда нужно тронуть только одно.
+
+  app-up:
+    desc: Start only application services (no infra)
+    cmds:
+      - docker compose -f infra/compose.app.yml --env-file .env up -d --build
+
+  app-down:
+    desc: Stop only application services
+    cmds:
+      - docker compose -f infra/compose.app.yml --env-file .env down
+
+  infra-up:
+    desc: Start only infrastructure services (no app)
+    cmds:
+      - docker compose -f infra/compose.infra.yml --env-file .env up -d
+
+  infra-down:
+    desc: Stop only infrastructure services
+    cmds:
+      - docker compose -f infra/compose.infra.yml --env-file .env down

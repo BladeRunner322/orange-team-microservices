@@ -443,7 +443,8 @@ orange-team-microservices/
 ├── logs/                             # файлы логов (в .gitignore)
 │
 ├── infra/                            # инфраструктура (docker, monitoring, networking)
-│   ├── docker-compose.yml            # все контейнеры
+│   ├── compose.app.yml               # сервисы приложения (4 + БД + Redis + migrate)
+│   ├── compose.infra.yml             # инфраструктура (Caddy, мониторинг, логи)
 │   ├── Caddyfile                     # конфиг Caddy (HTTPS-терминация)
 │   ├── prometheus.yml                # конфигурация Prometheus
 │   ├── alerts.yml                    # правила алертов (Prometheus)
@@ -726,12 +727,12 @@ orange-team-microservices/
 | Сервис | Назначение | Протокол | Внутри контейнера (Docker) | Хост (Docker) | Локальная разработка | Примечание |
 |--------|------------|----------|----------------------------|---------------|----------------------|------------|
 | **Auth** | gRPC | gRPC | `50051` | `50051` | `50061` | Смещение +10 |
-| **Auth** | Health / Metrics | HTTP | `8080` | `8080` | `8090` | Смещение +10, переопределяется в `infra/docker-compose.yml` |
+| **Auth** | Health / Metrics | HTTP | `8080` | `8080` | `8090` | Смещение +10, переопределяется в `infra/compose.app.yml` |
 | **Gateway** | HTTP API | HTTP | `8081` | `8081` | `8091` | Смещение +10 |
 | **Profiles** | gRPC | gRPC | `50052` | `50052` | `50062` | Смещение +10 |
-| **Profiles** | Health / Ready / Metrics | HTTP | `8080` | `8082` | `8092` | Смещение +10, переопределяется в `infra/docker-compose.yml`
+| **Profiles** | Health / Ready / Metrics | HTTP | `8080` | `8082` | `8092` | Смещение +10, переопределяется в `infra/compose.app.yml`
 | **Exercises** | gRPC | gRPC | `50053` | `50053` | `50063` | Смещение +10 |
-| **Exercises** | Health / Ready / Metrics | HTTP | `8080` | `8083` | `8093` | Смещение +10, переопределяется в `infra/docker-compose.yml` |
+| **Exercises** | Health / Ready / Metrics | HTTP | `8080` | `8083` | `8093` | Смещение +10, переопределяется в `infra/compose.app.yml` |
 | **PostgreSQL (Auth)** | База данных | TCP | `5432` | `5432` | — | Используется через Docker, проброс на хост |
 | **PostgreSQL (Profiles)** | База данных | TCP | `5432` | `5433` | — | Используется через Docker, проброс на хост |
 | **PostgreSQL (Exercises)** | База данных | TCP | `5432` | `5434` | — | Используется через Docker, проброс на хост | |
@@ -1425,7 +1426,7 @@ Caddy автоматически выпустит новый сертифика�
 
 **Всё остальное закрыто** — на двух уровнях:
 
-1. **Docker bind.** В `infra/docker-compose.yml` внутренние порты привязаны к `127.0.0.1`:
+1. **Docker bind.** В `infra/compose.app.yml` внутренние порты привязаны к `127.0.0.1`:
    ```
    ports:
      - "127.0.0.1:${AUTH_GRPC_PORT}:50051"
@@ -1568,7 +1569,7 @@ Docker Compose v2.24+, SSH-доступ для деплоя.
    - Обновление кода (`git pull origin main`).
    - Логин в GHCR.
    - Создание `secrets/bot_token` и `secrets/chat_id` из расшифрованного `.env` для Alertmanager.
-   - `docker compose pull` — скачивание свежих образов (с `COMPOSE_FILE=infra/docker-compose.yml`).
+   - `docker compose pull` — скачивание свежих образов (с `COMPOSE_FILE=infra/compose.app.yml:infra/compose.infra.yml`).
    - `docker compose up -d --no-build --force-recreate` — перезапуск всего стека.
 5. Запускается `smoke-test` — три проверки против прода.
 6. Запускается `notify` — уведомление в Telegram (успех / провал / «нечего деплоить»).
@@ -1755,7 +1756,7 @@ Grafana доступна по адресу: `http://localhost:3000`
 - Логин: `admin`
 - Пароль: `admin` (измените при первом входе)
 
-Источники данных (Prometheus и Loki) подключаются автоматически через provisioning — конфиг в `infra/grafana/provisioning/datasources/datasources.yml`, монтируется в контейнер через `infra/docker-compose.yml`.
+Источники данных (Prometheus и Loki) подключаются автоматически через provisioning — конфиг в `infra/grafana/provisioning/datasources/datasources.yml`, монтируется в контейнер через `infra/compose.infra.yml`.
 
 Дашборд нужно создать вручную: **+ → Create dashboard** → добавить панели с запросами к Prometheus (метрики) и Loki (логи). Пример запросов:
 
@@ -2060,7 +2061,7 @@ task test-cover
 
 ## Управление миграциями
 
-> 💡 При запуске `task docker-up` миграции применяются **автоматически** (сервисы `migrate-auth`, `migrate-profiles` и `migrate-exercises` в `infra/docker-compose.yml`). Ручные команды ниже нужны только для случаев, когда миграции запускаются отдельно (например, локальная разработка или откат).
+> 💡 При запуске `task docker-up` миграции применяются **автоматически** (сервисы `migrate-auth`, `migrate-profiles` и `migrate-exercises` в `infra/compose.app.yml`). Ручные команды ниже нужны только для случаев, когда миграции запускаются отдельно (например, локальная разработка или откат).
 
 > ⚠️ Миграции **не создают базу данных** — они только создают таблицы и схему внутри существующей БД. Если база `auth_db` (или `profiles_db`) отсутствует, `task auth:migrate-up` (или `task profiles:migrate-up`) упадёт с ошибкой `database "..." does not exist`.
 

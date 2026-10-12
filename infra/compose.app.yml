@@ -1,3 +1,15 @@
+# Compose для сервисов приложения.
+#
+# Все сервисы проекта: 4 Go-сервиса + 3 PostgreSQL + 2 Redis + 3 migrate.
+#
+# Вместе с infra/compose.infra.yml образуют единый проект
+# orange-team-microservices. Запускаются через COMPOSE_FILE:
+#
+#   COMPOSE_FILE=infra/compose.app.yml:infra/compose.infra.yml
+#
+# ВАЖНО: name проекта — orange-team-microservices. Он же в compose.infra.yml.
+# Если менять — потеряются volumes (см. ADR-021).
+
 name: orange-team-microservices
 
 services:
@@ -280,153 +292,6 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  # ============================================================
-  #  CADDY — HTTPS-терминация + reverse proxy на Gateway
-  # ============================================================
-  caddy:
-    image: caddy:2-alpine
-    container_name: caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    env_file:
-      - ../.env
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      gateway:
-        condition: service_healthy
-
-  # ============================================================
-  #  МОНИТОРИНГ (Prometheus + Grafana)
-  # ============================================================
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: auth-prometheus
-    ports:
-      - "127.0.0.1:${PROMETHEUS_PORT}:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./alerts.yml:/etc/prometheus/alerts.yml:ro
-      - prometheus_data:/prometheus
-    command:
-      # 15 дней хранения метрик. Покрывает типовые сценарии отладки
-      # (инцидент недельной давности), не забивает диск надолго.
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=15d'
-    depends_on:
-      auth:
-        condition: service_healthy
-      gateway:
-        condition: service_healthy
-      profiles:
-        condition: service_healthy
-      exercises:
-        condition: service_healthy
-      alertmanager:
-        condition: service_started
-    restart: unless-stopped
-
-  alertmanager:
-    image: prom/alertmanager:v0.34.1
-    container_name: alertmanager
-    ports:
-      - "127.0.0.1:${ALERTMANAGER_PORT}:9093"
-    volumes:
-      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - ../secrets:/etc/alertmanager/secrets:ro
-      - alertmanager_data:/alertmanager
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
-    depends_on:
-      - warp
-    restart: unless-stopped
-
-  node-exporter:
-    image: prom/node-exporter:v1.8.2
-    container_name: node-exporter
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:${NODE_EXPORTER_PORT}:9100"
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-      - ../backup-metrics:/var/lib/node_exporter/textfile:ro
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.sysfs=/host/sys'
-      - '--path.rootfs=/rootfs'
-      - '--collector.textfile.directory=/var/lib/node_exporter/textfile'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-    pid: host
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: auth-grafana
-    ports:
-      - "127.0.0.1:${GRAFANA_PORT}:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
-    volumes:
-      - grafana-storage:/var/lib/grafana
-      # Provisioning datasources (Prometheus, Loki) — читается при старте.
-      # См. infra/grafana/provisioning/datasources/datasources.yml.
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-    restart: unless-stopped
-
-  # ============================================================
-  #  ЛОГИ (Loki + Promtail)
-  # ============================================================
-  loki:
-    image: grafana/loki:latest
-    container_name: auth-loki
-    ports:
-      - "127.0.0.1:${LOKI_PORT}:3100"
-    volumes:
-      - ./loki-config.yml:/etc/loki/loki-config.yml:ro
-      - loki_data:/loki
-    command:
-      - '-config.file=/etc/loki/loki-config.yml'
-    restart: unless-stopped
-
-  promtail:
-    image: grafana/promtail:latest
-    container_name: auth-promtail
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - ./promtail-config.yml:/etc/promtail/config.yml:ro
-    command: -config.file=/etc/promtail/config.yml
-    depends_on:
-      - loki
-    restart: unless-stopped
-
-  # Cloudflare WARP — SOCKS5-прокси для обхода блокировок
-  warp:
-    image: caomingjun/warp:latest
-    container_name: warp
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:1080:1080"
-    environment:
-      - WARP_SLEEP=2
-    cap_add:
-      - NET_ADMIN
-      - SYS_MODULE
-    sysctls:
-      - net.ipv4.conf.all.src_valid_mark=1
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    dns:
-      - 1.1.1.1
-      - 1.0.0.1
-
 volumes:
   # PostgreSQL
   pgdata-auth:
@@ -436,17 +301,3 @@ volumes:
   # Redis
   redisdata-auth:
   redisdata-gateway:
-
-  # Grafana
-  grafana-storage:
-
-  # Caddy
-  caddy_data:
-  caddy_config:
-
-  # Alertmanager
-  alertmanager_data:
-
-  # Storage
-  prometheus_data:
-  loki_data:

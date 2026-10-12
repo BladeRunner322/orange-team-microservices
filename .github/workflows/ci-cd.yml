@@ -15,7 +15,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  COMPOSE_FILE: infra/docker-compose.yml
+  COMPOSE_FILE: infra/compose.app.yml:infra/compose.infra.yml
   COMPOSE_ENV_FILES: .env
 
 jobs:
