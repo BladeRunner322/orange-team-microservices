@@ -76,28 +76,132 @@ jobs:
     needs: ci
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     outputs:
-      # При push тега — всегда true (это релиз, собираем всё).
-      # При push в main — результат changed-files.
-      any_changed: ${{ startsWith(github.ref, 'refs/tags/v') && 'true' || steps.changed.outputs.any_changed }}
+      # any_changed — true, если нужно что-то деплоить (сервис, инфра или релиз).
+      any_changed: ${{ steps.compute.outputs.any_changed }}
+      # per-service флаги — что пересобирать и пересоздавать.
+      auth_changed: ${{ steps.compute.outputs.auth_changed }}
+      gateway_changed: ${{ steps.compute.outputs.gateway_changed }}
+      profiles_changed: ${{ steps.compute.outputs.profiles_changed }}
+      exercises_changed: ${{ steps.compute.outputs.exercises_changed }}
+      infra_changed: ${{ steps.compute.outputs.infra_changed }}
+      # matrix — JSON-массив сервисов, которые надо собрать. Пустой [] — нечего собирать.
+      matrix: ${{ steps.compute.outputs.matrix }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get changed services
+      - name: Get changed files (grouped)
+        # При push тега шаг пропускается — релиз собирает всё, diff не важен.
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         id: changed
         uses: tj-actions/changed-files@v44
         with:
-          files: |
-            api/**
-            internal/gen/**
-            services/**
-            scripts/**
-            pkg/**
-            infra/**
-            .github/workflows/ci-cd.yml
-            Taskfile.yml
-            go.mod
-            go.sum
+          files_yaml: |
+            auth:
+              - services/auth/**
+              - api/auth/**
+              - internal/gen/api/auth/**
+            gateway:
+              - services/gateway/**
+              - api/**
+              - internal/gen/api/**
+            profiles:
+              - services/profiles/**
+              - api/profiles/**
+              - internal/gen/api/profiles/**
+            exercises:
+              - services/exercises/**
+              - api/exercises/**
+              - internal/gen/api/exercises/**
+            pkg:
+              - pkg/**
+              - go.mod
+              - go.sum
+            infra:
+              - infra/**
+              - .github/workflows/ci-cd.yml
+              - Taskfile.yml
+
+      - name: Compute outputs
+        id: compute
+        env:
+          # Сырые outputs от changed-files. Пустые при tag push.
+          RAW_AUTH: ${{ steps.changed.outputs.auth_any_changed }}
+          RAW_GATEWAY: ${{ steps.changed.outputs.gateway_any_changed }}
+          RAW_PROFILES: ${{ steps.changed.outputs.profiles_any_changed }}
+          RAW_EXERCISES: ${{ steps.changed.outputs.exercises_any_changed }}
+          RAW_PKG: ${{ steps.changed.outputs.pkg_any_changed }}
+          RAW_INFRA: ${{ steps.changed.outputs.infra_any_changed }}
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          set -euo pipefail
+
+          # При tag push — это релиз: собираем и деплоим все 4 сервиса.
+          # Инфраструктуру не трогаем (она не часть релиза сервисов).
+          if [ "$IS_TAG" = "true" ]; then
+            auth=true
+            gateway=true
+            profiles=true
+            exercises=true
+            infra=false
+          else
+            auth="${RAW_AUTH:-false}"
+            gateway="${RAW_GATEWAY:-false}"
+            profiles="${RAW_PROFILES:-false}"
+            exercises="${RAW_EXERCISES:-false}"
+            infra="${RAW_INFRA:-false}"
+
+            # Изменения в pkg/** влияют на все четыре сервиса.
+            # Осознанный компромисс — статический анализ импортов
+            # сложнее, чем выгода (см. ADR-021 п.1).
+            if [ "${RAW_PKG:-false}" = "true" ]; then
+              auth=true
+              gateway=true
+              profiles=true
+              exercises=true
+            fi
+          fi
+
+          # any_changed — есть хоть что-то делать.
+          any=false
+          if [ "$auth" = "true" ] || [ "$gateway" = "true" ] \
+             || [ "$profiles" = "true" ] || [ "$exercises" = "true" ] \
+             || [ "$infra" = "true" ]; then
+            any=true
+          fi
+
+          # matrix — JSON-массив сервисов на сборку.
+          services=()
+          [ "$auth" = "true" ]      && services+=(auth)
+          [ "$gateway" = "true" ]   && services+=(gateway)
+          [ "$profiles" = "true" ]  && services+=(profiles)
+          [ "$exercises" = "true" ] && services+=(exercises)
+
+          if [ ${#services[@]} -eq 0 ]; then
+            matrix="[]"
+          else
+            matrix="[$(printf '"%s",' "${services[@]}" | sed 's/,$//')]"
+          fi
+
+          {
+            echo "any_changed=$any"
+            echo "auth_changed=$auth"
+            echo "gateway_changed=$gateway"
+            echo "profiles_changed=$profiles"
+            echo "exercises_changed=$exercises"
+            echo "infra_changed=$infra"
+            echo "matrix=$matrix"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log detected changes
+        run: |
+          echo "any_changed:       ${{ steps.compute.outputs.any_changed }}"
+          echo "auth:              ${{ steps.compute.outputs.auth_changed }}"
+          echo "gateway:           ${{ steps.compute.outputs.gateway_changed }}"
+          echo "profiles:          ${{ steps.compute.outputs.profiles_changed }}"
+          echo "exercises:         ${{ steps.compute.outputs.exercises_changed }}"
+          echo "infra:             ${{ steps.compute.outputs.infra_changed }}"
+          echo "matrix:            ${{ steps.compute.outputs.matrix }}"
   
 # ------------------------------------------------------------
 #  JOB 3: Build & Push (matrix)
