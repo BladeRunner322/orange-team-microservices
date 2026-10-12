@@ -261,7 +261,12 @@ jobs:
     name: Deploy to production server
     runs-on: ubuntu-latest
     needs: [changed-services, build-and-push]
-    if: needs.changed-services.outputs.any_changed == 'true'
+    # !failure() && !cancelled() — запускаться, даже если build-and-push был
+    # ПРОПУЩЕН (matrix пустой, только инфра менялась). Но не запускаться,
+    # если он упал с ошибкой. Без этого GitHub каскадно пропускает deploy.
+    if: |
+      !failure() && !cancelled()
+      && needs.changed-services.outputs.any_changed == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -432,7 +437,11 @@ jobs:
     name: Smoke test production
     runs-on: ubuntu-latest
     needs: deploy
-    if: needs.changed-services.outputs.any_changed == 'true'
+    # Аналогично deploy: если deploy был пропущен — пропустить и smoke.
+    # Если deploy упал — пропустить. Если deploy прошёл — запустить.
+    if: |
+      !failure() && !cancelled()
+      && needs.changed-services.outputs.any_changed == 'true'
     steps:
       - name: Wait for services and run smoke tests
         run: |
