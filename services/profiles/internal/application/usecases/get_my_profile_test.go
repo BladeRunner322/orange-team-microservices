@@ -21,7 +21,7 @@ func TestGetMyProfile_Execute(t *testing.T) {
 		ctx := ctxkeys.WithUserID(context.Background(), userID.String())
 		profile := domain.NewEmptyProfile(userID)
 		repo := newMockRepository()
-		_ = repo.Upsert(ctx, profile)
+		_ = repo.EnsureExists(ctx, profile)
 		uc := NewGetMyProfile(repo, logger.NewTestLogger())
 
 		// Act

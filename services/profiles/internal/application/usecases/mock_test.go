@@ -32,7 +32,7 @@ func (m *mockRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (dom
 	return profile, nil
 }
 
-func (m *mockRepository) Upsert(ctx context.Context, profile domain.Profile) error {
+func (m *mockRepository) EnsureExists(ctx context.Context, profile domain.Profile) error {
 	if m.err != nil {
 		return m.err
 	}

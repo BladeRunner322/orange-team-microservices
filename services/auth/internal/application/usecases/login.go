@@ -84,7 +84,6 @@ func (uc *Login) Execute(ctx context.Context, emailStr, password string) (LoginR
 		return LoginResult{}, fmt.Errorf("save refresh token: %w", err)
 	}
 
-	log.Info("user logged in successfully", "user_id", user.ID().String())
 	return LoginResult{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken.String(),

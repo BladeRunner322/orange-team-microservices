@@ -82,10 +82,10 @@ func runRepositoryTests(t *testing.T, repo *Repository) {
 		return domain.NewEmptyProfile(uuid.New())
 	}
 
-	t.Run("Upsert создаёт пустой профиль", func(t *testing.T) {
+	t.Run("EnsureExists создаёт пустой профиль", func(t *testing.T) {
 		profile := newEmptyProfile()
 
-		require.NoError(t, repo.Upsert(ctx, profile))
+		require.NoError(t, repo.EnsureExists(ctx, profile))
 
 		got, err := repo.GetByUserID(ctx, profile.UserID())
 		require.NoError(t, err)
@@ -98,11 +98,11 @@ func runRepositoryTests(t *testing.T, repo *Repository) {
 		assert.Nil(t, got.Height())
 	})
 
-	t.Run("Upsert дважды не падает (idempotent)", func(t *testing.T) {
+	t.Run("EnsureExists дважды не падает (idempotent)", func(t *testing.T) {
 		profile := newEmptyProfile()
 
-		require.NoError(t, repo.Upsert(ctx, profile))
-		require.NoError(t, repo.Upsert(ctx, profile))
+		require.NoError(t, repo.EnsureExists(ctx, profile))
+		require.NoError(t, repo.EnsureExists(ctx, profile))
 
 		got, err := repo.GetByUserID(ctx, profile.UserID())
 		require.NoError(t, err)
@@ -116,7 +116,7 @@ func runRepositoryTests(t *testing.T, repo *Repository) {
 
 	t.Run("Update обновляет поля и возвращает свежий updated_at", func(t *testing.T) {
 		profile := newEmptyProfile()
-		require.NoError(t, repo.Upsert(ctx, profile))
+		require.NoError(t, repo.EnsureExists(ctx, profile))
 
 		sex, err := domain.NewSex("male")
 		require.NoError(t, err)
@@ -170,7 +170,7 @@ func runRepositoryTests(t *testing.T, repo *Repository) {
 
 	t.Run("Delete удаляет профиль", func(t *testing.T) {
 		profile := newEmptyProfile()
-		require.NoError(t, repo.Upsert(ctx, profile))
+		require.NoError(t, repo.EnsureExists(ctx, profile))
 
 		require.NoError(t, repo.Delete(ctx, profile.UserID()))
 

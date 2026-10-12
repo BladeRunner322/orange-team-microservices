@@ -55,8 +55,8 @@ func (r *Repository) GetByUserID(ctx context.Context, userID uuid.UUID) (domain.
 	return ModelToDomain(m)
 }
 
-// Upsert создаёт пустой профиль, если его нет (idempotent, для lazy-create).
-func (r *Repository) Upsert(ctx context.Context, profile domain.Profile) error {
+// EnsureExists создаёт пустой профиль, если его нет (idempotent, для lazy-create).
+func (r *Repository) EnsureExists(ctx context.Context, profile domain.Profile) error {
 	ctx, cancel := context.WithTimeout(ctx, r.pool.OpTimeout())
 	defer cancel()
 
@@ -69,7 +69,7 @@ func (r *Repository) Upsert(ctx context.Context, profile domain.Profile) error {
 	`
 	_, err := r.pool.Exec(ctx, query, m.UserID, m.CreatedAt)
 	if err != nil {
-		return fmt.Errorf("upsert profile: %w", err)
+		return fmt.Errorf("ensure profile: %w", err)
 	}
 
 	return nil

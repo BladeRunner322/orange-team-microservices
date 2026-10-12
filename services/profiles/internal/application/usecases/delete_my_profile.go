@@ -21,7 +21,10 @@ func NewDeleteMyProfile(repo ports.Repository, log *logger.Logger) *DeleteMyProf
 }
 
 // Execute удаляет профиль текущего пользователя.
-// Если профиля нет — возвращает ErrProfileNotFound.
+//
+// Идемпотентен: повторный вызов (или DELETE несуществующего профиля)
+// возвращает nil, а не ошибку (см. ADR-007 F-3). Это защищает от
+// retry после network timeout — клиент может безопасно повторить запрос.
 func (uc *DeleteMyProfile) Execute(ctx context.Context) error {
 	log := uc.logger.With("operation", "DeleteMyProfile")
 
@@ -32,15 +35,14 @@ func (uc *DeleteMyProfile) Execute(ctx context.Context) error {
 
 	if err := uc.repo.Delete(ctx, userID); err != nil {
 		if errors.Is(err, domain.ErrProfileNotFound) {
-			log.Warn("profile not found", "user_id", userID)
-			return domain.ErrProfileNotFound
+			// Идемпотентность: профиля нет — считаем успехом.
+			log.Warn("profile already deleted", "user_id", userID)
+			return nil
 		}
 
 		log.Error("failed to delete profile", "error", err, "user_id", userID)
 		return fmt.Errorf("delete profile: %w", err)
 	}
-
-	log.Info("profile deleted", "user_id", userID)
 
 	return nil
 }

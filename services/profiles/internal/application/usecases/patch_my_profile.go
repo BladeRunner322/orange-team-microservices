@@ -55,7 +55,5 @@ func (uc *PatchMyProfile) Execute(ctx context.Context, patch domain.ProfilePatch
 		return domain.Profile{}, fmt.Errorf("update profile: %w", err)
 	}
 
-	log.Info("profile patched", "user_id", userID)
-
 	return updated, nil
 }

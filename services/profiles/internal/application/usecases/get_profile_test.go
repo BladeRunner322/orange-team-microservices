@@ -19,7 +19,7 @@ func TestGetProfile_Execute(t *testing.T) {
 		userID := uuid.New()
 		profile := domain.NewEmptyProfile(userID)
 		repo := newMockRepository()
-		_ = repo.Upsert(ctx, profile)
+		_ = repo.EnsureExists(ctx, profile)
 		uc := NewGetProfile(repo, logger.NewTestLogger())
 
 		// Act

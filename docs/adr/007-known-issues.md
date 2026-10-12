@@ -92,24 +92,27 @@ fixes), но остаётся список того, что нужно зала�
 |---|---|---|
 | `Auth.Logout` | идемпотентен | `services/auth/internal/application/usecases/logout.go` |
 | `Exercises.DeleteExercise` | **идемпотентен** | `services/exercises/internal/application/usecases/delete_exercise.go` |
-| `Profiles.DeleteMyProfile` | не идемпотентен → NotFound | `services/profiles/internal/application/usecases/delete_my_profile.go` |
+| `Profiles.DeleteMyProfile` | **идемпотентен** | `services/profiles/internal/application/usecases/delete_my_profile.go` |
 
 **Решение.** DELETE-подобные операции проектируем **идемпотентными**:
 повторный вызов возвращает успех, не NotFound. Это защищает от
 retry-проблем: прокси, load balancer или клиент может безопасно
 повторить запрос после network timeout, не получив ложный 404.
 
-- `Logout` — идемпотентен изначально, оставляем.
+- `Logout` — идемпотентен изначально.
 - `DeleteExercise` — идемпотентен: soft delete, повторный `MarkDeleted`
   даёт `0 rows affected`, usecase возвращает `nil`.
-- `DeleteMyProfile` — **отстаёт**, привести к идемпотентному стилю
-  при следующем касании Profiles.
+- `DeleteMyProfile` — **приведён к идемпотентному стилю** (2026-10-13):
+  при `ErrProfileNotFound` от репозитория usecase возвращает `nil`,
+  а не ошибку. Маппинг на `codes.NotFound` в gRPC-сервере оставлен
+  для совместимости (сработает, если usecase вернётся к прежней
+  семантике), но больше не активируется.
 
-**Приоритет:** низкий для `DeleteMyProfile` (рефакторинг Profiles),
-не блокер.
+**Приоритет:** низкий.
+**Статус:** ✅ Закрыто (2026-10-13).
 
-**Связанные контракты:** `DELETE /exercises/{id}` в Gateway после
-реализации должен возвращать `204` и на первый, и на повторный вызов.
+**Связанные контракты:** `DELETE /users/me` и `DELETE /exercises/{id}`
+в Gateway возвращают `204` и на первый, и на повторный вызов.
 
 ### Конфигурация
 
@@ -185,10 +188,13 @@ Docker на GitHub Actions доступен, Testcontainers работает.
 
 **S-1. `Upsert` в Profiles пишет только user_id + created_at.**
 `services/profiles/internal/infrastructure/postgres_repo/repository.go`.
-Остальные поля игнорируются. Имя вводит в заблуждение — оно про
+Остальные поля игнорируются. Имя вводило в заблуждение — оно про
 lazy-create, а не про «сохранить всё».
-**Что делать:** переименовать в `EnsureExists` или сделать полноценный upsert.
+
+**Что сделано:** метод переименован в `EnsureExists` (интерфейс, реализация, mock, integration test). Сигнатура и поведение не изменились.
+
 **Приоритет:** низкий.
+**Статус:** ✅ Закрыто (2026-10-13).
 
 **S-2. `test_logger.NewTestLogger` без `file`.**
 `pkg/logger/test_logger.go` создаёт `&Logger{Logger: ...}` без `file`.
@@ -199,23 +205,27 @@ lazy-create, а не про «сохранить всё».
 
 **S-3. Две обёртки `ResponseWriter` в Gateway middleware.**
 `logger.go` (`responseWriterWrapper`) и `metrics.go`
-(`metricsResponseWriter`) вложены друг в друга. Работает, но хрупко —
+(`metricsResponseWriter`) были вложены друг в друга. Работало, но хрупко —
 при добавлении третьей легко рассинхронить статус.
-**Что делать:** одна общая обёртка в `httputil`.
+
+**Что сделано:** одна общая обёртка `StatusRecorder` в `httputil`.
+Обе middleware (`logger`, `metrics`) используют её.
+
 **Приоритет:** низкий.
+**Статус:** ✅ Закрыто (2026-10-13).
 
 **S-4. `log.Info` в usecase дублируется с `LoggingInterceptor`.**
 
-Все usecase (Auth, Profiles, Exercises) логируют `Info` в конце операции: `"user registered successfully"`, `"profile patched"`, `"exercise fetched"`. При этом `LoggingInterceptor` уже логирует каждый gRPC-вызов с method, status и duration. Получается две записи на один успешный запрос.
+Все usecase (Auth, Profiles, Exercises) логировали `Info` в конце операции: `"user registered successfully"`, `"profile patched"`, `"exercise fetched"`. При этом `LoggingInterceptor` уже логирует каждый gRPC-вызов с method, status и duration. Получалось две записи на один успешный запрос.
 
 Для мутаций (`CreateExercise`, `PatchExercise`, `DeleteExercise`, `Register`) `Info` иногда рассматривают как бизнес-аудит: «кто что сделал». Но в Exercises аудит неполный — сервис не знает `user_id` (его использует только Gateway), поэтому запись «упражнение X удалено» без «кем» ценности не несёт. Полные данные всегда можно получить из БД.
 
-**Решение (принято в PR по Exercises):**
-- **Exercises — вариант B.** `log.Info` в usecase убран полностью. Логирование успешных операций — только на уровне `LoggingInterceptor`. `log.Warn` и `log.Error` в usecase остаются: они несут информацию, которой у интерсептора нет (`invalid name` vs `invalid difficulty` vs `db is down`).
-- **Auth, Profiles — пока вариант A** (Info везде). Устаревший стиль, привести к B при следующем касании соответствующего usecase. Отдельным PR.
+**Решение (принято в PR по Exercises, финализировано для Auth/Profiles):**
+- **Все usecase — вариант B.** `log.Info` в usecase убран полностью. Логирование успешных операций — только на уровне `LoggingInterceptor`. `log.Warn` и `log.Error` в usecase остаются: они несут информацию, которой у интерсептора нет (`invalid name` vs `invalid difficulty` vs `db is down`).
 - **Правило для новых сервисов (Habits, Workouts, Leaderboard):** вариант B. `Info` в usecase не пишем с самого начала.
 
-**Приоритет:** низкий для Auth/Profiles (рефакторинг), не блокер.
+**Приоритет:** низкий (рефакторинг), не блокер.
+**Статус:** ✅ Закрыто (2026-10-13).
 
 **S-5. `pkg/postgres` не различает constraint при unique violation.**
 
@@ -237,12 +247,16 @@ unique-индекс. Тогда оба нарушения будут маппи�
 доменную ошибку — клиент увидит неверное сообщение («name already
 exists» вместо «slug already exists»).
 
-**Что делать:** расширить `mapErrors` или добавить хелпер
-`ConstraintNameFromError(err) string` в `pkg/postgres`, чтобы
-репозиторий сам решал, что маппить. Правка `pkg/` — затрагивает Auth
-и Profiles одновременно.
+**Что сделано:** добавлен хелпер `postgres.ConstraintNameFromError(err) string`.
+Возвращает имя нарушенного constraint (для любого PgError с непустым
+`ConstraintName` — unique, foreign key, check, not-null). Репозитории
+смогут его использовать, когда в таблице появится второй unique-индекс —
+без правки `pkg/`. Сейчас хелпер не вызывается из репозиториев (триггер
+не наступил), но `pkg/` больше не блокирует их.
+
 **Приоритет:** низкий. Триггер — появление второго unique-индекса
 в любой таблице любого сервиса.
+**Статус:** ✅ Закрыто (2026-10-13).
 
 **S-6. Рассинхрон валидации `full_name` между Gateway и Auth.**
 
@@ -298,10 +312,11 @@ Gateway режет на 50, домен — на 100. Запрос с `full_name`
 2. **Средний:** — (закрыто).
 3. **Низкий:**
    - **F-2** — открыт (Profiles, Exercises).
-   - **F-3** — частично закрыт: Exercises идемпотентен ✅, Profiles — открыт.
-   - **S-1, S-3** — открыты.
-   - **S-4** — частично закрыт: Exercises следует варианту B ✅, Auth и Profiles — открыты.
-   - **S-5** — открыт.
+   - **F-3** — ✅ закрыт (2026-10-13).
+   - **S-1** — ✅ закрыт (2026-10-13).
+   - **S-3** — ✅ закрыт (2026-10-13).
+   - **S-4** — ✅ закрыт (2026-10-13).
+   - **S-5** — ✅ закрыт (2026-10-13).
    - **S-6** — ✅ закрыт (2026-10-10).
 4. **Документирование:** ✅ B-3 закрыто (2026-10-08, см. ADR-016).
 

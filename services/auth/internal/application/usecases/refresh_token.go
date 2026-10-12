@@ -95,7 +95,6 @@ func (uc *RefreshToken) Execute(ctx context.Context, rawRefreshToken string) (Re
 		return Result{}, fmt.Errorf("save refresh token: %w", err)
 	}
 
-	log.Info("refresh token rotated", "user_id", userID)
 	return Result{
 		AccessToken:  accessToken,
 		RefreshToken: newRefreshToken.String(),

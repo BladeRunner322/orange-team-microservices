@@ -35,6 +35,5 @@ func (uc *Logout) Execute(ctx context.Context, rawRefreshToken string) error {
 		return fmt.Errorf("delete refresh token: %w", err)
 	}
 
-	log.Info("user logged out")
 	return nil
 }
