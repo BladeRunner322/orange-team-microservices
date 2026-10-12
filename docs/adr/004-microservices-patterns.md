@@ -41,11 +41,9 @@ Gateway умеет агрегировать данные из нескольки
 **Centralized Logging & Metrics.**
 Prometheus для метрик, Loki + Promtail для логов, Grafana для визуализации. У каждого сервиса `/metrics`.
 
-**Метрики есть только на серверной стороне gRPC.** `MetricsInterceptor` в `pkg/grpc/interceptors` собирает `grpc_requests_total` и `grpc_request_duration_ms` для входящих вызовов. Исходящие gRPC-вызовы (Gateway → Auth/Profiles/Exercises) не инструментированы: latency и error rate на клиентской стороне не видны. Это gap в observability — при инциденте непонятно, тормозит ли сам сервис, или сеть между Gateway и сервисом.
+**Метрики есть на обеих сторонах gRPC.** `MetricsInterceptor` собирает `grpc_requests_total` и `grpc_request_duration_ms` для входящих вызовов. `ClientMetricsInterceptor` (ADR-020) — для исходящих: `grpc_client_requests_total`, `grpc_client_request_duration_ms`, `grpc_client_requests_in_flight`. Плюс метрики Circuit Breaker (`grpc_client_circuit_breaker_state`, `_transitions_total`) и Retry (`grpc_client_retry_attempts_total`).
 
-**Что делать:** client-side gRPC interceptor с метриками `grpc_client_requests_total` (по target, method, status) и `grpc_client_request_duration_ms`. Регистрируется в `pkg/grpc/client` рядом с `TimeoutInterceptor` и `UserIDClientInterceptor`. Естественно добавляется вместе с O-2.
-
-**Приоритет:** средний. Триггер — реальная отладка latency-проблем в цепочке Gateway → downstream.
+Gap, зафиксированный ранее, закрыт в ADR-020.
 
 ### Не используем (осознанно)
 
@@ -61,10 +59,10 @@ Cross-service транзакций нет. По ADR-002 `user_workout_score` н�
 ### Технический долг (отложено)
 
 **Circuit Breaker.**
-Не реализован. Если downstream-сервис тормозит, upstream будет ждать таймаут на каждом запросе вместо быстрого возврата ошибки. Это задача **Уровня 2 в [ADR-019](019-microservices-evolution.md)** — второй приоритет после независимого деплоя.
+~~Не реализован.~~ ✅ **Реализовано** в ADR-020 (2026-10-13). `CircuitBreakerInterceptor` в `pkg/grpc/interceptors`, `sony/gobreaker/v2`. Fail-fast вместо таймаута, состояния CLOSED → OPEN → HALF-OPEN, бизнес-ошибки не считаются failure.
 
-**Retry с exponential backoff — Level C (после прода).**
-Межсервисные вызовы не повторяются при временных сбоях сети. Реализовать после первого прода, только для идемпотентных вызовов, чтобы не плодить дубли.
+**Retry с exponential backoff.**
+~~Межсервисные вызовы не повторяются при временных сбоях сети.~~ ✅ **Реализовано** в ADR-020 (2026-10-13). `RetryInterceptor` с whitelist read-only методов, только `codes.Unavailable`, exponential backoff с jitter.
 
 **`GRPC_CLIENT_TLS_MODE=verify` в проде.**
 ~~В dev/staging — `insecure`. В проде — обязательно `verify` после установки HTTPS/Caddy.~~

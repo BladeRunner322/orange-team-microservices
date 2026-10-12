@@ -287,9 +287,7 @@ Gateway режет на 50, домен — на 100. Запрос с `full_name`
 ### Отложено из ранее принятых ADR
 
 - **ADR-016:** сетевая безопасность. ✅ Внедрено (2026-10-08). Внутренние порты на `127.0.0.1`, ufw (только 22/80/443), fail2ban на SSH, `insecure` gRPC как осознанный выбор.
-- **ADR-004:** circuit breaker (Level B), retry с backoff (Level C),
-  distributed tracing (Level C), mTLS (Level C — только при выходе
-  из одной docker-сети). gRPC deadlines на клиентах — закрыты, см. C-1.
+- **ADR-004:** ✅ circuit breaker (Level B) и retry с backoff (Level C) — закрыты в ADR-020 (2026-10-13). ⬜ distributed tracing (Level C) и mTLS (Level C — только при выходе из одной docker-сети) — открыты. gRPC deadlines на клиентах — закрыты, см. C-1.
 - **ADR-006:** SOPS + age. ✅ Внедрено (2026-10-06). `.env.enc` коммитятся
   в git, CD расшифровывает через `SOPS_AGE_KEY` из GitHub Secrets.
 - **ADR-012:** smoke-тесты и rollback. ✅ Внедрено (2026-10-08). Level 1 — detection без auto-rollback; триггеры для Level 2 зафиксированы.
