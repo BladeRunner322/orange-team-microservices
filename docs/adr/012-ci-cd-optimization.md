@@ -161,6 +161,8 @@ strategy:
 
 ## Пересоздание контейнеров при деплое
 
+> ⚠️ **Частично пересмотрено в ADR-021.** Раньше `--force-recreate` применялся ко **всему** стеку на каждом деплое. После ADR-021 деплой точечный: изменённые сервисы через `--no-deps`, инфраструктура — `--force-recreate` только если менялся `infra/**`. Раздел ниже описывает **историческое** решение и обоснование `--force-recreate` для инфры. Актуальная логика — в ADR-021.
+
 **Проблема.** `docker compose up -d --no-build` пересоздаёт контейнер только если изменился его манифест в compose (образ, ports, volumes, env) или содержимое `.env`. Изменения **содержимого монтируемых конфиг-файлов** compose не отслеживает — для него это тот же volume, тот же путь.
 
 Сервисы, которые читают конфиг при старте и не перечитывают его автоматически:
@@ -172,7 +174,7 @@ strategy:
 
 Итог: правишь `infra/alerts.yml` в PR, мержишь, CD зелёный, а прод работает на старых правилах. Первый инцидент — узнаешь, что алерт не срабатывает, потому что конфиг не применился.
 
-**Решение.** В deploy job добавлен `--force-recreate`:
+**Решение (историческое).** В deploy job добавлен `--force-recreate`:
 
 ```
 docker compose up -d --no-build --force-recreate
@@ -180,26 +182,20 @@ docker compose up -d --no-build --force-recreate
 
 Все контейнеры пересоздаются на каждом деплое, конфиги гарантированно актуальны.
 
-**Что это значит по факту:**
+**Что это значило по факту:**
 
-- Postgres и Redis тоже пересоздаются. Данные не теряются (volumes), но соединения рвутся на 2–5 секунд. Клиенты переподключаются автоматически.
+- Postgres и Redis тоже пересоздавались. Данные не терялись (volumes), но соединения рвались на 2–5 секунд.
 - Downtime ~10 секунд на весь стек. Для solo-проекта без SLA — приемлемо.
-- CD-джоба теперь занимает на 5–10 секунд больше.
+- CD-джоба занимала на 5–10 секунд больше.
 
-**Альтернатива** — перечислять только сервисы с конфигами:
+**Актуально после ADR-021.** `--force-recreate` остался, но применяется **только** к 8 инфра-контейнерам и только если менялся `infra/**`. Изменённые сервисы пересоздаются через `--no-deps` — Postgres и Redis не трогаются. Даунтайм сократился до конкретного изменённого сервиса (5–10 секунд вместо 10 секунд на весь стек).
 
-```
-docker compose up -d --no-build --force-recreate alertmanager prometheus promtail caddy
-```
+**Когда пересмотреть (актуально):**
 
-Быстрее, но список надо поддерживать вручную при добавлении новых конфиг-сервисов. При первом забытом сервисе — та же проблема с неприменённым конфигом. Отвергнуто в пользу простоты.
-
-**Когда пересмотреть:**
-
-- Появится SLA с пользователями, даунтайм 10 секунд станет недопустимым → blue-green или rolling.
+- Появится SLA с пользователями, даунтайм даже одного сервиса (5–10 секунд) станет недопустимым → blue-green или rolling.
 - Стек переедет в k8s → там ConfigMap-изменения триггерят rolling restart автоматически.
 
-**Про `COMPOSE_FILE` и SSH-деплой.** Переменные окружения GitHub Actions не пробрасываются на сервер через `appleboy/ssh-action` — SSH-скрипт выполняется в новой shell-сессии. `COMPOSE_FILE: infra/docker-compose.yml` в глобальном `env:` работает только для команд, запускаемых **на раннере**. В deploy job (SSH на сервер) их надо выставлять явно:
+**Про `COMPOSE_FILE` и SSH-деплой.** Переменные окружения GitHub Actions не пробрасываются на сервер через `appleboy/ssh-action` — SSH-скрипт выполняется в новой shell-сессии. `COMPOSE_FILE` в глобальном `env:` работает только для команд, запускаемых **на раннере**. В deploy job (SSH на сервер) их надо выставлять явно:
 
 ```
 export COMPOSE_FILE=infra/compose.app.yml:infra/compose.infra.yml
@@ -208,9 +204,13 @@ export COMPOSE_ENV_FILES=.env
 
 Тот же путь и `COMPOSE_ENV_FILES` — потому что Compose ищет top-level `.env` рядом с compose-файлом, а `.env` лежит в корне репозитория.
 
+> ⚠️ **Грабли.** При разделении compose (ADR-021) обновили только `env:` в шапке workflow, но забыли строку `export COMPOSE_FILE=...` внутри SSH-скрипта deploy job. Первый CD упал на `docker compose pull` с `compose file "infra/docker-compose.yml" ... no such file or directory`. Отдельный PR `fix(ci): use new compose files in ssh deploy script`. При добавлении новых переменных окружения в SSH-скрипт — **всегда проверяй, что и в шапке workflow, и внутри скрипта значения совпадают**.
+
 **Про триггеры changed-services после переноса в infra/.** Изначально в `changed-services` были перечислены семь отдельных путей (`docker-compose.yml`, `Caddyfile`, `prometheus.yml`, `alerts.yml`, `alertmanager.yml`, `loki-config.yml`, `promtail-config.yml`). После переноса в `infra/` эти пути перестали матчиться — коммит с правками `infra/docker-compose.yml` триггерил `any_changed = false`, деплой пропускался.
 
 Решение — заменить семь путей на `infra/**`. При добавлении нового конфига в `infra/` не нужно дописывать его в список.
+
+> ⚠️ **Обновлено в ADR-021.** `changed-services` расширен: теперь outputs `auth_changed`, `gateway_changed`, `profiles_changed`, `exercises_changed`, `infra_changed`, `matrix`. `infra/**` попадает в `infra_changed`, но `matrix` при этом пустой — сборка пропускается, деплой пересоздаёт только инфру.
 
 **Про имя проекта.** Compose определяет имя проекта по имени директории с compose-файлом. Раньше файл был в корне (`orange-team-microservices/docker-compose.yml`) → проект `orange-team-microservices`, все volumes с префиксом `orange-team-microservices_`. После переноса в `infra/` Compose стал бы использовать `infra` как имя проекта → volumes `infra_pgdata-auth` и т. д. То есть **новые пустые volumes** вместо существующих.
 
@@ -221,13 +221,22 @@ export COMPOSE_ENV_FILES=.env
 
 Замена всех `./` на `../` — типичная ошибка при переносе: Docker создаёт пустую директорию с именем файла и падает с `not a directory`.
 
-Решение — задать имя проекта явно в `infra/docker-compose.yml`:
+Решение — задать имя проекта явно. После ADR-021 compose разделён на два файла, **имя проекта задано в обоих**:
 
 ```yaml
 name: orange-team-microservices
 ```
 
-Это top-level поле Compose (v2.20+). Без него перенос compose-файла в поддиректорию = потеря данных.
+Это top-level поле Compose (v2.20+). Без него перенос compose-файла в поддиректорию или разделение на несколько файлов = потеря данных.
+
+**Проверка перед первым деплоем после правок.** Оба файла дают правильное имя:
+
+```bash
+docker compose -f infra/compose.app.yml --env-file .env config --format json | python3 -c "import json,sys; print(json.load(sys.stdin)['name'])"
+docker compose -f infra/compose.infra.yml --env-file .env config --format json | python3 -c "import json,sys; print(json.load(sys.stdin)['name'])"
+```
+
+Оба должны вывести `orange-team-microservices`.
 
 ## Уведомления о деплое в Telegram
 
