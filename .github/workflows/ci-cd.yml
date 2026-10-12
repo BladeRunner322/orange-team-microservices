@@ -295,10 +295,19 @@ jobs:
 
       - name: Deploy to production server
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          AUTH_CHANGED:      ${{ needs.changed-services.outputs.auth_changed }}
+          GATEWAY_CHANGED:   ${{ needs.changed-services.outputs.gateway_changed }}
+          PROFILES_CHANGED:  ${{ needs.changed-services.outputs.profiles_changed }}
+          EXERCISES_CHANGED: ${{ needs.changed-services.outputs.exercises_changed }}
+          INFRA_CHANGED:     ${{ needs.changed-services.outputs.infra_changed }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
+          # appleboy/ssh-action не пробрасывает env с раннера автоматически —
+          # переменные надо явно перечислить в envs.
+          envs: AUTH_CHANGED,GATEWAY_CHANGED,PROFILES_CHANGED,EXERCISES_CHANGED,INFRA_CHANGED
           script: |
             set -e
 
@@ -360,14 +369,59 @@ jobs:
               fi
             done
 
-            docker compose pull
+            # Собираем список сервисов на пересоздание.
+            # Миграции для изменённых сервисов прогоняются здесь же —
+            # migrate up идемпотентен, повторный запуск на актуальной схеме = no-op.
+            SERVICES=""
+            if [ "${AUTH_CHANGED}" = "true" ]; then
+              SERVICES="${SERVICES} auth"
+              echo "→ Running migrate-auth"
+              docker compose run --rm migrate-auth
+            fi
+            if [ "${GATEWAY_CHANGED}" = "true" ]; then
+              SERVICES="${SERVICES} gateway"
+            fi
+            if [ "${PROFILES_CHANGED}" = "true" ]; then
+              SERVICES="${SERVICES} profiles"
+              echo "→ Running migrate-profiles"
+              docker compose run --rm migrate-profiles
+            fi
+            if [ "${EXERCISES_CHANGED}" = "true" ]; then
+              SERVICES="${SERVICES} exercises"
+              echo "→ Running migrate-exercises"
+              docker compose run --rm migrate-exercises
+            fi
 
-            # --force-recreate: docker compose не отслеживает изменения
-            # содержимого монтируемых конфигов (alertmanager.yml, prometheus.yml,
-            # Caddyfile, promtail-config.yml). Без флага контейнеры не
-            # пересоздаются, и правки конфигов не применяются до ручного
-            # вмешательства. См. ADR-012.
-            docker compose up -d --no-build --force-recreate
+            # Ранний выход, если нечего делать (не должно случаться —
+            # any_changed уже проверен в job.if).
+            if [ -z "${SERVICES}" ] && [ "${INFRA_CHANGED}" != "true" ]; then
+              echo "→ Nothing to deploy (no services, no infra)"
+              exit 0
+            fi
+
+            # Pull только нужных образов.
+            if [ -n "${SERVICES}" ]; then
+              echo "→ Pulling images:${SERVICES}"
+              docker compose pull ${SERVICES}
+            fi
+
+            # Пересоздать изменённые сервисы. --no-deps — не трогаем
+            # PostgreSQL / Redis / другие сервисы.
+            if [ -n "${SERVICES}" ]; then
+              echo "→ Recreating services:${SERVICES}"
+              docker compose up -d --no-build --no-deps ${SERVICES}
+            fi
+
+            # Инфраструктура пересоздаётся целиком, если менялось что-то
+            # в infra/**. Их 8 контейнеров, stateless (volumes сохраняются).
+            # --force-recreate обязателен: docker compose не отслеживает
+            # изменения содержимого монтируемых конфигов (prometheus.yml,
+            # alertmanager.yml, Caddyfile, promtail-config.yml). См. ADR-012.
+            if [ "${INFRA_CHANGED}" = "true" ]; then
+              echo "→ Recreating infra services"
+              docker compose up -d --no-build --force-recreate \
+                caddy prometheus alertmanager node-exporter grafana loki promtail warp
+            fi
 
             docker image prune -f
 
