@@ -210,14 +210,20 @@ jobs:
     name: Build & Push ${{ matrix.service }}
     runs-on: ubuntu-latest
     needs: changed-services
-    if: needs.changed-services.outputs.any_changed == 'true'
+    # Собираем только если: (a) есть что деплоить И (b) матрица не пустая.
+    # Пустая матрица = изменилась только инфра, сервисы пересобирать не надо.
+    if: |
+      needs.changed-services.outputs.any_changed == 'true'
+      && needs.changed-services.outputs.matrix != '[]'
     permissions:
       contents: read
       packages: write
     strategy:
       fail-fast: false
+      # matrix формируется динамически в changed-services.
+      # Например: ["auth", "gateway"] — только изменённые.
       matrix:
-        service: [auth, gateway, profiles, exercises]
+        service: ${{ fromJSON(needs.changed-services.outputs.matrix) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
