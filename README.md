@@ -1540,7 +1540,8 @@ Docker Compose v2.24+, SSH-доступ для деплоя.
 ### Триггеры
 
 - **Pull Request в `main`** → запускается только **CI** (тесты, сборка, smoke-тест).
-- **Push в `main`** (после вливания PR) → запускается **CD** (сборка образа, публикация в GHCR, деплой на сервер).
+- **Push в `main`** (после вливания PR) → запускается **CD** (сборка образов, публикация в GHCR, деплой на сервер). Собираются и деплоятся только изменённые сервисы (см. [ADR-021](docs/adr/021-independent-deployment.md)).
+- **Push git-тега `v*`** (например, `v0.1.0`) → релиз: собираются все 4 сервиса, публикуются с дополнительным тегом `:v0.1.0`. Semver.
 
 ### CI (Continuous Integration)
 
@@ -1558,27 +1559,31 @@ Docker Compose v2.24+, SSH-доступ для деплоя.
 
 При пуше в `main`:
 
-1. Определяются изменённые сервисы (`services/auth/**`, `services/gateway/**`, `services/profiles/**`, `services/exercises/**`, `.github/workflows/ci-cd.yml`, `pkg/**`).
-2. Собираются Docker-образы для изменённых сервисов через **matrix** (параллельно).
-3. Образы публикуются в **GitHub Container Registry**:
-   - `ghcr.io/bladerunner322/orange-team-microservices/auth:latest` (+ `:<git-sha>`)
-   - `ghcr.io/bladerunner322/orange-team-microservices/gateway:latest` (+ `:<git-sha>`)
-   - `ghcr.io/bladerunner322/orange-team-microservices/profiles:latest` (+ `:<git-sha>`)
-   - `ghcr.io/bladerunner322/orange-team-microservices/exercises:latest` (+ `:<git-sha>`)
+1. `changed-services` определяет по файлам, какие сервисы и/или инфраструктура изменились. Outputs: `auth_changed`, `gateway_changed`, `profiles_changed`, `exercises_changed`, `infra_changed`, `matrix` (JSON-массив сервисов на сборку).
+2. Собираются Docker-образы **только для изменённых сервисов** через **matrix** (параллельно). Если менялся `pkg/**` — все 4 сервиса. Если только `infra/**` — matrix пустая, сборка пропускается.
+3. Образы публикуются в **GitHub Container Registry** с тегами:
+   - `:latest` — текущий прод.
+   - `:<git-sha>` — точная привязка к коммиту.
+   - `:vX.Y.Z` — semver (только при push тега `v*`, см. ADR-021).
 4. По SSH выполняется деплой на продакшен-сервер (только если `any_changed == 'true'`):
    - Обновление кода (`git pull origin main`).
    - Логин в GHCR.
    - Создание `secrets/bot_token` и `secrets/chat_id` из расшифрованного `.env` для Alertmanager.
-   - `docker compose pull` — скачивание свежих образов (с `COMPOSE_FILE=infra/compose.app.yml:infra/compose.infra.yml`).
-   - `docker compose up -d --no-build --force-recreate` — перезапуск всего стека.
+   - Валидация `.env` против `.env.example`.
+   - Прогон миграций для изменённых сервисов (`docker compose run --rm migrate-<svc>`).
+   - `docker compose pull <changed_services>` — только нужные образы.
+   - `docker compose up -d --no-build --no-deps <changed_services>` — пересоздание только изменённых сервисов.
+   - Если менялась инфра (`infra/**`) — `docker compose up -d --no-build --force-recreate <infra_services>` для 8 инфра-контейнеров.
 5. Запускается `smoke-test` — три проверки против прода.
 6. Запускается `notify` — уведомление в Telegram (успех / провал / «нечего деплоить»).
 
-Используется **Docker layer caching** (`type=gha`) — повторные сборки быстрее в 2-3 раза. Подробнее — [ADR-012](docs/adr/012-ci-cd-optimization.md).
+Используется **Docker layer caching** (`type=gha`) — повторные сборки быстрее в 2-3 раза. Подробнее — [ADR-012](docs/adr/012-ci-cd-optimization.md) и [ADR-021](docs/adr/021-independent-deployment.md).
 
 ### Секреты GitHub Actions
 
 Для деплоя используются секреты репозитория (Settings → Secrets and variables → Actions):
+
+> 💡 Для релизов semver (`git push origin v0.1.0`) дополнительные секреты не нужны — используются те же `SERVER_*` и `SOPS_AGE_KEY`. См. [ADR-021](docs/adr/021-independent-deployment.md).
 
 | Секрет | Назначение |
 |--------|------------|
@@ -1700,7 +1705,14 @@ task sops:decrypt   # .env.enc → .env (например, на новой ма�
 - `http_request_duration_seconds` — длительность HTTP-запросов в секундах
 - `http_requests_in_flight` — HTTP-запросы в обработке
 
-Плюс транзитивно подтягиваются gRPC-метрики исходящих вызовов в Auth и Profiles.
+Плюс **client-side gRPC-метрики исходящих вызовов** (см. [ADR-020](docs/adr/020-circuit-breaker-and-retry.md)):
+
+- `grpc_client_requests_total{target, method, status}` — сколько Gateway вызывает downstream и с каким кодом.
+- `grpc_client_request_duration_ms{target, method}` — сколько Gateway ждёт ответа.
+- `grpc_client_requests_in_flight{target}` — сколько вызовов висит сейчас.
+- `grpc_client_circuit_breaker_state{target}` — `0=closed`, `1=half-open`, `2=open`.
+- `grpc_client_circuit_breaker_transitions_total{target, from, to}` — переходы состояний CB.
+- `grpc_client_retry_attempts_total{target, method, result}` — retry-попытки (`result: success|failure`).
 
 **Profiles:**
 
@@ -2244,5 +2256,6 @@ task <service-name>:migrate-version
 - [ADR-018: Retention метрик и логов](docs/adr/018-storage-retention.md) — Prometheus 15 дней, Loki 30 дней
 - [ADR-019: Эволюция в сторону микросервисов](docs/adr/019-microservices-evolution.md) — roadmap: независимый деплой, failure isolation, event bus, tracing
 - [ADR-020: Circuit Breaker и Retry для gRPC-клиентов](docs/adr/020-circuit-breaker-and-retry.md) — fail-fast, retry read-методов, client-side метрики
+- [ADR-021: Независимый деплой сервисов](docs/adr/021-independent-deployment.md) — разделение compose, semver, точечный деплой изменённых сервисов
 
 Подробнее — в [docs/adr/README.md](docs/adr/README.md).
