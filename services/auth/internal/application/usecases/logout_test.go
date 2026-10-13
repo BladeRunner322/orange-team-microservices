@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -53,5 +54,18 @@ func TestLogout_Execute(t *testing.T) {
 		// Второй logout — тоже не ошибка
 		err = uc.Execute(context.Background(), token.String())
 		require.NoError(t, err)
+	})
+
+	t.Run("ошибка репозитория при Delete", func(t *testing.T) {
+		refreshRepo := newMockRefreshTokenRepository()
+		refreshRepo.deleteErr = errors.New("redis connection lost")
+
+		uc := NewLogout(refreshRepo, log)
+
+		token, _ := domain.GenerateRefreshToken()
+		err := uc.Execute(context.Background(), token.String())
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "redis connection lost")
 	})
 }

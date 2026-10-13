@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -83,5 +84,71 @@ func TestRefreshToken_Execute(t *testing.T) {
 		_, err := uc.Execute(context.Background(), token.String())
 
 		assert.Error(t, err)
+	})
+
+	t.Run("невалидный user_id в refresh токене", func(t *testing.T) {
+		userRepo := newMockRepository()
+		refreshRepo := newMockRefreshTokenRepository()
+
+		// user_id в Redis — не UUID
+		token, _ := domain.GenerateRefreshToken()
+		_ = refreshRepo.Save(context.Background(), token, "not-a-uuid", time.Hour)
+
+		uc := NewRefreshToken(refreshRepo, userRepo, tokenManager, time.Hour, log)
+		_, err := uc.Execute(context.Background(), token.String())
+
+		assert.ErrorIs(t, err, domain.ErrInvalidRefreshToken)
+	})
+
+	t.Run("ошибка удаления старого токена", func(t *testing.T) {
+		userRepo := newMockRepository()
+		user := setupUser(userRepo)
+		refreshRepo := newMockRefreshTokenRepository()
+
+		token, _ := domain.GenerateRefreshToken()
+		_ = refreshRepo.Save(context.Background(), token, user.ID().String(), time.Hour)
+
+		refreshRepo.deleteErr = errors.New("redis down")
+
+		uc := NewRefreshToken(refreshRepo, userRepo, tokenManager, time.Hour, log)
+		_, err := uc.Execute(context.Background(), token.String())
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "redis down")
+	})
+
+	t.Run("ошибка генерации access токена", func(t *testing.T) {
+		userRepo := newMockRepository()
+		user := setupUser(userRepo)
+		refreshRepo := newMockRefreshTokenRepository()
+
+		token, _ := domain.GenerateRefreshToken()
+		_ = refreshRepo.Save(context.Background(), token, user.ID().String(), time.Hour)
+
+		tokenManager := mockTokenManager{generateErr: errors.New("signing failed")}
+
+		uc := NewRefreshToken(refreshRepo, userRepo, tokenManager, time.Hour, log)
+		_, err := uc.Execute(context.Background(), token.String())
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "signing failed")
+	})
+
+	t.Run("ошибка сохранения нового токена", func(t *testing.T) {
+		userRepo := newMockRepository()
+		user := setupUser(userRepo)
+		refreshRepo := newMockRefreshTokenRepository()
+
+		token, _ := domain.GenerateRefreshToken()
+		_ = refreshRepo.Save(context.Background(), token, user.ID().String(), time.Hour)
+
+		// Включаем saveErr после первого Save — теперь упадёт Save нового токена.
+		refreshRepo.saveErr = errors.New("redis down")
+
+		uc := NewRefreshToken(refreshRepo, userRepo, tokenManager, time.Hour, log)
+		_, err := uc.Execute(context.Background(), token.String())
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "redis down")
 	})
 }

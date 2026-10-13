@@ -12,8 +12,9 @@ import (
 
 // mockRepository реализует ports.Repository
 type mockRepository struct {
-	users map[string]domain.User // key = email
-	err   error                  // для имитации ошибок
+	users   map[string]domain.User // key = email
+	err     error                  // общая — все методы возвращают её
+	saveErr error                  // только Save — проверяется раньше общей err
 }
 
 func newMockRepository() *mockRepository {
@@ -21,6 +22,9 @@ func newMockRepository() *mockRepository {
 }
 
 func (m *mockRepository) Save(ctx context.Context, user domain.User) error {
+	if m.saveErr != nil {
+		return m.saveErr
+	}
 	if m.err != nil {
 		return m.err
 	}
