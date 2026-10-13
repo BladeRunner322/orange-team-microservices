@@ -182,4 +182,41 @@ func runRepositoryTests(t *testing.T, repo *Repository) {
 		err := repo.Delete(ctx, uuid.New())
 		assert.ErrorIs(t, err, domain.ErrProfileNotFound)
 	})
+
+	t.Run("WithTx + GetByUserIDForUpdate — блокировка видна параллельному запросу", func(t *testing.T) {
+		profile := newEmptyProfile()
+		require.NoError(t, repo.EnsureExists(ctx, profile))
+
+		// Открываем транзакцию, читаем с FOR UPDATE, не коммитим.
+		tx, err := repo.pool.BeginTx(ctx)
+		require.NoError(t, err)
+
+		txRepo := &Repository{tx: tx, opTimeout: 5 * time.Second}
+
+		_, err = txRepo.GetByUserIDForUpdate(ctx, profile.UserID())
+		require.NoError(t, err)
+
+		// Параллельный FOR UPDATE должен ждать. Проверяем через таймаут.
+		done := make(chan error, 1)
+		go func() {
+			_, err := repo.GetByUserIDForUpdate(ctx, profile.UserID())
+			done <- err
+		}()
+
+		select {
+		case <-done:
+			t.Fatal("параллельный FOR UPDATE не должен завершиться, пока первая транзакция открыта")
+		case <-time.After(200 * time.Millisecond):
+			// Ожидаемо: ждёт.
+		}
+
+		require.NoError(t, tx.Rollback(ctx))
+
+		select {
+		case err := <-done:
+			require.NoError(t, err, "после ROLLBACK блокировка должна сняться")
+		case <-time.After(2 * time.Second):
+			t.Fatal("параллельный FOR UPDATE должен был завершиться после ROLLBACK")
+		}
+	})
 }
