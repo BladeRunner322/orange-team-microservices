@@ -82,9 +82,16 @@ HALF-OPEN ──(1 ошибка)────────────────
 backoff с jitter, ограничение по кодам ответа, ограничение попыток.
 Уже проверен в проде, не требует своей реализации.
 
-**Коды для retry:** только `codes.Unavailable` и
-`codes.DeadlineExceeded`. Не `Internal`, не `InvalidArgument`, не
-`NotFound`. Логические ошибки не ретраим — только транспортные.
+**Коды для retry:** только `codes.Unavailable`. Не `DeadlineExceeded`
+(см. ниже), не `Internal`, не `InvalidArgument`, не `NotFound`.
+Логические ошибки не ретраим — только транспортные.
+
+**Почему не `DeadlineExceeded`.** Библиотека
+`grpc-ecosystem/go-grpc-middleware/retry` не ретраит `DeadlineExceeded`
+автоматически — для этого нужен `WithPerRetryTimeout`, который задаёт
+отдельный таймаут на попытку. У нас таймаут ставится `TimeoutInterceptor`
+(per-call, внутри Retry), а не через опции библиотеки. Смешивать два
+механизма таймаута — источник путаницы. Оставили только `Unavailable`.
 
 ### 3. Whitelist идемпотентных методов
 
@@ -133,7 +140,7 @@ side-эффектов в БД или в других сервисах. Повт�
 **Итоговая цепочка:**
 
 ```
-CB → Retry → Timeout → UserID → RequestID → invoker
+CB → Retry → ClientMetrics → Timeout → UserID → RequestID → invoker
 ```
 
 **Обоснование порядка:**
@@ -145,6 +152,9 @@ CB → Retry → Timeout → UserID → RequestID → invoker
 - **Retry снаружи Timeout.** Таймаут применяется к **каждой попытке**,
   а не ко всему retry-циклу. Иначе `3 × 10s = 30s` на один вызов
   превысит `GATEWAY_TIMEOUT` и весь бюджет запроса клиента.
+- **ClientMetrics внутри Retry.** Метрика видит каждую попытку
+  как отдельный вызов. Иначе при retry мы бы получили одну запись
+  с суммарной длительностью, а не N записей по попыткам.
 - **UserID и RequestID внутри.** Это финализирующие интерсепторы,
   которые кладут данные в metadata непосредственно перед вызовом.
   Они должны отработать один раз на каждую попытку, включая retry
@@ -230,15 +240,17 @@ GATEWAY_RETRY_IDEMPOTENT_METHODS=/auth.AuthService/ValidateToken,/profiles.Profi
 | `grpc_client_requests_in_flight` | Gauge | `target` | Сколько вызовов висит сейчас |
 | `grpc_client_circuit_breaker_state` | Gauge | `target` | `0=closed`, `1=half-open`, `2=open` |
 | `grpc_client_circuit_breaker_transitions_total` | Counter | `target, from, to` | Сколько раз CB менял состояние |
-| `grpc_client_retry_attempts_total` | Counter | `target, method, result` | Сколько было retry-попыток (`result: success\|failure`) |
+| `grpc_client_retry_attempts_total` | Counter | `target, method, result` | Три значения: `result="retry"` — сколько было retry-попыток (calls - 1), `result="success"` / `result="failure"` — исход retry-цикла. `retry` инкрементится, только если попыток было больше одной |
 
 **Источники данных:**
 
 - `ClientMetricsInterceptor` (новый) — первые три, пишет на каждый вызов.
 - `gobreaker.Settings.OnStateChange` — следующие два, вызывается
   библиотекой при каждом переходе.
-- `RetryInterceptor` (свой) — последний, инкрементит на каждую
-  retry-попытку.
+- `RetryInterceptor` (свой) — последний. Инкрементит `result="retry"`
+  на разницу `calls - 1` (число фактических повторов), а также
+  `result="success"` или `result="failure"` на исход всего
+  retry-цикла. Если попытка одна — метрика не пишется.
 
 **Что это даёт при инциденте:**
 
