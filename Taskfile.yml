@@ -7,9 +7,13 @@ env:
   COMPOSE_ENV_FILES: .env
 
 vars:
-  # Паттерны пакетов, исключаемых из coverage:
-  # обвязка, сгенерированный код, точки входа — unit-тесты не имеют смысла.
-  COVERAGE_EXCLUDE: 'internal/gen|/cmd$|/config$|/bootstrap$|/interfaces/.*grpc$|/application/ports$|pkg/logger$|pkg/health$|pkg/grpc/server$|pkg/nullable$|pkg/redis$|pkg/metrics$|pkg/ratelimit$'
+  # Паттерны, исключаемые из unit-покрытия.
+  # Первая часть — обвязка (нет логики для unit-тестов).
+  # Вторая часть — пакеты с только integration-тестами (0% в unit-режиме вводит в заблуждение).
+  UNIT_COVERAGE_EXCLUDE: 'internal/gen|/cmd$|/config$|/bootstrap$|/interfaces/.*grpc$|/application/ports$|pkg/logger$|pkg/health$|pkg/grpc/server$|pkg/nullable$|pkg/redis$|pkg/metrics$|pkg/ratelimit$|/infrastructure/postgres_repo$|/infrastructure/redis_repo$|/infrastructure/clients$'
+
+  # Явный список пакетов, покрываемых integration-тестами.
+  INTEGRATION_PACKAGES: './pkg/postgres/... ./pkg/ratelimit/... ./services/auth/internal/infrastructure/postgres_repo/... ./services/auth/internal/infrastructure/redis_repo/... ./services/profiles/internal/infrastructure/postgres_repo/... ./services/exercises/internal/infrastructure/postgres_repo/...'
 
 includes:
   auth:      ./taskfiles/auth.yml
@@ -38,19 +42,20 @@ tasks:
   # ============================================================
 
   test:
-    desc: Run unit tests (only testable packages, with coverage)
+    desc: Run unit tests with coverage (only unit-testable packages)
     cmds:
-      - go test -short -cover $(go list ./... | grep -vE '{{.COVERAGE_EXCLUDE}}')
+      - go test -short -cover $(go list ./... | grep -vE '{{.UNIT_COVERAGE_EXCLUDE}}')
 
   test-integration:
-    desc: Run integration tests with Testcontainers
-    cmds: [go test -tags=integration -v ./...]
+    desc: Run integration tests with Testcontainers and coverage
+    cmds:
+      - go test -tags=integration -cover {{.INTEGRATION_PACKAGES}}
 
   test-cover:
-    desc: HTML coverage report with line-by-line highlighting (only testable packages)
+    desc: HTML coverage report from unit tests (only unit-testable packages)
     cmds:
       - mkdir -p coverage
-      - go test -short -coverprofile=coverage/coverage.out $(go list ./... | grep -vE '{{.COVERAGE_EXCLUDE}}')
+      - go test -short -coverprofile=coverage/coverage.out $(go list ./... | grep -vE '{{.UNIT_COVERAGE_EXCLUDE}}')
       - go tool cover -html=coverage/coverage.out -o coverage/coverage.html
       - echo "Coverage report saved to coverage/coverage.html"
 
