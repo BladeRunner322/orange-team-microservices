@@ -21,7 +21,7 @@ func NewDeleteExercise(repo ports.Repository, log *logger.Logger) *DeleteExercis
 	return &DeleteExercise{repo: repo, logger: log}
 }
 
-// / Execute помечает упражнение удалённым (deleted_at = NOW()).
+// Execute помечает упражнение удалённым (deleted_at = NOW()).
 //
 // Идемпотентен: повторный вызов (или DELETE несуществующего id)
 // возвращает nil, а не ошибку (см. ADR-007 F-3). Это защищает

@@ -1,3 +1,5 @@
+// Package domain — доменная модель Profiles-сервиса:
+// сущность Profile, value objects и ошибки.
 package domain
 
 import (
@@ -62,7 +64,6 @@ func (p Profile) Completed() bool {
 
 // ApplyPatch применяет патч: каждое поле с Set устанавливается, остальные не трогаются.
 func (p *Profile) ApplyPatch(patch ProfilePatch) {
-
 	if patch.Sex.Set {
 		p.sex = patch.Sex.Value
 	}

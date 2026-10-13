@@ -1,4 +1,3 @@
-// Package postgres_repo — преобразование между domain.Profile и ProfileModel.
 package postgres_repo
 
 import "github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/domain"

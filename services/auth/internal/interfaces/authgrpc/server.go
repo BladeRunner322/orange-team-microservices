@@ -1,3 +1,4 @@
+// Package authgrpc реализует gRPC-сервер Auth-сервиса: обработчики RPC и мапперы proto ↔ domain.
 package authgrpc
 
 import (

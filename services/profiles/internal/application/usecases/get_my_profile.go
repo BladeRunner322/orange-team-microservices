@@ -1,3 +1,4 @@
+// Package usecases реализует сценарии работы Profiles-сервиса.
 package usecases
 
 import (

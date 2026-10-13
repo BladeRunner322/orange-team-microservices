@@ -1,3 +1,5 @@
+// Package jwt — генерация и валидация JWT для Auth-сервиса.
+// HS256, issuer и audience проверяются при валидации (см. ADR-007 B-1).
 package jwt
 
 import (

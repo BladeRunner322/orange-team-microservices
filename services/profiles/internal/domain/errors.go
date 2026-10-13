@@ -1,4 +1,3 @@
-// Package domain — доменные ошибки Profiles-сервиса.
 package domain
 
 import "errors"

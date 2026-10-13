@@ -1,3 +1,5 @@
+// Package domain — доменная модель Auth-сервиса:
+// сущность User, value objects и ошибки.
 package domain
 
 import (

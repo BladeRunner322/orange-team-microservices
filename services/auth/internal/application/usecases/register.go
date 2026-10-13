@@ -1,3 +1,4 @@
+// Package usecases реализует сценарии работы Auth-сервиса.
 package usecases
 
 import (
@@ -21,15 +22,15 @@ func NewRegister(repo ports.Repository, log *logger.Logger) *Register {
 	return &Register{repo: repo, logger: log}
 }
 
-func (uc *Register) Execute(ctx context.Context, emailStr, password, fullNameStr string) (domain.User, error) {
+func (uc *Register) Execute(ctx context.Context, emailRaw, password, fullNameRaw string) (domain.User, error) {
 	log := uc.logger.With("operation", "Register")
 
-	email, err := domain.NewEmail(emailStr)
+	email, err := domain.NewEmail(emailRaw)
 	if err != nil {
 		log.Warn("invalid email", "error", err)
 		return domain.User{}, err
 	}
-	fullName, err := domain.NewFullName(fullNameStr)
+	fullName, err := domain.NewFullName(fullNameRaw)
 	if err != nil {
 		log.Warn("invalid full name", "error", err)
 		return domain.User{}, err

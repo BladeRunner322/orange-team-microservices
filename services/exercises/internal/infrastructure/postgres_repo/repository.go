@@ -1,4 +1,5 @@
-// Package postgres_repo — реализация ports.Repository для PostgreSQL.
+// Package postgres_repo — реализация ports.Repository для PostgreSQL:
+// работа с таблицей exercises.exercises и маппинг ExerciseModel ↔ domain.Exercise.
 package postgres_repo
 
 import (

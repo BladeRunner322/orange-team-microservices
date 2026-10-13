@@ -1,4 +1,5 @@
-// Package postgres_repo — реализация ports.Repository для PostgreSQL.
+// Package postgres_repo — реализация ports.Repository для PostgreSQL:
+// работа с таблицей profiles.users и маппинг ProfileModel ↔ domain.Profile.
 package postgres_repo
 
 import (
@@ -34,15 +35,7 @@ func (r *Repository) GetByUserID(ctx context.Context, userID uuid.UUID) (domain.
 
 	var m ProfileModel
 	row := r.pool.QueryRow(ctx, query, userID)
-	err := row.Scan(
-		&m.UserID,
-		&m.Sex,
-		&m.WeightGrams,
-		&m.BirthDate,
-		&m.HeightCM,
-		&m.CreatedAt,
-		&m.UpdatedAt,
-	)
+	err := m.Scan(row)
 
 	if errors.Is(err, postgres.ErrNoRows) {
 		return domain.Profile{}, domain.ErrProfileNotFound
@@ -52,7 +45,12 @@ func (r *Repository) GetByUserID(ctx context.Context, userID uuid.UUID) (domain.
 		return domain.Profile{}, fmt.Errorf("find profile by user_id: %w", err)
 	}
 
-	return ModelToDomain(m)
+	profile, err := ModelToDomain(m)
+	if err != nil {
+		return domain.Profile{}, fmt.Errorf("profile %s: %w", m.UserID, err)
+	}
+
+	return profile, nil
 }
 
 // EnsureExists создаёт пустой профиль, если его нет (idempotent, для lazy-create).
@@ -93,7 +91,6 @@ func (r *Repository) Update(ctx context.Context, profile domain.Profile) (domain
 		WHERE user_id = $1
 		RETURNING user_id, sex, weight_grams, birth_date, height_cm, created_at, updated_at
 	`
-	var updated ProfileModel
 	row := r.pool.QueryRow(
 		ctx,
 		query,
@@ -103,15 +100,7 @@ func (r *Repository) Update(ctx context.Context, profile domain.Profile) (domain
 		m.BirthDate,
 		m.HeightCM,
 	)
-	err := row.Scan(
-		&updated.UserID,
-		&updated.Sex,
-		&updated.WeightGrams,
-		&updated.BirthDate,
-		&updated.HeightCM,
-		&updated.CreatedAt,
-		&updated.UpdatedAt,
-	)
+	err := m.Scan(row)
 
 	if errors.Is(err, postgres.ErrNoRows) {
 		return domain.Profile{}, domain.ErrProfileNotFound
@@ -121,7 +110,12 @@ func (r *Repository) Update(ctx context.Context, profile domain.Profile) (domain
 		return domain.Profile{}, fmt.Errorf("update profile: %w", err)
 	}
 
-	return ModelToDomain(updated)
+	updated, err := ModelToDomain(m)
+	if err != nil {
+		return domain.Profile{}, fmt.Errorf("profile %s: %w", m.UserID, err)
+	}
+
+	return updated, nil
 }
 
 // Delete удаляет профиль по user_id.

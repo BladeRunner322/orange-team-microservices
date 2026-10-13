@@ -1,3 +1,5 @@
+// Package postgres_repo — реализация ports.Repository для PostgreSQL:
+// работа с таблицей auth.users и маппинг UserModel ↔ domain.User.
 package postgres_repo
 
 import (
@@ -61,15 +63,7 @@ func (r *Repository) FindByEmail(ctx context.Context, email domain.Email) (domai
 	`
 	var m UserModel
 	row := r.pool.QueryRow(ctx, query, email.String())
-	err := row.Scan(
-		&m.ID,
-		&m.Email,
-		&m.PasswordHash,
-		&m.FullName,
-		&m.Role,
-		&m.CreatedAt,
-		&m.UpdatedAt,
-	)
+	err := m.Scan(row)
 
 	if errors.Is(err, postgres.ErrNoRows) {
 		return domain.User{}, domain.ErrUserNotFound
@@ -77,7 +71,13 @@ func (r *Repository) FindByEmail(ctx context.Context, email domain.Email) (domai
 	if err != nil {
 		return domain.User{}, fmt.Errorf("find user by email: %w", err)
 	}
-	return ModelToDomain(m)
+
+	user, err := ModelToDomain(m)
+	if err != nil {
+		return domain.User{}, fmt.Errorf("user %s: %w", m.ID, err)
+	}
+
+	return user, nil
 }
 
 // FindByID ищет пользователя по ID.
@@ -92,20 +92,18 @@ func (r *Repository) FindByID(ctx context.Context, id uuid.UUID) (domain.User, e
 	`
 	var m UserModel
 	row := r.pool.QueryRow(ctx, query, id)
-	err := row.Scan(
-		&m.ID,
-		&m.Email,
-		&m.PasswordHash,
-		&m.FullName,
-		&m.Role,
-		&m.CreatedAt,
-		&m.UpdatedAt,
-	)
+	err := m.Scan(row)
 	if errors.Is(err, postgres.ErrNoRows) {
 		return domain.User{}, domain.ErrUserNotFound
 	}
 	if err != nil {
 		return domain.User{}, fmt.Errorf("find user by id: %w", err)
 	}
-	return ModelToDomain(m)
+
+	user, err := ModelToDomain(m)
+	if err != nil {
+		return domain.User{}, fmt.Errorf("user %s: %w", m.ID, err)
+	}
+
+	return user, nil
 }
