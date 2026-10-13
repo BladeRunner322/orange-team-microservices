@@ -141,3 +141,158 @@ func TestLoginHandler(t *testing.T) {
 		assert.Contains(t, rr.Body.String(), "invalid credentials")
 	})
 }
+
+func TestRefreshHandler(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		mock := &mockAuthClient{
+			refreshTokenFunc: func(ctx context.Context, refreshToken string) (*authpb.RefreshTokenResponse, error) {
+				return &authpb.RefreshTokenResponse{
+					AccessToken:  "new-access",
+					RefreshToken: "new-refresh",
+					TokenType:    "Bearer",
+				}, nil
+			},
+		}
+		handler := RefreshHandler(mock)
+
+		reqBody := RefreshRequest{RefreshToken: "old-refresh-token-string-that-is-long-enough"}
+		jsonBody, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/refresh", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var resp authpb.RefreshTokenResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+		assert.Equal(t, "new-access", resp.AccessToken)
+		assert.Equal(t, "new-refresh", resp.RefreshToken)
+	})
+
+	t.Run("invalid body", func(t *testing.T) {
+		mock := &mockAuthClient{}
+		handler := RefreshHandler(mock)
+
+		req := httptest.NewRequest(http.MethodPost, "/refresh", bytes.NewReader([]byte("not json")))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid request body")
+	})
+
+	t.Run("empty refresh_token — validation error", func(t *testing.T) {
+		mock := &mockAuthClient{}
+		handler := RefreshHandler(mock)
+
+		reqBody := RefreshRequest{RefreshToken: ""}
+		jsonBody, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/refresh", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "failed on the 'required' tag")
+	})
+
+	t.Run("gRPC error — invalid refresh", func(t *testing.T) {
+		mock := &mockAuthClient{
+			refreshTokenFunc: func(ctx context.Context, refreshToken string) (*authpb.RefreshTokenResponse, error) {
+				return nil, status.Error(codes.Unauthenticated, "invalid refresh token")
+			},
+		}
+		handler := RefreshHandler(mock)
+
+		reqBody := RefreshRequest{RefreshToken: "some-token-string-that-is-long-enough-here"}
+		jsonBody, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/refresh", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid refresh token")
+	})
+}
+
+func TestLogoutHandler(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		mock := &mockAuthClient{
+			logoutFunc: func(ctx context.Context, refreshToken string) error {
+				return nil
+			},
+		}
+		handler := LogoutHandler(mock)
+
+		reqBody := LogoutRequest{RefreshToken: "some-refresh-token-string-long-enough"}
+		jsonBody, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/logout", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var resp map[string]string
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+		assert.Equal(t, "logged out", resp["status"])
+	})
+
+	t.Run("invalid body", func(t *testing.T) {
+		mock := &mockAuthClient{}
+		handler := LogoutHandler(mock)
+
+		req := httptest.NewRequest(http.MethodPost, "/logout", bytes.NewReader([]byte("not json")))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid request body")
+	})
+
+	t.Run("empty refresh_token — validation error", func(t *testing.T) {
+		mock := &mockAuthClient{}
+		handler := LogoutHandler(mock)
+
+		reqBody := LogoutRequest{RefreshToken: ""}
+		jsonBody, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/logout", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "failed on the 'required' tag")
+	})
+
+	t.Run("gRPC error", func(t *testing.T) {
+		mock := &mockAuthClient{
+			logoutFunc: func(ctx context.Context, refreshToken string) error {
+				return status.Error(codes.InvalidArgument, "invalid refresh token")
+			},
+		}
+		handler := LogoutHandler(mock)
+
+		reqBody := LogoutRequest{RefreshToken: "some-refresh-token-string-long-enough"}
+		jsonBody, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/logout", bytes.NewReader(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid refresh token")
+	})
+}

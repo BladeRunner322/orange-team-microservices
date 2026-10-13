@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +16,13 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/httputil"
 )
 
+// Limiter — контракт, которому должен соответствовать rate limiter.
+// Middleware не зависит от конкретной реализации (pkg/ratelimit.Limiter),
+// только от метода Allow. Это позволяет подменять реализацию и упрощает тесты.
+type Limiter interface {
+	Allow(ctx context.Context, key string, rule ratelimit.Rule) (ratelimit.Result, error)
+}
+
 // RateLimitMiddleware ограничивает частоту запросов.
 //
 // Работает по-разному в зависимости от пути:
@@ -25,7 +33,7 @@ import (
 // Если правило или ключ определить не удалось — запрос пропускается
 // без проверки (fail-open), чтобы не блокировать рабочий трафик.
 func RateLimitMiddleware(
-	limiter *ratelimit.Limiter,
+	limiter Limiter,
 	trustedProxies []*net.IPNet,
 	cfg config.RateLimitConfig,
 	log *logger.Logger,
