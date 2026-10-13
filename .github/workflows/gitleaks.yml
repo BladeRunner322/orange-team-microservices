@@ -1,0 +1,29 @@
+name: Gitleaks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  gitleaks:
+    name: Scan for secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Полная история — gitleaks сканирует коммиты, а не только файлы.
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Не оставляем комментарии в PR — при падении видно в логах job'а.
+          GITLEAKS_ENABLE_COMMENTS: false
+          # Не выгружаем артефакты — SARIF в GitHub Security не настроен.
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+          # Не запускать gitleaks для merge-коммитов — они дублируют содержимое.
+          GITLEAKS_ENABLE_SUMMARY: true
