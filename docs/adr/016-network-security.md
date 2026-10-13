@@ -87,7 +87,26 @@ enabled = true
 - Не защищает от атак через 80/443.
 - Не заменяет правильную настройку SSH (`PasswordAuthentication no`, `PermitRootLogin prohibit-password`).
 
-### 4. RBAC проверяется только в Gateway, downstream доверяет metadata
+### 4. `TRUSTED_PROXIES` — обязательная переменная в проде
+
+Gateway за Caddy. `RemoteAddr` входящего HTTP-запроса — это IP Caddy (docker-сеть), а не клиента. Реальный IP клиента приходит в заголовке `X-Forwarded-For`, который Caddy дописывает справа.
+
+Middleware `RateLimitMiddleware` использует `clientIP()`, который доверяет `XFF` только если `RemoteAddr` входит в `TRUSTED_PROXIES`. При пустом списке `XFF` игнорируется полностью, `clientIP` возвращает IP Caddy.
+
+Следствие: rate limit по IP (`/refresh` — 20/мин) превращается в лимит на весь сервис. `/login` и `/register` защищены от брутфорса одного аккаунта (там ключ `<ip>:<email>`, email меняется), но не от распределённого перебора с одного IP-адреса.
+
+Что должно быть в `.env` — subnet docker-сети проекта:
+
+```
+docker network inspect orange-team-microservices_default | grep Subnet
+# например: "Subnet": "172.18.0.0/16"
+
+TRUSTED_PROXIES=172.18.0.0/16
+```
+
+Если стек переедет на несколько хостов или появится внешний балансировщик — список расширяется. Алгоритм `clientIP` обходит `XFF` справа налево и берёт первый не-trusted IP — это защищает от подделки заголовка клиентом (см. `rate_limit_test.go`, подтесты `клиент подделал XFF` и `Caddy добавляет свой IP в XFF`).
+
+### 5. RBAC проверяется только в Gateway, downstream доверяет metadata
 
 Exercises (и будущие сервисы) не проверяют роль пользователя внутри своих usecase — они доверяют тому, что роль уже проверена на уровне Gateway (`middleware.RequireRole("admin")`). В gRPC-контракте нет отдельного поля «роль»: она передаётся через metadata (`x-user-role`) вместе с `x-user-id`.
 
@@ -105,7 +124,7 @@ Exercises (и будущие сервисы) не проверяют роль п
 
 **Статус:** осознанное решение, симметрично `insecure` gRPC (см. ниже).
 
-### 5. gRPC `insecure` между сервисами — осознанный выбор
+### 6. gRPC `insecure` между сервисами — осознанный выбор
 
 Gateway ходит к Auth/Profiles/Exercises с `GRPC_CLIENT_TLS_MODE=insecure` (TLS есть, но сертификат не проверяется).
 
@@ -136,12 +155,14 @@ Gateway ходит к Auth/Profiles/Exercises с `GRPC_CLIENT_TLS_MODE=insecure`
 - Периметр декларативен: `ufw status` + `infra/compose.app.yml` + `infra/compose.infra.yml` — единый источник истины.
 - Защита для процессов вне Docker (если однажды поднимешь что-то руками).
 - Никаких преждевременных сложностей: `insecure` gRPC — обоснованное решение, а не недоделка.
+- `TRUSTED_PROXIES` покрывает реальный вектор атаки на rate limit — подмену `X-Forwarded-For` клиентом.
 
 **Минусы:**
 
 - Ручной шаг при добавлении нового сервиса: если у него есть публичный порт (как у Caddy), нужно явно разрешить в ufw. Если внутренний — просто bind на `127.0.0.1`.
 - fail2ban иногда банит соседние IP из Selectel (в логах видно `136.234.4.130` — соседний VDS, сканирующий подсеть). Это не баг, но при отладке из соседнего контейнера может ввести в заблуждение.
 - `insecure` gRPC остаётся техническим долгом — но осознанно, с триггерами и без иллюзий.
+- Без `TRUSTED_PROXIES` в проде rate limit деградирует до глобального по IP. Это критично, поэтому переменная обязательна и проверяется при деплое.
 
 **Когда пересмотреть:**
 
@@ -166,6 +187,7 @@ Gateway ходит к Auth/Profiles/Exercises с `GRPC_CLIENT_TLS_MODE=insecure`
 - ufw активен: открыты 22, 80, 443. Остальное — `deny incoming`.
 - fail2ban установлен, SSH-jail активен, `bantime=1h`, `maxretry=5`. Проверено на живых ботах.
 - `GRPC_CLIENT_TLS_MODE=insecure` — зафиксировано как осознанный выбор, триггеры для `verify` зафиксированы.
+- `TRUSTED_PROXIES` заполнен subnet docker-сети, `clientIP` корректно определяет IP клиента за Caddy. Покрыто тестами (`rate_limit_test.go`).
 - Проверено: `nmap` снаружи показывает `open` только для 22, 80, 443. Остальные — `filtered`.
 
 **Обновлено в ADR-021** (2026-10-13). Compose разделён на `app` + `infra`, все правила сетевой безопасности сохранены. `127.0.0.1` bind по-прежнему применяется ко всем внутренним портам.

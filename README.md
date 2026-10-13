@@ -118,7 +118,7 @@ cp services/exercises/.env.example services/exercises/.env
 - `EXERCISES_GRPC_ADDR` — адрес Exercises Service (по умолчанию `exercises-service:50053`)
 - `GRPC_CLIENT_TLS_MODE` — режим TLS для исходящих gRPC-соединений (`disabled` / `insecure` / `verify`). По умолчанию `insecure` — для self-signed сертификатов в dev/staging.
 - `REDIS_PASSWORD` — пароль для Redis (rate limiting, можно тот же или отдельный)
-- `TRUSTED_PROXIES` — CIDR-список доверенных прокси через запятую (опционально). Если пусто — заголовок `X-Forwarded-For` игнорируется, IP клиента берётся из `RemoteAddr`. Заполнять, только если перед Gateway стоит прокси (nginx, ALB).
+- `TRUSTED_PROXIES` — CIDR-список доверенных прокси через запятую. **В проде обязательно.** Если пусто, `X-Forwarded-For` игнорируется, и IP клиента берётся из `RemoteAddr` — а там в проде всегда IP Caddy, а не клиента. Следствие: rate limit по IP (`/refresh` — 20/мин) становится общим для всех клиентов сразу. В docker-стеке проекта значение — subnet docker-сети: `docker network inspect orange-team-microservices_default | grep Subnet`, обычно `172.18.0.0/16`. См. [ADR-016](docs/adr/016-network-security.md).
 
 **В `services/profiles/.env`:**
 
@@ -1288,6 +1288,18 @@ TTL устанавливается автоматически: если клие
 #### Fail-open
 
 Если Redis **недоступен** — middleware **пропускает запрос** и логирует ошибку. Это сделано намеренно: лучше пропустить запрос, чем уронить весь сервис, если Redis упадёт. Такой подход называется **fail-open**.
+
+#### Зависимость от `TRUSTED_PROXIES`
+
+Все ключи, содержащие `<ip>`, зависят от того, что Gateway правильно определяет IP клиента. В проде между клиентом и Gateway стоит Caddy, поэтому `RemoteAddr` в запросе — это IP Caddy, а не клиента. Реальный IP приходит в `X-Forwarded-For`.
+
+Middleware доверяет `XFF` только если `RemoteAddr` входит в `TRUSTED_PROXIES`. Если список пуст, `XFF` игнорируется, и все клиенты для Gateway выглядят как один IP (IP Caddy).
+
+Что это ломает:
+- `/refresh` — лимит 20/мин считается по `<ip>`. Без `TRUSTED_PROXIES` это 20 refresh-запросов на весь сервис, а не на клиента.
+- `/login` и `/register` — лимит по `<ip>:<email>`. Защита от брутфорса одного аккаунта всё ещё работает (email меняется), но защита по IP-адресу — нет.
+
+**В проде `TRUSTED_PROXIES` должен быть заполнен** (subnet docker-сети проекта). См. [ADR-016](docs/adr/016-network-security.md).
 
 ### RBAC flow
 
