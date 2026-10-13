@@ -1,0 +1,24 @@
+version: '3'
+
+tasks:
+  run:
+    desc: 'Run profiles locally (auto-starts postgres + runs migrations)'
+    deps: [generate]
+    cmds:
+      - docker compose up -d postgres-profiles
+      - docker compose run --rm migrate-profiles
+      - env GRPC_PORT=:50062 POSTGRES_HOST=localhost POSTGRES_PORT=5433 ENABLE_TLS=true TLS_CERT_FILE=./certs/server.crt TLS_KEY_FILE=./certs/server.key HTTP_PORT=:8092 go run services/profiles/cmd/main.go
+
+  logs:
+    desc: Show Profiles service logs
+    cmds: [docker compose logs -f profiles]
+
+  psql:
+    desc: Open psql console for Profiles database
+    cmds:
+      - docker compose exec postgres-profiles sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+
+  migrate-create:
+    desc: 'Create a new migration for Profiles (usage: task profiles:migrate-create -- create_profiles)'
+    cmds:
+      - docker compose run --rm --entrypoint migrate migrate-profiles create -ext sql -dir /migrations -seq {{.CLI_ARGS}}
