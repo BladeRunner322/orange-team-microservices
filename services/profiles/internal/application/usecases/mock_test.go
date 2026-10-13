@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/application/ports"
 	"github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/domain"
 )
 
@@ -17,6 +18,18 @@ type mockRepository struct {
 
 func newMockRepository() *mockRepository {
 	return &mockRepository{profiles: make(map[uuid.UUID]domain.Profile)}
+}
+
+func (m *mockRepository) WithTx(ctx context.Context, fn func(ports.Repository) error) error {
+	if m.err != nil {
+		return m.err
+	}
+	// В памяти транзакции нет — прокидываем тот же мок.
+	return fn(m)
+}
+
+func (m *mockRepository) GetByUserIDForUpdate(ctx context.Context, userID uuid.UUID) (domain.Profile, error) {
+	return m.GetByUserID(ctx, userID)
 }
 
 func (m *mockRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (domain.Profile, error) {

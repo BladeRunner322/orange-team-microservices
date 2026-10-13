@@ -30,29 +30,37 @@ func (uc *PatchMyProfile) Execute(ctx context.Context, patch domain.ProfilePatch
 		return domain.Profile{}, err
 	}
 
-	profile, err := uc.repo.GetByUserID(ctx, userID)
-
-	if errors.Is(err, domain.ErrProfileNotFound) {
-		log.Warn("profile not found", "user_id", userID)
-		return domain.Profile{}, domain.ErrProfileNotFound
-	}
-
-	if err != nil {
-		log.Error("failed to get profile", "error", err, "user_id", userID)
-		return domain.Profile{}, fmt.Errorf("get profile: %w", err)
-	}
-
-	profile.ApplyPatch(patch)
-
-	updated, err := uc.repo.Update(ctx, profile)
-	if err != nil {
-		if errors.Is(err, domain.ErrProfileNotFound) {
-			log.Warn("profile not found during update", "user_id", userID)
-			return domain.Profile{}, domain.ErrProfileNotFound
+	var updated domain.Profile
+	err = uc.repo.WithTx(ctx, func(txRepo ports.Repository) error {
+		// SELECT ... FOR UPDATE — блокируем строку до COMMIT.
+		// Защита от lost update (ADR-007 F-2).
+		profile, err := txRepo.GetByUserIDForUpdate(ctx, userID)
+		if err != nil {
+			if errors.Is(err, domain.ErrProfileNotFound) {
+				log.Warn("profile not found", "user_id", userID)
+				return domain.ErrProfileNotFound
+			}
+			log.Error("failed to get profile for update", "error", err, "user_id", userID)
+			return fmt.Errorf("get profile for update: %w", err)
 		}
 
-		log.Error("failed to update profile", "error", err, "user_id", userID)
-		return domain.Profile{}, fmt.Errorf("update profile: %w", err)
+		profile.ApplyPatch(patch)
+
+		updated, err = txRepo.Update(ctx, profile)
+		if err != nil {
+			if errors.Is(err, domain.ErrProfileNotFound) {
+				log.Warn("profile not found during update", "user_id", userID)
+				return domain.ErrProfileNotFound
+			}
+			log.Error("failed to update profile", "error", err, "user_id", userID)
+			return fmt.Errorf("update profile: %w", err)
+		}
+
+		return nil
+	})
+	
+	if err != nil {
+		return domain.Profile{}, err
 	}
 
 	return updated, nil
