@@ -90,7 +90,7 @@ services:
     pid: host
 
   grafana:
-    image: grafana/grafana:13
+    image: grafana/grafana:13.2.3
     container_name: auth-grafana
     ports:
       - "127.0.0.1:${GRAFANA_PORT}:3000"

@@ -93,7 +93,7 @@ Database per Service (ADR-004) требует отдельный Postgres для
 prometheus:
   image: prom/prometheus:v3
 grafana:
-  image: grafana/grafana:13
+  image: grafana/grafana:13.2.3
 loki:
   image: grafana/loki:3
 promtail:
@@ -102,13 +102,15 @@ warp:
   image: caomingjun/warp@sha256:3af90254e5b623ac450d1006836c250b574a89d6df5cbf70380fd747ba216f95
 ```
 
-Мажорные версии выбраны по текущим запущенным: Prometheus 3.15.0, Grafana 13.2.3, Loki 3.7.8, Promtail 3.6.8.
+Версии выбраны по текущим запущенным: Prometheus 3.15.0, Grafana 13.2.3, Loki 3.7.8, Promtail 3.6.8.
+
+**Prometheus, Loki, Promtail закреплены по мажору** (`:v3`, `:3`, `:3`) — минорные и патч-обновления внутри ветки остаются доступными, `docker compose pull` их подтянет. Мажорный скачок заблокирован.
+
+**Grafana закреплена полной версией** (`:13.2.3`), а не мажором. Причина: мажорного тега `:13` в Docker Hub нет — `docker compose pull` падает с `not found`, деплой прерывается. Grafana публикует мажорные теги не для всех релизов. Полная версия — такой же надёжный пин, но требует ручного обновления при желании получить минорные апдейты.
 
 **WARP закреплён по дайджесту** (не по тегу) — у `caomingjun/warp` в Docker Hub нет версионных тегов, только `latest`. Дайджест фиксирует точный образ неизменяемо. Обновление — вручную: `docker pull caomingjun/warp:latest`, взять новый digest, заменить в compose. Для WARP это осознанно: он редко обновляется, автоматическое обновление тут не нужно.
 
 Остальные образы закреплены (`postgres:18.6-bookworm`, `redis:7-alpine`, `caddy:2-alpine`, `migrate/migrate:v4.19.1`, `prom/alertmanager:v0.34.1`, `prom/node-exporter:v1.8.2`).
-
-Минорные и патч-обновления внутри мажорной ветки остаются — `docker compose pull` их подтянет. Мажорный скачок заблокирован.
 
 ### Мини-ПК как альтернатива VPS
 
