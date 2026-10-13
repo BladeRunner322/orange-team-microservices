@@ -38,18 +38,19 @@ tasks:
   # ============================================================
 
   test:
-    desc: Run unit tests (compact — one line per package with coverage)
-    cmds: [go test -short -cover ./...]
+    desc: Run unit tests (only testable packages, with coverage)
+    cmds:
+      - go test -short -cover $(go list ./... | grep -vE '{{.COVERAGE_EXCLUDE}}')
 
   test-integration:
     desc: Run integration tests with Testcontainers
     cmds: [go test -tags=integration -v ./...]
 
   test-cover:
-    desc: HTML coverage report with line-by-line highlighting
+    desc: HTML coverage report with line-by-line highlighting (only testable packages)
     cmds:
       - mkdir -p coverage
-      - go test -short -coverprofile=coverage/coverage.out ./...
+      - go test -short -coverprofile=coverage/coverage.out $(go list ./... | grep -vE '{{.COVERAGE_EXCLUDE}}')
       - go tool cover -html=coverage/coverage.out -o coverage/coverage.html
       - echo "Coverage report saved to coverage/coverage.html"
 
