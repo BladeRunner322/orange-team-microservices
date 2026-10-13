@@ -283,14 +283,17 @@ package domain
 
 **Exercises — ✅ сделан по конвенциям** (этот ADR писался параллельно с Exercises). Суффикс `Raw`, `Scan(row)` на модели, вложенный стиль ошибок, `ModelToDomain` с id, `ToDomainID(raw)` — всё применено.
 
-**Существующие (Auth, Profiles):** привести к конвенциям в отдельном PR — «refactor: apply naming conventions». Что переделать:
+**Auth и Profiles — ✅ приведены к конвенциям** (2026-10-13). Что было сделано:
 
-- Auth: суффикс `Str` в параметрах usecase (`emailStr`) → `Raw` (N-3).
+- Auth: суффикс `Str` в параметрах usecase (`emailStr`, `fullNameStr`) → `Raw` (N-3).
 - Profiles: `ToDomainUserID(req)` → `ToDomainUserID(raw string)` (N-1).
-- Profiles: inline-скан в репозитории → `Scan(row)` на модели (CS-3).
-- Профили и Auth: комментарий пакета — один раз, в представительном файле (CS-9).
+- Profiles: порядок методов `ports.Repository` выровнен по CRUD-alphabetical (N-2).
+- Auth и Profiles: inline-скан → `Scan(row)` на модели (CS-3).
+- Auth и Profiles: обёртка `ModelToDomain` с id записи (CS-4).
+- Auth и Profiles: возврат через переменную (CS-8).
+- Auth и Profiles: package-комментарий — один раз, в представительном файле (CS-9).
 
-**Приоритет рефакторинга:** низкий. Косметика, не блокер.
+**Приоритет рефакторинга:** закрыт. Все четыре сервиса соответствуют конвенциям.
 
 ## Связанные решения
 

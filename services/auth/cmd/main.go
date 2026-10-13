@@ -1,3 +1,4 @@
+// Точка входа Auth-сервиса.
 package main
 
 import (

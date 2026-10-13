@@ -1,3 +1,4 @@
+// Package ports — интерфейсы, которые domain требует от инфраструктуры.
 package ports
 
 import (

@@ -1,3 +1,5 @@
+// Package redis_repo — реализация ports.RefreshTokenRepository через Redis:
+// хранение refresh-токенов с TTL и set токенов пользователя для revoke-all.
 package redis_repo
 
 import (

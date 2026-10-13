@@ -42,10 +42,10 @@ type LoginResult struct {
 	RefreshToken string
 }
 
-func (uc *Login) Execute(ctx context.Context, emailStr, password string) (LoginResult, error) {
+func (uc *Login) Execute(ctx context.Context, emailRaw, password string) (LoginResult, error) {
 	log := uc.logger.With("operation", "Login")
 
-	email, err := domain.NewEmail(emailStr)
+	email, err := domain.NewEmail(emailRaw)
 	if err != nil {
 		log.Warn("invalid email", "error", err)
 		return LoginResult{}, domain.ErrInvalidCredentials
@@ -84,8 +84,10 @@ func (uc *Login) Execute(ctx context.Context, emailStr, password string) (LoginR
 		return LoginResult{}, fmt.Errorf("save refresh token: %w", err)
 	}
 
-	return LoginResult{
+	result := LoginResult{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken.String(),
-	}, nil
+	}
+
+	return result, nil
 }

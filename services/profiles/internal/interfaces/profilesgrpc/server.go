@@ -1,3 +1,4 @@
+// Package profilesgrpc реализует gRPC-сервер Profiles-сервиса: обработчики RPC и мапперы proto ↔ domain.
 package profilesgrpc
 
 import (
@@ -61,7 +62,7 @@ func (s *Server) GetProfile(
 	ctx context.Context,
 	req *profiles.GetProfileRequest,
 ) (*profiles.UserProfile, error) {
-	userID, err := ToDomainUserID(req)
+	userID, err := ToDomainUserID(req.UserId)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
 	}

@@ -27,7 +27,6 @@
 | 8 | Docker logging options | [ADR-018](adr/018-storage-retention.md) | ~15 мин | `daemon.json` + перезапуск Docker |
 | 9 | Rotation SSH на Ed25519 | [ADR-006](adr/006-secrets-management.md), [ADR-021](adr/021-independent-deployment.md) | ~30 мин | `appleboy/ssh-action` уже обновлён |
 | 10 | F-2: read-then-write без транзакции | [ADR-007](adr/007-known-issues.md) | ~2 ч | `PatchMyProfile`, `PatchExercise` |
-| 11 | Рефакторинг Auth/Profiles по ADR-011 | [ADR-011](adr/011-naming-and-code-style.md) | ~2 ч | N-1, N-3, CS-3, CS-9 |
 
 ## 🟡 После недели наблюдений за CB/Retry
 

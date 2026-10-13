@@ -115,9 +115,9 @@ func ToDomainProfilePatch(req *profiles.PatchMyProfileRequest) (domain.ProfilePa
 	return domain.NewProfilePatch(sex, weight, birthDate, height), nil
 }
 
-// ToDomainUserID преобразует pb.GetProfileRequest в параметры для use case.
-func ToDomainUserID(req *profiles.GetProfileRequest) (uuid.UUID, error) {
-	userID, err := uuid.Parse(req.UserId)
+// ToDomainUserID парсит user_id из proto в uuid.UUID.
+func ToDomainUserID(raw string) (uuid.UUID, error) {
+	userID, err := uuid.Parse(raw)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("parse user_id: %w", err)
 	}
