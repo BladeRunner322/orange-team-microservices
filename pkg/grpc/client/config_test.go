@@ -1,6 +1,7 @@
 package client
 
 import (
+	"crypto/tls"
 	"testing"
 	"time"
 
@@ -253,5 +254,32 @@ func TestApplyDefaults_ThenValidate(t *testing.T) {
 
 		require.NoError(t, cfg.validate())
 		assert.Equal(t, defaultTimeout, cfg.Timeout)
+	})
+}
+
+func TestTLSConfig(t *testing.T) {
+	t.Run("TLSModeVerify", func(t *testing.T) {
+		cfg := Config{TLSMode: TLSModeVerify}
+		tc := cfg.tlsConfig()
+
+		require.NotNil(t, tc)
+		assert.Equal(t, uint16(tls.VersionTLS12), tc.MinVersion)
+		assert.False(t, tc.InsecureSkipVerify)
+	})
+
+	t.Run("TLSModeInsecure", func(t *testing.T) {
+		cfg := Config{TLSMode: TLSModeInsecure}
+		tc := cfg.tlsConfig()
+
+		require.NotNil(t, tc)
+		assert.Equal(t, uint16(tls.VersionTLS12), tc.MinVersion)
+		assert.True(t, tc.InsecureSkipVerify)
+	})
+
+	t.Run("TLSModeDisabled", func(t *testing.T) {
+		cfg := Config{TLSMode: TLSModeDisabled}
+		tc := cfg.tlsConfig()
+
+		assert.Nil(t, tc)
 	})
 }
