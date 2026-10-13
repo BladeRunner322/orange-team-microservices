@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/BladeRunner322/orange-team-microservices/pkg/pgerrors"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
 	"github.com/BladeRunner322/orange-team-microservices/services/exercises/internal/domain"
 	"github.com/google/uuid"
@@ -37,7 +38,7 @@ func (r *Repository) Create(ctx context.Context, exercise domain.Exercise) (doma
 	row := r.pool.QueryRow(ctx, query, m.ID, m.Name, m.Description, m.Difficulty, m.Type)
 
 	if err := m.Scan(row); err != nil {
-		if errors.Is(err, postgres.ErrViolatesUnique) {
+		if errors.Is(err, pgerrors.ErrViolatesUnique) {
 			return domain.Exercise{}, domain.ErrExerciseNameExists
 		}
 
@@ -66,7 +67,7 @@ func (r *Repository) GetExercise(ctx context.Context, id uuid.UUID) (domain.Exer
 	var m ExerciseModel
 	row := r.pool.QueryRow(ctx, query, id)
 	if err := m.Scan(row); err != nil {
-		if errors.Is(err, postgres.ErrNoRows) {
+		if errors.Is(err, pgerrors.ErrNoRows) {
 			return domain.Exercise{}, domain.ErrExerciseNotFound
 		}
 
@@ -143,11 +144,11 @@ func (r *Repository) Update(ctx context.Context, exercise domain.Exercise) (doma
 	row := r.pool.QueryRow(ctx, query, m.ID, m.Name, m.Description, m.Difficulty)
 
 	if err := m.Scan(row); err != nil {
-		if errors.Is(err, postgres.ErrNoRows) {
+		if errors.Is(err, pgerrors.ErrNoRows) {
 			return domain.Exercise{}, domain.ErrExerciseNotFound
 		}
 
-		if errors.Is(err, postgres.ErrViolatesUnique) {
+		if errors.Is(err, pgerrors.ErrViolatesUnique) {
 			return domain.Exercise{}, domain.ErrExerciseNameExists
 		}
 

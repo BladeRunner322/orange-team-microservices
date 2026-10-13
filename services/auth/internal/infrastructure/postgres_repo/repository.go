@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/BladeRunner322/orange-team-microservices/pkg/pgerrors"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/domain"
 	"github.com/google/uuid"
@@ -41,12 +42,14 @@ func (r *Repository) Save(ctx context.Context, user domain.User) error {
 		m.Role,
 		m.CreatedAt,
 	)
+
 	if err != nil {
-		if errors.Is(err, postgres.ErrViolatesUnique) {
+		if errors.Is(err, pgerrors.ErrViolatesUnique) {
 			return domain.ErrEmailAlreadyExists
 		}
 		return fmt.Errorf("save user: %w", err)
 	}
+	
 	return nil
 }
 
@@ -65,9 +68,10 @@ func (r *Repository) FindByEmail(ctx context.Context, email domain.Email) (domai
 	row := r.pool.QueryRow(ctx, query, email.String())
 	err := m.Scan(row)
 
-	if errors.Is(err, postgres.ErrNoRows) {
+	if errors.Is(err, pgerrors.ErrNoRows) {
 		return domain.User{}, domain.ErrUserNotFound
 	}
+
 	if err != nil {
 		return domain.User{}, fmt.Errorf("find user by email: %w", err)
 	}
@@ -93,9 +97,11 @@ func (r *Repository) FindByID(ctx context.Context, id uuid.UUID) (domain.User, e
 	var m UserModel
 	row := r.pool.QueryRow(ctx, query, id)
 	err := m.Scan(row)
-	if errors.Is(err, postgres.ErrNoRows) {
+
+	if errors.Is(err, pgerrors.ErrNoRows) {
 		return domain.User{}, domain.ErrUserNotFound
 	}
+
 	if err != nil {
 		return domain.User{}, fmt.Errorf("find user by id: %w", err)
 	}
