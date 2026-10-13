@@ -1,0 +1,29 @@
+version: '3'
+
+tasks:
+  run:
+    desc: 'Run auth locally (auto-starts postgres + redis + runs migrations)'
+    deps: [generate]
+    cmds:
+      - docker compose up -d postgres-auth redis-auth
+      - docker compose run --rm migrate-auth
+      - env GRPC_PORT=:50061 POSTGRES_HOST=localhost ENABLE_TLS=true TLS_CERT_FILE=./certs/server.crt TLS_KEY_FILE=./certs/server.key HTTP_PORT=:8090 go run services/auth/cmd/main.go
+
+  logs:
+    desc: Show Auth service logs
+    cmds: [docker compose logs -f auth]
+
+  psql:
+    desc: Open psql console for Auth database
+    cmds:
+      - docker compose exec postgres-auth sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+
+  redis:
+    desc: Open redis-cli for Auth Redis
+    cmds:
+      - docker compose exec redis-auth sh -c 'redis-cli -a "$REDIS_PASSWORD"'
+
+  migrate-create:
+    desc: 'Create a new migration for Auth (usage: task auth:migrate-create -- create_users)'
+    cmds:
+      - docker compose run --rm --entrypoint migrate migrate-auth create -ext sql -dir /migrations -seq {{.CLI_ARGS}}

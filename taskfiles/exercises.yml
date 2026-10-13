@@ -1,0 +1,24 @@
+version: '3'
+
+tasks:
+  run:
+    desc: 'Run exercises locally (auto-starts postgres + runs migrations)'
+    deps: [generate]
+    cmds:
+      - docker compose up -d postgres-exercises
+      - docker compose run --rm migrate-exercises
+      - env GRPC_PORT=:50063 POSTGRES_HOST=localhost POSTGRES_PORT=5434 ENABLE_TLS=true TLS_CERT_FILE=./certs/server.crt TLS_KEY_FILE=./certs/server.key HTTP_PORT=:8093 go run services/exercises/cmd/main.go
+
+  logs:
+    desc: Show Exercises service logs
+    cmds: [docker compose logs -f exercises]
+
+  psql:
+    desc: Open psql console for Exercises database
+    cmds:
+      - docker compose exec postgres-exercises sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+
+  migrate-create:
+    desc: 'Create a new migration for Exercises (usage: task exercises:migrate-create -- create_exercises)'
+    cmds:
+      - docker compose run --rm --entrypoint migrate migrate-exercises create -ext sql -dir /migrations -seq {{.CLI_ARGS}}

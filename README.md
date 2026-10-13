@@ -453,7 +453,12 @@ orange-team-microservices/
 │   ├── loki-config.yml               # конфигурация Loki (retention 30d)
 │   └── promtail-config.yml           # конфигурация Promtail
 │
-├── Taskfile.yml                      # задачи для разработки
+├── Taskfile.yml                      # корневые задачи (тесты, docker, секреты)
+├── taskfiles/                        # задачи по сервисам
+│   ├── auth.yml
+│   ├── gateway.yml
+│   ├── profiles.yml
+│   └── exercises.yml
 ├── go.mod
 ├── go.sum
 └── README.md
@@ -764,46 +769,35 @@ orange-team-microservices/
 
 Для разработки можно запускать сервисы локально. Порты сдвинуты на **+10** относительно Docker, чтобы не конфликтовать с контейнерами (подробнее — в разделе «Сводная таблица портов»).
 
+Каждый `<svc>:run` сам поднимает свои зависимости (PostgreSQL, Redis, прогоняет миграции). Перед запуском один раз сгенерировать сертификаты:
+
+```bash
+task gen-certs
+```
+
 **Auth Service:**
 ```bash
 task auth:run
 ```
-
-- gRPC: `localhost:50061`
-- HTTP (health/metrics): `localhost:8090`
+gRPC `localhost:50061`, HTTP `localhost:8090`.
 
 **Gateway Service (требует запущенных Auth и Profiles):**
 ```bash
 task gateway:run
 ```
-
-- HTTP: `localhost:8091`
+HTTP `localhost:8091`.
 
 **Profiles Service:**
 ```bash
 task profiles:run
 ```
-
-- gRPC: `localhost:50062`
-- HTTP (health/ready/metrics): `localhost:8092`
+gRPC `localhost:50062`, HTTP `localhost:8092`.
 
 **Exercises Service:**
 ```bash
 task exercises:run
 ```
-
-- gRPC: `localhost:50063`
-- HTTP (health/ready/metrics): `localhost:8093`
-
-**Требования для локального запуска:**
-- PostgreSQL запущен через Docker: `task auth:postgres-up`
-- Redis запущен через Docker: `task auth:redis-up`
-- Миграции применены: `task auth:migrate-up`
-- PostgreSQL для Profiles запущен: `task profiles:postgres-up`
-- Миграции Profiles применены: `task profiles:migrate-up`
-- PostgreSQL для Exercises запущен: `task exercises:postgres-up`
-- Миграции Exercises применены: `task exercises:migrate-up`
-- TLS-сертификаты созданы: `task gen-certs`
+gRPC `localhost:50063`, HTTP `localhost:8093`.
 
 ### Важно: команда `task docker-down-v`
 
@@ -827,16 +821,11 @@ task exercises:run
 
 Проект использует `vendor` для ускорения сборки Docker. Все зависимости зафиксированы в папке `vendor`.
 
-Если вы добавили новую зависимость в `go.mod`, обновите `vendor`:
+Если добавили новую зависимость в `go.mod`:
 
 ```bash
+go mod tidy
 go mod vendor
-```
-
-или
- 
-```bash
-task vendor
 ```
 
 ## Сервисы
@@ -859,30 +848,11 @@ task vendor
 
   | Команда | Назначение |
   |---------|------------|
-  | `task auth:run` | Запуск локально (gRPC `50061`, HTTP `8090`) |
-  | `task auth:build` | Сборка Docker-образа |
-  | `task auth:rebuild` | Пересборка без кеша (с обновлением vendor) |
-  | `task auth:up` | Запуск в Docker Compose |
-  | `task auth:restart` | Перезапуск (rebuild + up) |
+  | `task auth:run` | Запуск локально с зависимостями (gRPC `50061`, HTTP `8090`) |
   | `task auth:logs` | Просмотр логов Auth |
-
-- Команды для PostgreSQL:
-
-  | Команда | Назначение |
-  |---------|------------|
-  | `task auth:postgres-up` | Запуск PostgreSQL |
-  | `task auth:postgres-down` | Остановка PostgreSQL |
-  | `task auth:postgres-logs` | Просмотр логов PostgreSQL |
-  | `task auth:postgres-psql` | Консоль psql |
-
-- Команды для Redis:
-
-  | Команда | Назначение |
-  |---------|------------|
-  | `task auth:redis-up` | Запуск Redis |
-  | `task auth:redis-down` | Остановка Redis |
-  | `task auth:redis-logs` | Просмотр логов Redis |
-  | `task auth:redis-cli` | Консоль redis-cli |
+  | `task auth:psql` | Консоль psql для `auth_db` |
+  | `task auth:redis` | Консоль redis-cli для `redis-auth` |
+  | `task auth:migrate-create -- <name>` | Создать новую миграцию |
 
 #### Healthcheck и readiness
 
@@ -938,30 +908,10 @@ curl http://localhost:8090/metrics
 
   | Команда | Назначение |
   |---------|------------|
-  | `task profiles:run` | Запуск локально (gRPC `50062`, HTTP `8092`) |
-  | `task profiles:build` | Сборка Docker-образа |
-  | `task profiles:rebuild` | Пересборка без кеша (с обновлением vendor) |
-  | `task profiles:up` | Запуск в Docker Compose |
-  | `task profiles:restart` | Перезапуск (rebuild + up) |
+  | `task profiles:run` | Запуск локально с зависимостями (gRPC `50062`, HTTP `8092`) |
   | `task profiles:logs` | Просмотр логов Profiles |
-
-- Команды для PostgreSQL:
-
-  | Команда | Назначение |
-  |---------|------------|
-  | `task profiles:postgres-up` | Запуск PostgreSQL |
-  | `task profiles:postgres-down` | Остановка PostgreSQL |
-  | `task profiles:postgres-logs` | Просмотр логов PostgreSQL |
-  | `task profiles:postgres-psql` | Консоль psql |
-
-- Команды для миграций:
-
-  | Команда | Назначение |
-  |---------|------------|
+  | `task profiles:psql` | Консоль psql для `profiles_db` |
   | `task profiles:migrate-create -- <name>` | Создать новую миграцию |
-  | `task profiles:migrate-up` | Применить миграции |
-  | `task profiles:migrate-down -- 1` | Откатить последнюю |
-  | `task profiles:migrate-version` | Показать текущую версию |
 
 #### Healthcheck и readiness
 
@@ -1014,30 +964,10 @@ curl http://localhost:8082/metrics
 
   | Команда | Назначение |
   |---------|------------|
-  | `task exercises:run` | Запуск локально (gRPC `50063`, HTTP `8093`) |
-  | `task exercises:build` | Сборка Docker-образа |
-  | `task exercises:rebuild` | Пересборка без кеша (с обновлением vendor) |
-  | `task exercises:up` | Запуск в Docker Compose |
-  | `task exercises:restart` | Перезапуск (rebuild + up) |
+  | `task exercises:run` | Запуск локально с зависимостями (gRPC `50063`, HTTP `8093`) |
   | `task exercises:logs` | Просмотр логов Exercises |
-
-- Команды для PostgreSQL:
-
-  | Команда | Назначение |
-  |---------|------------|
-  | `task exercises:postgres-up` | Запуск PostgreSQL |
-  | `task exercises:postgres-down` | Остановка PostgreSQL |
-  | `task exercises:postgres-logs` | Просмотр логов PostgreSQL |
-  | `task exercises:postgres-psql` | Консоль psql |
-
-- Команды для миграций:
-
-  | Команда | Назначение |
-  |---------|------------|
+  | `task exercises:psql` | Консоль psql для `exercises_db` |
   | `task exercises:migrate-create -- <name>` | Создать новую миграцию |
-  | `task exercises:migrate-up` | Применить миграции |
-  | `task exercises:migrate-down -- 1` | Откатить последнюю |
-  | `task exercises:migrate-version` | Показать текущую версию |
 
 #### Healthcheck и readiness
 
@@ -1085,12 +1015,9 @@ curl http://localhost:8083/metrics
 
   | Команда | Назначение |
   |---------|------------|
-  | `task gateway:run` | Запуск локально (HTTP `8091`, требует запущенного Auth) |
-  | `task gateway:build` | Сборка Docker-образа |
-  | `task gateway:rebuild` | Пересборка без кеша (с обновлением vendor) |
-  | `task gateway:up` | Запуск в Docker Compose |
-  | `task gateway:restart` | Перезапуск (rebuild + up) |
+  | `task gateway:run` | Запуск локально (HTTP `8091`) |
   | `task gateway:logs` | Просмотр логов Gateway |
+  | `task gateway:redis` | Консоль redis-cli для `redis-gateway` |
 
 #### Healthcheck и readiness
 
@@ -1662,7 +1589,7 @@ orange-team-microservices/
 
 1. Локально:
    ```bash
-   task sops:edit -- services/auth/.env.enc
+   sops --input-type dotenv services/auth/.env.enc
    ```
    SOPS расшифрует файл, откроет `$EDITOR`, при сохранении зашифрует обратно.
 2. Закоммить изменения `.env.enc` и запушь в `main`.
@@ -1808,24 +1735,19 @@ Grafana доступна по адресу: `http://localhost:3000`
 
 ### Запуск мониторинга
 
-Все команды доступны через Taskfile:
-
 ```bash
-task docker-up        # поднимает всё (приложение + мониторинг + логи)
-task monitoring-up    # только Prometheus + Grafana
-task logging-up       # только Loki + Promtail
-task alertmanager-up  # только Alertmanager
+task docker-up    # всё (приложение + инфраструктура)
+task infra-up     # только инфраструктура (Caddy, Prometheus, Grafana, Loki, Promtail, Alertmanager, WARP, node-exporter)
+task app-up       # только приложение (сервисы + БД + Redis)
 ```
 
 ### Управление Alertmanager
 
 ```bash
-task secrets:generate      # создать secrets/* из локального .env (автоматически в docker-up)
-task alertmanager-up       # запустить
-task alertmanager-down     # остановить
-task alertmanager-logs     # логи
-task alertmanager-restart  # пересоздать (для применения изменений infra/alertmanager.yml)
-task alertmanager-reload   # hot-reload конфига без рестарта
+task secrets:generate                  # создать secrets/* из локального .env (автоматически в docker-up)
+docker compose up -d alertmanager      # запустить
+docker compose logs -f alertmanager    # логи
+docker compose up -d --force-recreate alertmanager   # пересоздать для применения infra/alertmanager.yml
 ```
 
 ### Проверка работы
@@ -2086,9 +2008,12 @@ task test-cover
 
 ## Управление миграциями
 
-> 💡 При запуске `task docker-up` миграции применяются **автоматически** (сервисы `migrate-auth`, `migrate-profiles` и `migrate-exercises` в `infra/compose.app.yml`). Ручные команды ниже нужны только для случаев, когда миграции запускаются отдельно (например, локальная разработка или откат).
+Миграции применяются **автоматически** при:
 
-> ⚠️ Миграции **не создают базу данных** — они только создают таблицы и схему внутри существующей БД. Если база `auth_db` (или `profiles_db`) отсутствует, `task auth:migrate-up` (или `task profiles:migrate-up`) упадёт с ошибкой `database "..." does not exist`.
+- запуске сервиса локально — `task <svc>:run` (сам поднимает БД и прогоняет `migrate up`);
+- запуске в Docker — `task docker-up` (сервисы `migrate-*` в `infra/compose.app.yml`).
+
+> ⚠️ Миграции **не создают базу данных** — они только создают таблицы и схему внутри существующей БД. Если база `auth_db` (или `profiles_db`) отсутствует, миграция упадёт с ошибкой `database "..." does not exist`.
 
 Для создания БД вручную:
 ```bash
@@ -2097,7 +2022,7 @@ docker exec -it profiles-postgres psql -U test -c "CREATE DATABASE profiles_db;"
 docker exec -it exercises-postgres psql -U test -c "CREATE DATABASE exercises_db;"
 ```
 
-Или просто удали volume и подними заново — `task docker-up` создаст БД автоматически из переменной `POSTGRES_DB` в `.env`:
+Или просто удали volumes и подними заново — `task docker-up` создаст БД автоматически из переменной `POSTGRES_DB` в `.env`:
 ```bash
 task docker-down-v
 task docker-up
@@ -2106,21 +2031,6 @@ task docker-up
 ### Создать новую миграцию
 ```bash
 task <service-name>:migrate-create -- create_users_table
-```
-
-### Применить миграции
-```bash
-task <service-name>:migrate-up
-```
-
-### Откатить последнюю
-```bash
-task <service-name>:migrate-down -- 1
-```
-
-### Показать текущую версию
-```bash
-task <service-name>:migrate-version
 ```
 
 ## Переменные окружения

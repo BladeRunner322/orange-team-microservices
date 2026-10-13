@@ -1,13 +1,20 @@
 version: '3'
+
 dotenv: ['.env']
+
 env:
   COMPOSE_FILE: infra/compose.app.yml:infra/compose.infra.yml
   COMPOSE_ENV_FILES: .env
 
-tasks:
+includes:
+  auth:      ./taskfiles/auth.yml
+  gateway:   ./taskfiles/gateway.yml
+  profiles:  ./taskfiles/profiles.yml
+  exercises: ./taskfiles/exercises.yml
 
+tasks:
   # ============================================================
-  #  ОБЩИЕ ЗАДАЧИ (генерация, тесты, TLS)
+  #  ГЕНЕРАЦИЯ
   # ============================================================
 
   generate:
@@ -15,39 +22,23 @@ tasks:
     cmds:
       - protoc -I api --go_out=. --go-grpc_out=. $(find api -name '*.proto')
 
-  tidy:
-    desc: Run go mod tidy
-    cmds:
-      - go mod tidy
-
-  vendor:
-    desc: Update vendor directory with current dependencies
-    cmds:
-      - go mod vendor
-
   gen-certs:
     desc: Generate self-signed TLS certificates for development
     cmds:
       - mkdir -p certs
       - openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.crt -days 365 -nodes -subj "/CN=localhost"
 
-  test:
-    desc: Run all unit tests with verbose output
-    cmds:
-      - go test -v ./...
+  # ============================================================
+  #  ТЕСТЫ
+  # ============================================================
 
-  test-cover:
-    desc: Run tests with coverage report
-    cmds:
-      - mkdir -p coverage
-      - go test -v -coverprofile=coverage/coverage.out ./...
-      - go tool cover -html=coverage/coverage.out -o coverage/coverage.html
-      - echo "Coverage report saved to coverage/coverage.html"
+  test:
+    desc: Run unit tests
+    cmds: [go test -v ./...]
 
   test-integration:
     desc: Run integration tests with Testcontainers
-    cmds:
-      - go test -tags=integration -v ./...
+    cmds: [go test -tags=integration -v ./...]
 
   test-all:
     desc: Run unit and integration tests
@@ -55,16 +46,53 @@ tasks:
       - task: test
       - task: test-integration
 
-  # ============================================================
-  #  AUTH SERVICE – ЛОКАЛЬНЫЙ ЗАПУСК
-  # ============================================================
+  test-cover:
+    desc: Run tests with HTML coverage report
+    cmds:
+      - mkdir -p coverage
+      - go test -v -coverprofile=coverage/coverage.out ./...
+      - go tool cover -html=coverage/coverage.out -o coverage/coverage.html
+      - echo "Coverage report saved to coverage/coverage.html"
 
   # ============================================================
-  #  СЕКРЕТЫ (SOPS + age)
+  #  DOCKER
+  # ============================================================
+
+  docker-up:
+    desc: Start all services (app + infra)
+    deps: [secrets:generate]
+    cmds: [docker compose up -d --build]
+
+  docker-down:
+    desc: Stop all services
+    cmds: [docker compose down]
+
+  docker-down-v:
+    desc: Stop all services and remove volumes
+    cmds: [docker compose down -v]
+
+  app-up:
+    desc: Start only application services (no infra)
+    cmds: [docker compose -f infra/compose.app.yml --env-file .env up -d --build]
+
+  app-down:
+    desc: Stop only application services
+    cmds: [docker compose -f infra/compose.app.yml --env-file .env down]
+
+  infra-up:
+    desc: Start only infrastructure services (no app)
+    cmds: [docker compose -f infra/compose.infra.yml --env-file .env up -d]
+
+  infra-down:
+    desc: Stop only infrastructure services
+    cmds: [docker compose -f infra/compose.infra.yml --env-file .env down]
+
+  # ============================================================
+  #  СЕКРЕТЫ
   # ============================================================
 
   sops:encrypt:
-    desc: Encrypt all .env and rclone.conf files to .enc (SOPS + age)
+    desc: Encrypt all .env and rclone.conf files (SOPS + age)
     cmds:
       - sops --encrypt --input-type dotenv --filename-override .env .env > .env.enc
       - sops --encrypt --input-type dotenv --filename-override services/auth/.env services/auth/.env > services/auth/.env.enc
@@ -72,10 +100,9 @@ tasks:
       - sops --encrypt --input-type dotenv --filename-override services/profiles/.env services/profiles/.env > services/profiles/.env.enc
       - sops --encrypt --input-type dotenv --filename-override services/exercises/.env services/exercises/.env > services/exercises/.env.enc
       - sops --encrypt --input-type binary --filename-override scripts/rclone.conf scripts/rclone.conf > scripts/rclone.conf.enc
-      - 'echo "✅ Encrypted: .env + services/*/.env + scripts/rclone.conf → *.enc"'
 
   sops:decrypt:
-    desc: Decrypt all .enc files to plain (for local setup on a new machine)
+    desc: Decrypt all .enc files to plain
     cmds:
       - sops --decrypt --input-type dotenv --filename-override .env .env.enc > .env
       - sops --decrypt --input-type dotenv --filename-override services/auth/.env services/auth/.env.enc > services/auth/.env
@@ -83,479 +110,6 @@ tasks:
       - sops --decrypt --input-type dotenv --filename-override services/profiles/.env services/profiles/.env.enc > services/profiles/.env
       - sops --decrypt --input-type dotenv --filename-override services/exercises/.env services/exercises/.env.enc > services/exercises/.env
       - sops --decrypt --input-type binary --filename-override scripts/rclone.conf scripts/rclone.conf.enc > scripts/rclone.conf
-      - 'echo "✅ Decrypted: *.enc → plain files (.env + services/*/.env + scripts/rclone.conf)"'
-
-  sops:edit:
-    desc: 'Edit an encrypted .env (usage - task sops:edit -- services/auth/.env.enc)'
-    cmds:
-      - sops --input-type dotenv edit {{.CLI_ARGS}}
-
-  auth:run:
-    desc: Run auth service locally
-    deps: [generate, tidy]
-    cmds:
-      - env GRPC_PORT=:50061 POSTGRES_HOST=localhost ENABLE_TLS=true TLS_CERT_FILE=./certs/server.crt TLS_KEY_FILE=./certs/server.key HTTP_PORT=:8090 go run services/auth/cmd/main.go
-
-  # ============================================================
-  #  AUTH SERVICE – DOCKER
-  # ============================================================
-
-  auth:build:
-    desc: Build Auth service Docker image
-    cmds:
-      - docker compose build auth
-
-  auth:rebuild:
-    desc: Rebuild Auth service with fresh vendor and no cache
-    deps: [vendor]
-    cmds:
-      - docker compose build auth --no-cache
-
-  auth:up:
-    desc: Start Auth service with all dependencies (postgres + migrations + auth)
-    cmds:
-      - docker compose up -d postgres-auth migrate-auth auth
-
-  auth:down:
-    desc: Stop Auth service container
-    cmds:
-      - docker compose down auth
-
-  auth:restart:
-    desc: Restart Auth service (rebuild and start)
-    cmds:
-      - docker compose up -d --build auth
-
-  auth:logs:
-    desc: Show Auth service logs
-    cmds:
-      - docker compose logs -f auth
-
-  # ============================================================
-  #  AUTH SERVICE – POSTGRES
-  # ============================================================
-
-  auth:postgres-up:
-    desc: Start PostgreSQL for Auth service
-    cmds:
-      - docker compose up -d postgres-auth
-
-  auth:postgres-down:
-    desc: Stop PostgreSQL for Auth service
-    cmds:
-      - docker compose down postgres-auth
-
-  auth:postgres-logs:
-    desc: Show PostgreSQL logs for Auth
-    cmds:
-      - docker compose logs -f postgres-auth
-
-  auth:postgres-psql:
-    desc: Open psql console for Auth database
-    cmds:
-      - docker compose exec postgres-auth sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-
-  # ============================================================
-  #  AUTH SERVICE – REDIS
-  # ============================================================
-
-  auth:redis-up:
-    desc: Start Redis for Auth service
-    cmds:
-      - docker compose up -d redis-auth
-
-  auth:redis-down:
-    desc: Stop Redis for Auth service
-    cmds:
-      - docker compose down redis-auth
-
-  auth:redis-logs:
-    desc: Show Redis logs for Auth
-    cmds:
-      - docker compose logs -f redis-auth
-
-  auth:redis-cli:
-    desc: Open redis-cli
-    cmds:
-      - docker compose exec redis-auth sh -c 'redis-cli -a "$REDIS_PASSWORD"'
-
-  # ============================================================
-  #  AUTH SERVICE – МИГРАЦИИ
-  # ============================================================
-
-  auth:migrate-create:
-    desc: Create a new migration for Auth
-    cmds:
-      - docker compose run --rm --entrypoint migrate migrate-auth create -ext sql -dir /migrations -seq {{.CLI_ARGS}}
-
-  auth:migrate-up:
-    desc: Apply all pending migrations for Auth
-    cmds:
-      - docker compose run --rm --entrypoint sh migrate-auth -c 'migrate -path /migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres-auth:5432/$POSTGRES_DB?sslmode=disable" up'
-
-  auth:migrate-down:
-    desc: Rollback the last migration for Auth
-    cmds:
-      - docker compose run --rm --entrypoint sh migrate-auth -c 'migrate -path /migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres-auth:5432/$POSTGRES_DB?sslmode=disable" down {{.CLI_ARGS}}'
-
-  auth:migrate-version:
-    desc: Show current migration version for Auth
-    cmds:
-      - docker compose run --rm --entrypoint sh migrate-auth -c 'migrate -path /migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres-auth:5432/$POSTGRES_DB?sslmode=disable" version'
-
-  # ============================================================
-  #  GATEWAY SERVICE – ЛОКАЛЬНЫЙ ЗАПУСК
-  # ============================================================
-
-  gateway:run:
-    desc: Run gateway service locally
-    deps: [generate, tidy]
-    cmds:
-      - GATEWAY_HTTP_PORT=:8091 AUTH_GRPC_ADDR=localhost:50061 REDIS_ADDR=localhost:6380 REDIS_PASSWORD=gateway_redis_secret go run services/gateway/cmd/main.go
-
-  # ============================================================
-  #  GATEWAY SERVICE – DOCKER
-  # ============================================================
-
-  gateway:build:
-    desc: Build Gateway service Docker image
-    cmds:
-      - docker compose build gateway
-
-  gateway:rebuild:
-    desc: Rebuild Gateway with fresh vendor and no cache
-    deps: [vendor]
-    cmds:
-      - docker compose build gateway --no-cache
-
-  gateway:up:
-    desc: Start Gateway service (assumes image is already built)
-    cmds:
-      - docker compose up -d gateway
-
-  gateway:down:
-    desc: Stop Gateway service
-    cmds:
-      - docker compose down gateway
-
-  gateway:logs:
-    desc: Show Gateway service logs
-    cmds:
-      - docker compose logs -f gateway
-
-  gateway:restart:
-    desc: Restart Gateway service (rebuild and start)
-    cmds:
-      - docker compose up -d --build gateway
-
-  # ============================================================
-  #  PROFILES SERVICE – ЛОКАЛЬНЫЙ ЗАПУСК
-  # ============================================================
-
-  profiles:run:
-    desc: Run profiles service locally
-    deps: [generate, tidy]
-    cmds:
-      - env GRPC_PORT=:50062 POSTGRES_HOST=localhost POSTGRES_PORT=5433 ENABLE_TLS=true TLS_CERT_FILE=./certs/server.crt TLS_KEY_FILE=./certs/server.key HTTP_PORT=:8092 go run services/profiles/cmd/main.go
-
-  # ============================================================
-  #  PROFILES SERVICE – DOCKER
-  # ============================================================
-
-  profiles:build:
-    desc: Build Profiles service Docker image
-    cmds:
-      - docker compose build profiles
-
-  profiles:rebuild:
-    desc: Rebuild Profiles with fresh vendor and no cache
-    deps: [vendor]
-    cmds:
-      - docker compose build profiles --no-cache
-
-  profiles:up:
-    desc: Start Profiles service with all dependencies
-    cmds:
-      - docker compose up -d postgres-profiles migrate-profiles profiles
-
-  profiles:down:
-    desc: Stop Profiles service
-    cmds:
-      - docker compose down profiles
-
-  profiles:restart:
-    desc: Restart Profiles service (rebuild and start)
-    cmds:
-      - docker compose up -d --build profiles
-
-  profiles:logs:
-    desc: Show Profiles service logs
-    cmds:
-      - docker compose logs -f profiles
-
-  # ============================================================
-  #  PROFILES SERVICE – POSTGRES
-  # ============================================================
-
-  profiles:postgres-up:
-    desc: Start PostgreSQL for Profiles
-    cmds:
-      - docker compose up -d postgres-profiles
-
-  profiles:postgres-down:
-    desc: Stop PostgreSQL for Profiles
-    cmds:
-      - docker compose down postgres-profiles
-
-  profiles:postgres-logs:
-    desc: Show PostgreSQL logs for Profiles
-    cmds:
-      - docker compose logs -f postgres-profiles
-
-  profiles:postgres-psql:
-    desc: Open psql console for Profiles database
-    cmds:
-      - docker compose exec postgres-profiles sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-
-  # ============================================================
-  #  PROFILES SERVICE – МИГРАЦИИ
-  # ============================================================
-
-  profiles:migrate-create:
-    desc: Create a new migration for Profiles
-    cmds:
-      - docker compose run --rm --entrypoint migrate migrate-profiles create -ext sql -dir /migrations -seq {{.CLI_ARGS}}
-
-  profiles:migrate-up:
-    desc: Apply all pending migrations for Profiles
-    cmds:
-      - docker compose run --rm --entrypoint sh migrate-profiles -c 'migrate -path /migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres-profiles:5432/$POSTGRES_DB?sslmode=disable" up'
-
-  profiles:migrate-down:
-    desc: Rollback the last migration for Profiles
-    cmds:
-      - docker compose run --rm --entrypoint sh migrate-profiles -c 'migrate -path /migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres-profiles:5432/$POSTGRES_DB?sslmode=disable" down {{.CLI_ARGS}}'
-
-  profiles:migrate-version:
-    desc: Show current migration version for Profiles
-    cmds:
-      - docker compose run --rm --entrypoint sh migrate-profiles -c 'migrate -path /migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres-profiles:5432/$POSTGRES_DB?sslmode=disable" version'
-
-  # ============================================================
-  #  EXERCISES SERVICE – ЛОКАЛЬНЫЙ ЗАПУСК
-  # ============================================================
-
-  exercises:run:
-    desc: Run exercises service locally
-    deps: [generate, tidy]
-    cmds:
-      - env GRPC_PORT=:50063 POSTGRES_HOST=localhost POSTGRES_PORT=5434 ENABLE_TLS=true TLS_CERT_FILE=./certs/server.crt TLS_KEY_FILE=./certs/server.key HTTP_PORT=:8093 go run services/exercises/cmd/main.go
-
-  # ============================================================
-  #  EXERCISES SERVICE – DOCKER
-  # ============================================================
-
-  exercises:build:
-    desc: Build Exercises service Docker image
-    cmds:
-      - docker compose build exercises
-
-  exercises:rebuild:
-    desc: Rebuild Exercises with fresh vendor and no cache
-    deps: [vendor]
-    cmds:
-      - docker compose build exercises --no-cache
-
-  exercises:up:
-    desc: Start Exercises service with all dependencies
-    cmds:
-      - docker compose up -d postgres-exercises migrate-exercises exercises
-
-  exercises:down:
-    desc: Stop Exercises service
-    cmds:
-      - docker compose down exercises
-
-  exercises:restart:
-    desc: Restart Exercises service (rebuild and start)
-    cmds:
-      - docker compose up -d --build exercises
-
-  exercises:logs:
-    desc: Show Exercises service logs
-    cmds:
-      - docker compose logs -f exercises
-
-  # ============================================================
-  #  EXERCISES SERVICE – POSTGRES
-  # ============================================================
-
-  exercises:postgres-up:
-    desc: Start PostgreSQL for Exercises
-    cmds:
-      - docker compose up -d postgres-exercises
-
-  exercises:postgres-down:
-    desc: Stop PostgreSQL for Exercises
-    cmds:
-      - docker compose down postgres-exercises
-
-  exercises:postgres-logs:
-    desc: Show PostgreSQL logs for Exercises
-    cmds:
-      - docker compose logs -f postgres-exercises
-
-  exercises:postgres-psql:
-    desc: Open psql console for Exercises database
-    cmds:
-      - docker compose exec postgres-exercises sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-
-  # ============================================================
-  #  EXERCISES SERVICE – МИГРАЦИИ
-  # ============================================================
-
-  exercises:migrate-create:
-    desc: Create a new migration for Exercises
-    cmds:
-      - docker compose run --rm --entrypoint migrate migrate-exercises create -ext sql -dir /migrations -seq {{.CLI_ARGS}}
-
-  exercises:migrate-up:
-    desc: Apply all pending migrations for Exercises
-    cmds:
-      - docker compose run --rm --entrypoint sh migrate-exercises -c 'migrate -path /migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres-exercises:5432/$POSTGRES_DB?sslmode=disable" up'
-
-  exercises:migrate-down:
-    desc: Rollback the last migration for Exercises
-    cmds:
-      - docker compose run --rm --entrypoint sh migrate-exercises -c 'migrate -path /migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres-exercises:5432/$POSTGRES_DB?sslmode=disable" down {{.CLI_ARGS}}'
-
-  exercises:migrate-version:
-    desc: Show current migration version for Exercises
-    cmds:
-      - docker compose run --rm --entrypoint sh migrate-exercises -c 'migrate -path /migrations -database "postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@postgres-exercises:5432/$POSTGRES_DB?sslmode=disable" version'
-
-  # ============================================================
-  #  ОБЩИЕ ЗАДАЧИ ДЛЯ ВСЕГО DOCKER-СТЕКА
-  # ============================================================
-
-  docker-up:
-    desc: Start all services (app + monitoring + logging)
-    deps: [secrets:generate]
-    cmds:
-      - docker compose up -d --build
-      - echo "✅ All services started! (postgres-auth, redis-auth, migrate-auth, auth, redis-gateway, gateway, postgres-profiles, migrate-profiles, profiles, postgres-exercises, migrate-exercises, exercises, prometheus, grafana, loki, promtail, alertmanager, warp)"
-
-  docker-down:
-    desc: Stop all services
-    cmds:
-      - docker compose down
-
-  docker-down-v:
-    desc: Stop all services and remove volumes
-    cmds:
-      - docker compose down -v
-
-  # ============================================================
-  #  МОНИТОРИНГ (Prometheus + Grafana)
-  # ============================================================
-
-  monitoring-up:
-    desc: Start Prometheus and Grafana
-    cmds:
-      - docker compose up -d prometheus grafana
-
-  monitoring-down:
-    desc: Stop Prometheus and Grafana
-    cmds:
-      - docker compose down prometheus grafana
-
-  monitoring-logs:
-    desc: Show logs from Prometheus and Grafana
-    cmds:
-      - docker compose logs -f prometheus grafana
-
-  # ============================================================
-  #  ЛОГИ (Loki + Promtail)
-  # ============================================================
-
-  loki-up:
-    desc: Start Loki
-    cmds:
-      - docker compose up -d loki
-
-  loki-down:
-    desc: Stop Loki
-    cmds:
-      - docker compose down loki
-
-  loki-logs:
-    desc: Show Loki logs
-    cmds:
-      - docker compose logs -f loki
-
-  promtail-up:
-    desc: Start Promtail
-    cmds:
-      - docker compose up -d promtail
-
-  promtail-down:
-    desc: Stop Promtail
-    cmds:
-      - docker compose down promtail
-
-  promtail-logs:
-    desc: Show Promtail logs
-    cmds:
-      - docker compose logs -f promtail
-
-  logging-up:
-    desc: Start Loki and Promtail
-    cmds:
-      - docker compose up -d loki promtail
-
-  logging-down:
-    desc: Stop Loki and Promtail
-    cmds:
-      - docker compose down loki promtail
-
-  logging-logs:
-    desc: Show logs from Loki and Promtail
-    cmds:
-      - docker compose logs -f loki promtail
-
-  # ============================================================
-  #  ALERTING (Alertmanager)
-  # ============================================================
-
-  alertmanager-up:
-    desc: Start Alertmanager
-    cmds:
-      - docker compose up -d alertmanager
-
-  alertmanager-down:
-    desc: Stop Alertmanager
-    cmds:
-      - docker compose down alertmanager
-
-  alertmanager-logs:
-    desc: Show Alertmanager logs
-    cmds:
-      - docker compose logs -f alertmanager
-
-  alertmanager-restart:
-    desc: Restart Alertmanager with --force-recreate (picks up config changes)
-    cmds:
-      - docker compose up -d --force-recreate alertmanager
-
-  alertmanager-reload:
-    desc: Hot-reload Alertmanager config (no restart)
-    cmds:
-      - curl -s -X POST http://localhost:${ALERTMANAGER_PORT}/-/reload
-      - 'echo "✅ Alertmanager config reloaded"'
-
-  # ============================================================
-  #  SECRETS (локальная генерация файлов из .env)
-  # ============================================================
 
   secrets:generate:
     desc: Generate secrets files for local containers from .env
@@ -568,34 +122,3 @@ tasks:
         printf '%s' "$TELEGRAM_BOT_TOKEN" > secrets/bot_token
         printf '%s' "$TELEGRAM_CHAT_ID"   > secrets/chat_id
         chmod 644 secrets/bot_token secrets/chat_id
-      - 'echo "✅ secrets/bot_token and secrets/chat_id generated"'
-
-  # ============================================================
-  #  COMPOSE FILE НАПРАВЛЕНИЯ (ADR-021)
-  # ============================================================
-  #
-  # app — 4 сервиса + БД + Redis + migrate.
-  # infra — Caddy + мониторинг + логи + WARP.
-  #
-  # docker-up / docker-down работают с обоими сразу (COMPOSE_FILE).
-  # Отдельные таргеты — для случаев, когда нужно тронуть только одно.
-
-  app-up:
-    desc: Start only application services (no infra)
-    cmds:
-      - docker compose -f infra/compose.app.yml --env-file .env up -d --build
-
-  app-down:
-    desc: Stop only application services
-    cmds:
-      - docker compose -f infra/compose.app.yml --env-file .env down
-
-  infra-up:
-    desc: Start only infrastructure services (no app)
-    cmds:
-      - docker compose -f infra/compose.infra.yml --env-file .env up -d
-
-  infra-down:
-    desc: Stop only infrastructure services
-    cmds:
-      - docker compose -f infra/compose.infra.yml --env-file .env down

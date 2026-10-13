@@ -273,9 +273,7 @@ sops --decrypt --input-type dotenv --extract '["TELEGRAM_BOT_TOKEN"]' .env.enc
 - Alertmanager: `POST /-/reload` (флаг `--web.enable-lifecycle` включён в compose).
 - Prometheus: `POST /-/reload` (флаг `--web.enable-lifecycle` не включён, отдельная задача).
 
-Taskfile таргеты: `task alertmanager-reload`.
-
-Это не заменяет `--force-recreate` в CD (не все сервисы умеют reload), но удобно для локальной работы: правишь `infra/alertmanager.yml` — `task alertmanager-reload` — проверяешь без рестарта.
+Это не заменяет `--force-recreate` в CD (не все сервисы умеют reload), но удобно для локальной работы: правишь `infra/alertmanager.yml` — `curl -X POST http://localhost:9093/-/reload` — проверяешь без рестарта.
 
 ## Rollback: стратегия
 

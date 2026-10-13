@@ -1,0 +1,18 @@
+version: '3'
+
+tasks:
+  run:
+    desc: Run gateway locally
+    deps: [generate]
+    cmds:
+      - docker compose up -d redis-gateway
+      - GATEWAY_HTTP_PORT=:8091 AUTH_GRPC_ADDR=localhost:50061 REDIS_ADDR=localhost:6380 REDIS_PASSWORD=gateway_redis_secret go run services/gateway/cmd/main.go
+
+  logs:
+    desc: Show Gateway service logs
+    cmds: [docker compose logs -f gateway]
+
+  redis:
+    desc: Open redis-cli for Gateway Redis (rate limiting)
+    cmds:
+      - docker compose exec redis-gateway sh -c 'redis-cli -a "$REDIS_PASSWORD"'
