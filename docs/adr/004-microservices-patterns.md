@@ -108,13 +108,12 @@ Rate limit есть только на Gateway (для клиентов). Вну�
 
 - Downstream-сервис упал → upstream тоже падает (нет деградации).
 - Нет eventual consistency для проекций.
-- Отсутствие Circuit Breaker (Level B) и retry (Level C) делает систему хрупкой при сбоях сети.
 - При росте числа сервисов отладка без tracing будет сложной.
 
 **Когда пересматривать:**
 
 - Если понадобятся cross-service транзакции — вводить событийную шину и outbox.
-- Если начнутся каскадные отказы из-за недоступности downstream — Circuit Breaker и retry.
+- Если начнутся каскадные отказы **даже с Circuit Breaker** (ADR-020) — вводить Bulkheads (семафор на downstream). См. ADR-019, Уровень 2.
 - Если число сервисов превысит 5 — Distributed Tracing.
 - Если сервисы выйдут за пределы одной docker-сети — mTLS.
 
