@@ -42,6 +42,7 @@ func TestLoad_DefaultPort(t *testing.T) {
 }
 
 func TestLoad_MissingHost(t *testing.T) {
+	t.Setenv("POSTGRES_HOST", "")
 	t.Setenv("POSTGRES_USER", "testuser")
 	t.Setenv("POSTGRES_PASSWORD", "testpass")
 	t.Setenv("POSTGRES_DB", "testdb")
@@ -49,40 +50,43 @@ func TestLoad_MissingHost(t *testing.T) {
 
 	_, err := Load()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "HOST")
+	assert.Contains(t, err.Error(), "POSTGRES_HOST")
 }
 
 func TestLoad_MissingUser(t *testing.T) {
 	t.Setenv("POSTGRES_HOST", "postgres-test")
+	t.Setenv("POSTGRES_USER", "")
 	t.Setenv("POSTGRES_PASSWORD", "testpass")
 	t.Setenv("POSTGRES_DB", "testdb")
 	t.Setenv("POSTGRES_TIMEOUT", "30s")
 
 	_, err := Load()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "USER")
+	assert.Contains(t, err.Error(), "POSTGRES_USER")
 }
 
 func TestLoad_MissingPassword(t *testing.T) {
 	t.Setenv("POSTGRES_HOST", "postgres-test")
 	t.Setenv("POSTGRES_USER", "testuser")
+	t.Setenv("POSTGRES_PASSWORD", "")
 	t.Setenv("POSTGRES_DB", "testdb")
 	t.Setenv("POSTGRES_TIMEOUT", "30s")
 
 	_, err := Load()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "PASSWORD")
+	assert.Contains(t, err.Error(), "POSTGRES_PASSWORD")
 }
 
 func TestLoad_MissingDatabase(t *testing.T) {
 	t.Setenv("POSTGRES_HOST", "postgres-test")
 	t.Setenv("POSTGRES_USER", "testuser")
 	t.Setenv("POSTGRES_PASSWORD", "testpass")
+	t.Setenv("POSTGRES_DB", "")
 	t.Setenv("POSTGRES_TIMEOUT", "30s")
 
 	_, err := Load()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "DB")
+	assert.Contains(t, err.Error(), "POSTGRES_DB")
 }
 
 func TestLoad_MissingTimeout(t *testing.T) {
@@ -90,10 +94,11 @@ func TestLoad_MissingTimeout(t *testing.T) {
 	t.Setenv("POSTGRES_USER", "testuser")
 	t.Setenv("POSTGRES_PASSWORD", "testpass")
 	t.Setenv("POSTGRES_DB", "testdb")
+	t.Setenv("POSTGRES_TIMEOUT", "")
 
 	_, err := Load()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "TIMEOUT")
+	assert.Contains(t, err.Error(), "POSTGRES_TIMEOUT")
 }
 
 func TestMustLoad_Success(t *testing.T) {
@@ -107,10 +112,6 @@ func TestMustLoad_Success(t *testing.T) {
 
 func TestMustLoad_Panics(t *testing.T) {
 	t.Setenv("POSTGRES_HOST", "")
-	t.Setenv("POSTGRES_USER", "")
-	t.Setenv("POSTGRES_PASSWORD", "")
-	t.Setenv("POSTGRES_DB", "")
-	t.Setenv("POSTGRES_TIMEOUT", "")
 
 	assert.Panics(t, func() {
 		MustLoad()
