@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/BladeRunner322/orange-team-microservices/pkg/pgerrors"
 )
 
 // PgxPool — реализация интерфейса Pool на основе pgxpool.
@@ -62,7 +64,7 @@ func NewPgxPool(ctx context.Context, cfg Config) (*PgxPool, error) {
 func (p *PgxPool) Query(ctx context.Context, sql string, args ...any) (Rows, error) {
 	rows, err := p.Pool.Query(ctx, sql, args...)
 	if err != nil {
-		return nil, mapErrors(err)
+		return nil, pgerrors.MapErrors(err)
 	}
 	return pgxRows{rows}, nil
 }
@@ -77,7 +79,7 @@ func (p *PgxPool) QueryRow(ctx context.Context, sql string, args ...any) Row {
 func (p *PgxPool) Exec(ctx context.Context, sql string, args ...any) (CommandTag, error) {
 	tag, err := p.Pool.Exec(ctx, sql, args...)
 	if err != nil {
-		return nil, mapErrors(err)
+		return nil, pgerrors.MapErrors(err)
 	}
 	return pgxCommandTag{tag}, nil
 }
@@ -86,7 +88,7 @@ func (p *PgxPool) Exec(ctx context.Context, sql string, args ...any) (CommandTag
 func (p *PgxPool) BeginTx(ctx context.Context) (Tx, error) {
 	tx, err := p.Pool.Begin(ctx)
 	if err != nil {
-		return nil, mapErrors(err)
+		return nil, pgerrors.MapErrors(err)
 	}
 	return NewTx(tx), nil
 }

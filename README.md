@@ -306,7 +306,8 @@ orange-team-microservices/
 │   ├── logger/                       # структурированное логирование (slog)
 │   ├── metrics/                      # метрики Prometheus (grpc.go, http.go)
 │   ├── nullable/                     # Nullable[T] для patch-полей (Set / Value)
-│   ├── postgres/                     # пул соединений pgx, конфиг, адаптеры, ошибки
+│   ├── pgerrors/                     # сентинелы и маппинг ошибок PostgreSQL (pgx/pgconn)
+│   ├── postgres/                     # пул соединений pgx, конфиг, адаптеры
 │   ├── ratelimit/                    # Token Bucket на Redis (rate limiting)
 │   └── redis/                        # клиент Redis (refresh tokens, rate limiting)
 │

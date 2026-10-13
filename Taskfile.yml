@@ -10,7 +10,8 @@ vars:
   # Паттерны, исключаемые из unit-покрытия.
   # Первая часть — обвязка (нет логики для unit-тестов).
   # Вторая часть — пакеты с только integration-тестами (0% в unit-режиме вводит в заблуждение).
-  UNIT_COVERAGE_EXCLUDE: 'internal/gen|/cmd$|/config$|/bootstrap$|/interfaces/.*grpc$|/application/ports$|pkg/logger$|pkg/health$|pkg/grpc/server$|pkg/nullable$|pkg/redis$|pkg/metrics$|pkg/ratelimit$|/infrastructure/postgres_repo$|/infrastructure/redis_repo$|/infrastructure/clients$'
+  # pkg/pgerrors НЕ в списке — он чистое, покрывается unit-тестами.
+  UNIT_COVERAGE_EXCLUDE: 'internal/gen|/cmd$|/config$|/bootstrap$|/interfaces/.*grpc$|/application/ports$|pkg/logger$|pkg/health$|pkg/grpc/server$|pkg/nullable$|pkg/redis$|pkg/metrics$|pkg/ratelimit$|pkg/postgres$|/infrastructure/postgres_repo$|/infrastructure/redis_repo$|/infrastructure/clients$'
 
   # Явный список пакетов, покрываемых integration-тестами.
   INTEGRATION_PACKAGES: './pkg/postgres/... ./pkg/ratelimit/... ./services/auth/internal/infrastructure/postgres_repo/... ./services/auth/internal/infrastructure/redis_repo/... ./services/profiles/internal/infrastructure/postgres_repo/... ./services/exercises/internal/infrastructure/postgres_repo/...'

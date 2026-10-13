@@ -1,4 +1,4 @@
-package postgres
+package pgerrors
 
 import (
 	"errors"
@@ -35,7 +35,7 @@ func TestConstraintNameFromError(t *testing.T) {
 
 	t.Run("PgError без ConstraintName — пустая строка", func(t *testing.T) {
 		err := &pgconn.PgError{
-			Code:    "42601", // syntax_error
+			Code:    "42601",
 			Message: "syntax error at or near \"SELEC\"",
 		}
 
@@ -48,14 +48,12 @@ func TestConstraintNameFromError(t *testing.T) {
 		assert.Empty(t, ConstraintNameFromError(err))
 	})
 
-	t.Run("результат mapErrors тоже даёт ConstraintName", func(t *testing.T) {
-		// mapErrors оборачивает оригинальную ошибку через %v и %w.
-		// errors.As должен пройти по цепочке и найти PgError.
+	t.Run("результат MapErrors тоже даёт ConstraintName", func(t *testing.T) {
 		pgErr := &pgconn.PgError{
 			Code:           "23505",
 			ConstraintName: "idx_auth_users_email",
 		}
-		mapped := mapErrors(pgErr)
+		mapped := MapErrors(pgErr)
 
 		assert.ErrorIs(t, mapped, ErrViolatesUnique)
 		assert.Equal(t, "idx_auth_users_email", ConstraintNameFromError(mapped))

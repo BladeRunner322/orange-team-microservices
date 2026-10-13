@@ -58,7 +58,7 @@ s, err := grpcserver.New(grpcserver.Config{
 Внутри — стандартная цепочка: `Metrics → Recovery → [UserID] → Logging`, TLS-конфиг, reflection. `WithUserID` опционален: Auth — источник `user_id`, остальные — читают из metadata.
 
 **Уже вынесено (для контекста):**
-- `pkg/postgres`, `pkg/redis`, `pkg/ratelimit`
+- `pkg/postgres`, `pkg/pgerrors`, `pkg/redis`, `pkg/ratelimit`
 - `pkg/logger`, `pkg/metrics`
 - `pkg/grpc/client`, `pkg/grpc/interceptors`
 - `pkg/ctxkeys` — ключи контекста, которые пропагируются между сервисами через HTTP-заголовки и gRPC metadata (`user_id`, `role`, `request_id`)

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/BladeRunner322/orange-team-microservices/pkg/pgerrors"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
 	"github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/domain"
 	"github.com/google/uuid"
@@ -37,7 +38,7 @@ func (r *Repository) GetByUserID(ctx context.Context, userID uuid.UUID) (domain.
 	row := r.pool.QueryRow(ctx, query, userID)
 	err := m.Scan(row)
 
-	if errors.Is(err, postgres.ErrNoRows) {
+	if errors.Is(err, pgerrors.ErrNoRows) {
 		return domain.Profile{}, domain.ErrProfileNotFound
 	}
 
@@ -102,7 +103,7 @@ func (r *Repository) Update(ctx context.Context, profile domain.Profile) (domain
 	)
 	err := m.Scan(row)
 
-	if errors.Is(err, postgres.ErrNoRows) {
+	if errors.Is(err, pgerrors.ErrNoRows) {
 		return domain.Profile{}, domain.ErrProfileNotFound
 	}
 

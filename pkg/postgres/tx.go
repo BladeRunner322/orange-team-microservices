@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 
+	"github.com/BladeRunner322/orange-team-microservices/pkg/pgerrors"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -19,7 +20,7 @@ func NewTx(tx pgx.Tx) Tx {
 func (t *pgxTx) Query(ctx context.Context, sql string, args ...any) (Rows, error) {
 	rows, err := t.tx.Query(ctx, sql, args...)
 	if err != nil {
-		return nil, mapErrors(err)
+		return nil, pgerrors.MapErrors(err)
 	}
 	return pgxRows{rows}, nil
 }
@@ -32,7 +33,7 @@ func (t *pgxTx) QueryRow(ctx context.Context, sql string, args ...any) Row {
 func (t *pgxTx) Exec(ctx context.Context, sql string, args ...any) (CommandTag, error) {
 	tag, err := t.tx.Exec(ctx, sql, args...)
 	if err != nil {
-		return nil, mapErrors(err)
+		return nil, pgerrors.MapErrors(err)
 	}
 	return pgxCommandTag{tag}, nil
 }
