@@ -22,7 +22,7 @@ func NewRegister(repo ports.Repository, log *logger.Logger) *Register {
 }
 
 func (uc *Register) Execute(ctx context.Context, emailStr, password, fullNameStr string) (domain.User, error) {
-	log := uc.logger.With("email", emailStr, "operation", "Register")
+	log := uc.logger.With("operation", "Register")
 
 	email, err := domain.NewEmail(emailStr)
 	if err != nil {
