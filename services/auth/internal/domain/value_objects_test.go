@@ -48,11 +48,12 @@ func TestNewFullName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewFullName(tt.input)
+			fullName, err := NewFullName(tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+				assert.Equal(t, tt.input, fullName.String())
 			}
 		})
 	}
@@ -95,12 +96,13 @@ func TestNewPassword(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewPassword(tt.input)
+			password, err := NewPassword(tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.ErrorIs(t, err, ErrWeakPassword)
 			} else {
 				assert.NoError(t, err)
+				assert.Equal(t, tt.input, password.String())
 			}
 		})
 	}

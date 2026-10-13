@@ -75,4 +75,15 @@ func TestRegister_Execute(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "db is down")
 	})
+
+	t.Run("ошибка репозитория при Save — пробрасывается", func(t *testing.T) {
+		repo := newMockRepository()
+		repo.saveErr = errors.New("disk full")
+		uc := NewRegister(repo, log)
+
+		_, err := uc.Execute(context.Background(), "test@example.com", "password123", "Test User")
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "disk full")
+	})
 }

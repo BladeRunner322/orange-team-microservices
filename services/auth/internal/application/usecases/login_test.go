@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -65,5 +66,44 @@ func TestLogin_Execute(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, domain.ErrInvalidCredentials)
+	})
+
+	t.Run("ошибка генерации access token", func(t *testing.T) {
+		repo := newMockRepository()
+		refreshRepo := newMockRefreshTokenRepository()
+
+		email, _ := domain.NewEmail("test@example.com")
+		fullName, _ := domain.NewFullName("Test User")
+		hash, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
+		passHash, _ := domain.NewPasswordHash(string(hash))
+		user := domain.NewUser(email, passHash, fullName)
+		_ = repo.Save(context.Background(), user)
+
+		tokenManager := mockTokenManager{generateErr: errors.New("signing failed")}
+
+		uc := NewLogin(repo, tokenManager, refreshRepo, time.Hour, log)
+		_, err := uc.Execute(context.Background(), "test@example.com", "password123")
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "signing failed")
+	})
+
+	t.Run("ошибка сохранения refresh токена", func(t *testing.T) {
+		repo := newMockRepository()
+		refreshRepo := newMockRefreshTokenRepository()
+		refreshRepo.saveErr = errors.New("redis down")
+
+		email, _ := domain.NewEmail("test@example.com")
+		fullName, _ := domain.NewFullName("Test User")
+		hash, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
+		passHash, _ := domain.NewPasswordHash(string(hash))
+		user := domain.NewUser(email, passHash, fullName)
+		_ = repo.Save(context.Background(), user)
+
+		uc := NewLogin(repo, mockTokenManager{}, refreshRepo, time.Hour, log)
+		_, err := uc.Execute(context.Background(), "test@example.com", "password123")
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "redis down")
 	})
 }
