@@ -33,7 +33,11 @@ tasks:
   # ============================================================
 
   test:
-    desc: Run unit tests
+    desc: Run unit tests (compact — one line per package with coverage)
+    cmds: [go test -short -cover ./...]
+
+  test-verbose:
+    desc: Run unit tests with verbose per-test output
     cmds: [go test -v ./...]
 
   test-integration:
@@ -46,11 +50,25 @@ tasks:
       - task: test
       - task: test-integration
 
-  test-cover:
-    desc: Run tests with HTML coverage report
+  test-cover-summary:
+    desc: Coverage table per function with total (compact terminal output)
     cmds:
       - mkdir -p coverage
-      - go test -v -coverprofile=coverage/coverage.out ./...
+      - go test -short -coverprofile=coverage/coverage.out ./... > /dev/null
+      - go tool cover -func=coverage/coverage.out
+
+  test-cover-worst:
+    desc: 20 least-covered functions (where to write tests next)
+    cmds:
+      - mkdir -p coverage
+      - go test -short -coverprofile=coverage/coverage.out ./... > /dev/null
+      - go tool cover -func=coverage/coverage.out | sort -k3 -n | head -20
+
+  test-cover:
+    desc: HTML coverage report with line-by-line highlighting
+    cmds:
+      - mkdir -p coverage
+      - go test -short -coverprofile=coverage/coverage.out ./...
       - go tool cover -html=coverage/coverage.out -o coverage/coverage.html
       - echo "Coverage report saved to coverage/coverage.html"
 
