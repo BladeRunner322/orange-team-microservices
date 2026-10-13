@@ -85,28 +85,30 @@ Database per Service (ADR-004) требует отдельный Postgres для
 
 Если бюджет ограничен, `task monitoring-down` + `task logging-down` освобождают **300-500 МБ RAM**. Для staging это часто оправдано. Для прода — нет (без метрик и логов не отладишь инциденты).
 
-### Версии monitoring-образов не закреплены
+### Версии monitoring-образов закреплены
 
-В `infra/compose.infra.yml` четыре сервиса мониторинга используют тег `:latest`:
+**Реализовано** (2026-10-14). Пять сервисов инфраструктуры в `infra/compose.infra.yml` переведены с `:latest` на закреплённые версии:
 
 ```yaml
 prometheus:
-  image: prom/prometheus:latest
+  image: prom/prometheus:v3
 grafana:
-  image: grafana/grafana:latest
+  image: grafana/grafana:13
 loki:
-  image: grafana/loki:latest
+  image: grafana/loki:3
 promtail:
-  image: grafana/promtail:latest
+  image: grafana/promtail:3
+warp:
+  image: caomingjun/warp@sha256:3af90254e5b623ac450d1006836c250b574a89d6df5cbf70380fd747ba216f95
 ```
 
-Остальные образы закреплены (`postgres:18.6-bookworm`, `redis:7-alpine`, `caddy:2-alpine`, `migrate/migrate:v4.19.1`).
+Мажорные версии выбраны по текущим запущенным: Prometheus 3.15.0, Grafana 13.2.3, Loki 3.7.8, Promtail 3.6.8.
 
-**Чем это плохо:** `docker compose pull` может притянуть мажорное обновление (например, Loki 3.x с ломающейся конфигурацией `pipeline_stages`), сервис не стартует, а CD уже прошёл. Отладка неочевидна — код не менялся, а сервис упал.
+**WARP закреплён по дайджесту** (не по тегу) — у `caomingjun/warp` в Docker Hub нет версионных тегов, только `latest`. Дайджест фиксирует точный образ неизменяемо. Обновление — вручную: `docker pull caomingjun/warp:latest`, взять новый digest, заменить в compose. Для WARP это осознанно: он редко обновляется, автоматическое обновление тут не нужно.
 
-**Что делать:** закрепить мажорную версию (`prom/prometheus:v3`, `grafana/grafana:11`, `grafana/loki:3`, `grafana/promtail:3`). Минорные и патч-обновления внутри мажорной ветки остаются — `pull` их подтянет.
+Остальные образы закреплены (`postgres:18.6-bookworm`, `redis:7-alpine`, `caddy:2-alpine`, `migrate/migrate:v4.19.1`, `prom/alertmanager:v0.34.1`, `prom/node-exporter:v1.8.2`).
 
-**Приоритет:** низкий. Триггер — первый инцидент из-за несовместимого обновления monitoring-образа.
+Минорные и патч-обновления внутри мажорной ветки остаются — `docker compose pull` их подтянет. Мажорный скачок заблокирован.
 
 ### Мини-ПК как альтернатива VPS
 

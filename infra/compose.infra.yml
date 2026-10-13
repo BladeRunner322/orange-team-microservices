@@ -35,7 +35,7 @@ services:
   #  МОНИТОРИНГ (Prometheus + Grafana)
   # ============================================================
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3
     container_name: auth-prometheus
     ports:
       - "127.0.0.1:${PROMETHEUS_PORT}:9090"
@@ -90,7 +90,7 @@ services:
     pid: host
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13
     container_name: auth-grafana
     ports:
       - "127.0.0.1:${GRAFANA_PORT}:3000"
@@ -107,7 +107,7 @@ services:
   #  ЛОГИ (Loki + Promtail)
   # ============================================================
   loki:
-    image: grafana/loki:latest
+    image: grafana/loki:3
     container_name: auth-loki
     ports:
       - "127.0.0.1:${LOKI_PORT}:3100"
@@ -119,7 +119,7 @@ services:
     restart: unless-stopped
 
   promtail:
-    image: grafana/promtail:latest
+    image: grafana/promtail:3
     container_name: auth-promtail
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -132,7 +132,7 @@ services:
 
   # Cloudflare WARP — SOCKS5-прокси для обхода блокировок
   warp:
-    image: caomingjun/warp:latest
+    image: caomingjun/warp@sha256:3af90254e5b623ac450d1006836c250b574a89d6df5cbf70380fd747ba216f95
     container_name: warp
     restart: unless-stopped
     ports:
