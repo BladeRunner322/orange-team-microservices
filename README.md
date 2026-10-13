@@ -1919,27 +1919,32 @@ cat /var/log/backup.log # утром следующего дня
 
 ## Тестирование
 
+Юнит-тесты и интеграционные — раздельные. Каждый показывает покрытие только по своим пакетам.
+
 ### Юнит-тесты
 ```bash
 task test
 ```
 
-### Интеграционные тесты (с Testcontainers)
+Одна строка на пакет с процентом покрытия. Без обвязки (`cmd`, `config`, `bootstrap`, `internal/gen`) и пакетов с только integration-тестами.
+
+### Интеграционные тесты (Testcontainers)
 ```bash
 task test-integration
 ```
 
-### Все тесты (юнит + интеграционные)
-```bash
-task test-all
-```
+Считает покрытие только по integration-пакетам: `pkg/postgres`, `pkg/ratelimit`, все `infrastructure/*_repo`.
 
-### Покрытие
+### HTML-отчёт покрытия (по юнит-тестам)
 ```bash
 task test-cover
 ```
 
-Отчёт будет в coverage/coverage.html.
+Отчёт — в `coverage/coverage.html`. Построчная подсветка: что покрыто, что нет.
+
+### Что не покрывается
+
+Пакеты обвязки (точки входа, конфиги, DI-сборка, сгенерированный код) и тонкие обёртки — unit-тестами не покрываются. Полный список — в `COVERAGE_EXCLUDE` в `Taskfile.yml` и в [ADR-022](docs/adr/022-testing-strategy.md).
 
 ### Postman-коллекция
 

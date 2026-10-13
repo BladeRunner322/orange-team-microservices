@@ -45,13 +45,22 @@ Integration-тесты помечены `//go:build integration` и в `task tes
 
 ### Как это зафиксировано в коде
 
-Переменная `COVERAGE_EXCLUDE` в `Taskfile.yml` — список паттернов исключаемых пакетов:
+В `Taskfile.yml` две переменные:
+
+- `UNIT_COVERAGE_EXCLUDE` — паттерны пакетов, исключаемых из unit-покрытия. Две группы: обвязка (нет логики для unit-тестов) и пакеты с только integration-тестами (0% в unit-режиме вводит в заблуждение).
 
 ```
-internal/gen|/cmd$|/config$|/bootstrap$|/interfaces/.*grpc$|/application/ports$|pkg/logger$|pkg/health$|pkg/grpc/server$|pkg/nullable$|pkg/redis$|pkg/metrics$|pkg/ratelimit$
+internal/gen|/cmd$|/config$|/bootstrap$|/interfaces/.*grpc$|/application/ports$|pkg/logger$|pkg/health$|pkg/grpc/server$|pkg/nullable$|pkg/redis$|pkg/metrics$|pkg/ratelimit$|/infrastructure/postgres_repo$|/infrastructure/redis_repo$|/infrastructure/clients$
 ```
 
-`task test` и `task test-cover` фильтруют через `go list ./... | grep -vE '{{.COVERAGE_EXCLUDE}}'`.
+- `INTEGRATION_PACKAGES` — явный список пакетов, покрываемых integration-тестами.
+
+```
+./pkg/postgres/... ./pkg/ratelimit/... ./services/auth/internal/infrastructure/postgres_repo/... ./services/auth/internal/infrastructure/redis_repo/... ./services/profiles/internal/infrastructure/postgres_repo/... ./services/exercises/internal/infrastructure/postgres_repo/...
+```
+
+- `task test` и `task test-cover` фильтруют через `go list ./... | grep -vE '{{.UNIT_COVERAGE_EXCLUDE}}'`.
+- `task test-integration` использует `-cover` и явный список `{{.INTEGRATION_PACKAGES}}`, показывает покрытие по integration-пакетам.
 
 ### Правила
 
