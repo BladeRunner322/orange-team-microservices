@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/BladeRunner322/orange-team-microservices/pkg/pgconfig"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/pgerrors"
 )
 
@@ -17,7 +18,7 @@ type PgxPool struct {
 }
 
 // NewPgxPool создаёт новый пул соединений с PostgreSQL.
-func NewPgxPool(ctx context.Context, cfg Config) (*PgxPool, error) {
+func NewPgxPool(ctx context.Context, cfg pgconfig.Config) (*PgxPool, error) {
 	connStr := fmt.Sprintf(
 		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
 		cfg.User,

@@ -9,15 +9,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BladeRunner322/orange-team-microservices/pkg/pgconfig"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
+	"github.com/BladeRunner322/orange-team-microservices/services/exercises/internal/domain"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
-
-	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
-	"github.com/BladeRunner322/orange-team-microservices/services/exercises/internal/domain"
 )
 
 func TestRepository_Integration(t *testing.T) {
@@ -50,7 +50,7 @@ func TestRepository_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	// 3. Создаём пул через pkg/postgres
-	pool, err := postgres.NewPgxPool(ctx, postgres.Config{
+	pool, err := postgres.NewPgxPool(ctx, pgconfig.Config{
 		Host:     host,
 		Port:     mappedPort.Port(),
 		User:     "testuser",

@@ -15,6 +15,7 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/BladeRunner322/orange-team-microservices/pkg/pgconfig"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/domain"
 )
@@ -50,7 +51,7 @@ func TestRepository_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	// 3. Создаём пул через наш pkg/postgres (как в bootstrap)
-	pool, err := postgres.NewPgxPool(ctx, postgres.Config{
+	pool, err := postgres.NewPgxPool(ctx, pgconfig.Config{
 		Host:     host,
 		Port:     mappedPort.Port(),
 		User:     "testuser",

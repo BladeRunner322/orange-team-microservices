@@ -11,6 +11,7 @@ import (
 	grpcserver "github.com/BladeRunner322/orange-team-microservices/pkg/grpc/server"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/health"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/pgconfig"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
 	"github.com/BladeRunner322/orange-team-microservices/services/profiles/config"
 	"github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/application/usecases"
@@ -35,7 +36,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	// ============================================================
 	// 1. ПОДКЛЮЧЕНИЕ К POSTGRESQL
 	// ============================================================
-	pgCfg := postgres.MustLoad()
+	pgCfg := pgconfig.MustLoad()
 	pool, err := postgres.NewPgxPool(ctx, pgCfg)
 	if err != nil {
 		return nil, fmt.Errorf("connect to postgres: %w", err)
