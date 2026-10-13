@@ -34,6 +34,10 @@
 - [ADR-020: Circuit Breaker и Retry для gRPC-клиентов](020-circuit-breaker-and-retry.md)
 - [ADR-021: Независимый деплой сервисов](021-independent-deployment.md)
 
+## Открытые задачи
+
+Список незакрытых задач проекта — в [docs/backlog.md](../backlog.md).
+
 ## Как добавить
 
 1. Создай файл `NNN-краткое-название.md`

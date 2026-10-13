@@ -35,6 +35,7 @@
 - [Управление миграциями](#управление-миграциями)
 - [Переменные окружения](#переменные-окружения)
 - [Architecture Decision Records](#architecture-decision-records)
+- [Открытые задачи](docs/backlog.md)
 
 ## Требования
 
