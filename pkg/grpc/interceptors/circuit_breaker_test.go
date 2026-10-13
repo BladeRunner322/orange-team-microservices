@@ -192,3 +192,11 @@ func TestStateToString(t *testing.T) {
 	assert.Equal(t, "half-open", stateToString(gobreaker.StateHalfOpen))
 	assert.Equal(t, "open", stateToString(gobreaker.StateOpen))
 }
+
+func TestStateToFloat_Unknown(t *testing.T) {
+	assert.Equal(t, -1.0, stateToFloat(gobreaker.State(99)))
+}
+
+func TestStateToString_Unknown(t *testing.T) {
+	assert.Equal(t, "unknown(99)", stateToString(gobreaker.State(99)))
+}
