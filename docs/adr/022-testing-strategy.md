@@ -24,13 +24,14 @@
 - `httputil` — `SendJSON`, `SendError`, `GrpcErrorToHTTP`, `StatusRecorder`.
 - `pkg/ctxkeys`, `pkg/grpc/client`, `pkg/grpc/interceptors` — инфраструктура с логикой.
 - `pkg/pgerrors` — сентинелы, маппинг ошибок PostgreSQL, `ConstraintNameFromError`.
+- `pkg/pgconfig` — `Config`, `Load`, `MustLoad`.
 
 ### Что покрываем integration-тестами (Testcontainers)
 
 - `infrastructure/postgres_repo` — SQL, маппинг ошибок, транзакции.
 - `infrastructure/redis_repo` — TTL, set-операции.
 - `pkg/ratelimit` — Lua-скрипт, атомарность Token Bucket.
-- `pkg/postgres` — пул соединений, `WithTx`, адаптеры. Чистая логика над ошибками — в `pkg/pgerrors`.
+- `pkg/postgres` — пул соединений, `WithTx`, адаптеры. Чистая логика над ошибками — в `pkg/pgerrors`, конфиг — в `pkg/pgconfig`.
 
 Integration-тесты помечены `//go:build integration` и в `task test` не участвуют.
 
