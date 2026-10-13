@@ -399,4 +399,41 @@ func runRepositoryTests(t *testing.T, repo *Repository) {
 		assert.Equal(t, name, created.Name().String())
 		assert.NotEqual(t, first.ID(), created.ID())
 	})
+
+	t.Run("WithTx + GetExerciseForUpdate — блокировка видна параллельному запросу", func(t *testing.T) {
+		created, err := repo.Create(ctx, mustExercise(t, uniqueName("Блокировка"), "Описание", 5, "weight"))
+		require.NoError(t, err)
+
+		// Открываем транзакцию, читаем с FOR UPDATE, не коммитим.
+		tx, err := repo.pool.(*postgres.PgxPool).BeginTx(ctx)
+		require.NoError(t, err)
+
+		txRepo := &Repository{tx: tx, opTimeout: 5 * time.Second}
+
+		_, err = txRepo.GetExerciseForUpdate(ctx, created.ID())
+		require.NoError(t, err)
+
+		// Параллельный FOR UPDATE должен ждать. Проверяем через таймаут.
+		done := make(chan error, 1)
+		go func() {
+			_, err := repo.GetExerciseForUpdate(ctx, created.ID())
+			done <- err
+		}()
+
+		select {
+		case <-done:
+			t.Fatal("параллельный FOR UPDATE не должен завершиться, пока первая транзакция открыта")
+		case <-time.After(200 * time.Millisecond):
+			// Ожидаемо: ждёт.
+		}
+
+		require.NoError(t, tx.Rollback(ctx))
+
+		select {
+		case err := <-done:
+			require.NoError(t, err, "после ROLLBACK блокировка должна сняться")
+		case <-time.After(2 * time.Second):
+			t.Fatal("параллельный FOR UPDATE должен был завершиться после ROLLBACK")
+		}
+	})
 }

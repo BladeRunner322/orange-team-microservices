@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/BladeRunner322/orange-team-microservices/services/exercises/internal/application/ports"
 	"github.com/BladeRunner322/orange-team-microservices/services/exercises/internal/domain"
 )
 
@@ -22,6 +23,18 @@ type mockRepository struct {
 
 func newMockRepository() *mockRepository {
 	return &mockRepository{exercises: make(map[uuid.UUID]domain.Exercise)}
+}
+
+func (m *mockRepository) WithTx(ctx context.Context, fn func(ports.Repository) error) error {
+	if m.err != nil {
+		return m.err
+	}
+	// В памяти транзакции нет — прокидываем тот же мок.
+	return fn(m)
+}
+
+func (m *mockRepository) GetExerciseForUpdate(ctx context.Context, id uuid.UUID) (domain.Exercise, error) {
+	return m.GetExercise(ctx, id)
 }
 
 // Create сохраняет упражнение. Проверяет уникальность name среди активных.

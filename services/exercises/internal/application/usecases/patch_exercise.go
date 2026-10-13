@@ -27,34 +27,40 @@ func NewPatchExercise(repo ports.Repository, log *logger.Logger) *PatchExercise 
 func (uc *PatchExercise) Execute(ctx context.Context, id uuid.UUID, patch domain.ExercisePatch) (domain.Exercise, error) {
 	log := uc.logger.With("operation", "PatchExercise", "exercise_id", id)
 
-	exercise, err := uc.repo.GetExercise(ctx, id)
+	var updated domain.Exercise
+	err := uc.repo.WithTx(ctx, func(txRepo ports.Repository) error {
+		// SELECT ... FOR UPDATE — блокируем строку до COMMIT.
+		// Защита от lost update (ADR-007 F-2).
+		exercise, err := txRepo.GetExerciseForUpdate(ctx, id)
+		if err != nil {
+			if errors.Is(err, domain.ErrExerciseNotFound) {
+				log.Warn("exercise not found")
+				return domain.ErrExerciseNotFound
+			}
+			log.Error("failed to get exercise for update", "error", err)
+			return fmt.Errorf("get exercise for update: %w", err)
+		}
 
+		exercise.ApplyPatch(patch)
+
+		updated, err = txRepo.Update(ctx, exercise)
+		if err != nil {
+			if errors.Is(err, domain.ErrExerciseNotFound) {
+				log.Warn("exercise not found or already deleted")
+				return domain.ErrExerciseNotFound
+			}
+			if errors.Is(err, domain.ErrExerciseNameExists) {
+				log.Warn("exercise name already exists", "name", exercise.Name())
+				return domain.ErrExerciseNameExists
+			}
+			log.Error("failed to update exercise", "error", err)
+			return fmt.Errorf("update exercise: %w", err)
+		}
+
+		return nil
+	})
 	if err != nil {
-		if errors.Is(err, domain.ErrExerciseNotFound) {
-			log.Warn("exercise not found")
-			return domain.Exercise{}, domain.ErrExerciseNotFound
-		}
-
-		log.Error("failed to get exercise", "error", err)
-		return domain.Exercise{}, fmt.Errorf("get exercise: %w", err)
-	}
-
-	exercise.ApplyPatch(patch)
-
-	updated, err := uc.repo.Update(ctx, exercise)
-	if err != nil {
-		if errors.Is(err, domain.ErrExerciseNotFound) {
-			log.Warn("exercise not found or already deleted")
-			return domain.Exercise{}, domain.ErrExerciseNotFound
-		}
-
-		if errors.Is(err, domain.ErrExerciseNameExists) {
-			log.Warn("exercise name already exists", "name", exercise.Name())
-			return domain.Exercise{}, domain.ErrExerciseNameExists
-		}
-
-		log.Error("failed to update exercise", "error", err)
-		return domain.Exercise{}, fmt.Errorf("update exercise: %w", err)
+		return domain.Exercise{}, err
 	}
 
 	return updated, nil
