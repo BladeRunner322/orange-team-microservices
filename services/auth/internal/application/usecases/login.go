@@ -43,7 +43,7 @@ type LoginResult struct {
 }
 
 func (uc *Login) Execute(ctx context.Context, emailStr, password string) (LoginResult, error) {
-	log := uc.logger.With("email", emailStr, "operation", "Login")
+	log := uc.logger.With("operation", "Login")
 
 	email, err := domain.NewEmail(emailStr)
 	if err != nil {
