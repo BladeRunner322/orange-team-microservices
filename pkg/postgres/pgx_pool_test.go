@@ -14,6 +14,8 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
+
+	"github.com/BladeRunner322/orange-team-microservices/pkg/pgconfig"
 )
 
 func TestPgxPool_WithTx(t *testing.T) {
@@ -45,7 +47,7 @@ func TestPgxPool_WithTx(t *testing.T) {
 	mappedPort, err := pgContainer.MappedPort(ctx, "5432/tcp")
 	require.NoError(t, err)
 
-	pool, err := NewPgxPool(ctx, Config{
+	pool, err := NewPgxPool(ctx, pgconfig.Config{
 		Host:     host,
 		Port:     mappedPort.Port(),
 		User:     "testuser",

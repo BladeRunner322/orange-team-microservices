@@ -94,7 +94,7 @@ func TestLoad_MissingTimeout(t *testing.T) {
 	t.Setenv("POSTGRES_USER", "testuser")
 	t.Setenv("POSTGRES_PASSWORD", "testpass")
 	t.Setenv("POSTGRES_DB", "testdb")
-	t.Setenv("POSTGRES_TIMEOUT", "")
+	t.Setenv("POSTGRES_TIMEOUT", "0s")
 
 	_, err := Load()
 	assert.Error(t, err)
@@ -116,4 +116,15 @@ func TestMustLoad_Panics(t *testing.T) {
 	assert.Panics(t, func() {
 		MustLoad()
 	})
+}
+
+func TestLoad_InvalidTimeout(t *testing.T) {
+	t.Setenv("POSTGRES_HOST", "postgres-test")
+	t.Setenv("POSTGRES_USER", "testuser")
+	t.Setenv("POSTGRES_PASSWORD", "testpass")
+	t.Setenv("POSTGRES_DB", "testdb")
+	t.Setenv("POSTGRES_TIMEOUT", "not-a-duration")
+
+	_, err := Load()
+	assert.Error(t, err)
 }
