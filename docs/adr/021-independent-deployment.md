@@ -119,20 +119,22 @@ docker compose up -d --no-build --no-deps auth
 
 **Что делать с инфраструктурой (пункт 3):** при изменении `infra/**` — `--force-recreate` **всех инфра-контейнеров** (Caddy, Prometheus, Alertmanager, Loki, Promtail, Grafana, node-exporter, WARP). Их 8, они stateless (volumes сохраняются, но пересоздание контейнера данные не теряет). Проще, чем вычислять, что именно затронуто.
 
-**Что делать с миграциями:** если изменился `services/<svc>/migrations/**` — пересоздать `migrate-<svc>` (migrate-контейнеры одноразовые, `restart: "no"`) и сервис `<svc>`:
+**Что делать с миграциями:** для каждого изменённого сервиса прогонять `migrate-<svc>` (migrate-контейнеры одноразовые, `restart: "no"`) перед `up -d --no-deps`:
 
 ```bash
 docker compose run --rm migrate-auth
 docker compose up -d --no-build --no-deps auth
 ```
 
-Иначе сервис останется на старой схеме БД.
+`migrate up` идемпотентен: на актуальной схеме — no-op. Поэтому мы не вычисляем, менялись ли файлы миграций, а прогоняем миграции всегда, когда сервис попал в список изменённых. Это дешевле, чем отдельно отслеживать `services/<svc>/migrations/**` в `changed-services`, и защищает от случая, когда схема разъехалась с кодом, но файлы миграций в этом коммите не трогали.
+
+У Gateway миграций нет — для него шаг пропускается.
 
 **Итоговый алгоритм deploy job:**
 
 1. `git pull` на сервере.
 2. `docker compose pull <list_of_changed_services>` — скачать только нужные образы.
-3. Для каждого изменённого сервиса: если менялись миграции — прогнать `migrate-<svc>`, потом `up -d --no-deps <svc>`.
+3. Для каждого изменённого сервиса: прогнать `migrate-<svc>` (идемпотентно), потом `up -d --no-deps <svc>`.
 4. Если изменился `infra/**` — `up -d --force-recreate <infra_services>`.
 5. `docker image prune -f`.
 
