@@ -25,7 +25,6 @@
 | Dependabot / Renovate | [ADR-012](adr/012-ci-cd-optimization.md) | ~30 мин | Авто-PR на зависимости |
 | Docker logging options | [ADR-018](adr/018-storage-retention.md) | ~15 мин | `daemon.json` + перезапуск Docker |
 | Rotation SSH на Ed25519 | [ADR-006](adr/006-secrets-management.md), [ADR-021](adr/021-independent-deployment.md) | ~30 мин | `appleboy/ssh-action` уже обновлён |
-| F-2: read-then-write без транзакции | [ADR-007](adr/007-known-issues.md) | ~2 ч | `PatchMyProfile`, `PatchExercise` |
 
 ## 🟡 После недели наблюдений за CB/Retry
 
