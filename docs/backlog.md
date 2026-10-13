@@ -13,9 +13,8 @@
 
 | # | Что | ADR | Оценка | Комментарий |
 |---|-----|-----|--------|-------------|
-| 1 | RS256 + JWKS вместо HS256 | [ADR-004](adr/004-microservices-patterns.md) | ~2.5 ч | Убирает общий секрет по сервисам. Триггер — второй потребитель JWT |
-| 2 | gitleaks / trufflehog в CI | [ADR-006](adr/006-secrets-management.md) | ~1 ч | Защита от случайного коммита секретов |
-| 3 | Закрепить версии monitoring-образов | [ADR-013](adr/013-infrastructure-requirements.md) | ~15 мин | `:latest` → `v3`, `11`, `3`, `3`. Триггер — первый инцидент |
+| 1 | gitleaks / trufflehog в CI | [ADR-006](adr/006-secrets-management.md) | ~1 ч | Защита от случайного коммита секретов |
+| 2 | Закрепить версии monitoring-образов | [ADR-013](adr/013-infrastructure-requirements.md) | ~15 мин | `:latest` → `v3`, `11`, `3`, `3`. Триггер — первый инцидент |
 
 ## 🟢 Низкий / техдолг
 
@@ -50,6 +49,7 @@
 | 20 | mTLS + `GRPC_CLIENT_TLS_MODE=verify` | [ADR-016](adr/016-network-security.md) | Выход из одной docker-сети / внешний gRPC-потребитель |
 | 21 | Статический анализ импортов `pkg/**` | [ADR-021](adr/021-independent-deployment.md) | Если `pkg/**` начнёт меняться часто |
 | 22 | Blue-green / canary | [ADR-012](adr/012-ci-cd-optimization.md), [ADR-021](adr/021-independent-deployment.md) | Появление SLA |
+| 23 | RS256 + JWKS вместо HS256 | [ADR-004](adr/004-microservices-patterns.md) | Второй потребитель JWT / требование не раздавать общий секрет / Auth стал bottleneck валидации |
 
 ## Что НЕ делаем (явно зафиксировано)
 
