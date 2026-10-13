@@ -2127,8 +2127,8 @@ task <service-name>:migrate-version
 | Переменная | Значение по умолчанию | Назначение |
 |------------|----------------------|------------|
 | `POSTGRES_PORT` | `5432` | Порт PostgreSQL на хосте |
-| `REDIS_AUTH_PORT` | `6379` | Порт Redis (Auth) на хосте |
-| `REDIS_GATEWAY_PORT` | `6380` | Порт Redis (Gateway) на хосте |
+| `AUTH_REDIS_PORT` | `6379` | Порт Redis (Auth) на хосте |
+| `GATEWAY_REDIS_PORT` | `6380` | Порт Redis (Gateway) на хосте |
 | `AUTH_GRPC_PORT` | `50051` | Порт gRPC Auth на хосте |
 | `AUTH_HTTP_PORT` | `8080` | Порт HTTP Auth (health/metrics) на хосте |
 | `GATEWAY_HTTP_PORT` | `8081` | Порт HTTP Gateway на хосте |
