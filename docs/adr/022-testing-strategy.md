@@ -23,13 +23,14 @@
 - `middleware` — чистые функции над `http.Request` / `http.ResponseWriter`.
 - `httputil` — `SendJSON`, `SendError`, `GrpcErrorToHTTP`, `StatusRecorder`.
 - `pkg/ctxkeys`, `pkg/grpc/client`, `pkg/grpc/interceptors` — инфраструктура с логикой.
+- `pkg/pgerrors` — сентинелы, маппинг ошибок PostgreSQL, `ConstraintNameFromError`.
 
 ### Что покрываем integration-тестами (Testcontainers)
 
 - `infrastructure/postgres_repo` — SQL, маппинг ошибок, транзакции.
 - `infrastructure/redis_repo` — TTL, set-операции.
 - `pkg/ratelimit` — Lua-скрипт, атомарность Token Bucket.
-- `pkg/postgres` — `WithTx`, `mapErrors` с реальным Postgres.
+- `pkg/postgres` — пул соединений, `WithTx`, адаптеры. Чистая логика над ошибками — в `pkg/pgerrors`.
 
 Integration-тесты помечены `//go:build integration` и в `task test` не участвуют.
 
@@ -42,15 +43,16 @@ Integration-тесты помечены `//go:build integration` и в `task tes
 - `interfaces/*grpc` — обвязка над usecase, тестируется e2e.
 - `application/ports` — интерфейсы, нет кода для покрытия.
 - `pkg/logger`, `pkg/health`, `pkg/nullable`, `pkg/redis`, `pkg/metrics`, `pkg/grpc/server` — тонкие обёртки.
+- `pkg/postgres` — pgx-специфика (пул, транзакции, адаптеры), покрывается integration-тестами. Чистая логика над ошибками вынесена в `pkg/pgerrors`.
 
 ### Как это зафиксировано в коде
 
 В `Taskfile.yml` две переменные:
 
-- `UNIT_COVERAGE_EXCLUDE` — паттерны пакетов, исключаемых из unit-покрытия. Две группы: обвязка (нет логики для unit-тестов) и пакеты с только integration-тестами (0% в unit-режиме вводит в заблуждение).
+- `UNIT_COVERAGE_EXCLUDE` — паттерны пакетов, исключаемых из unit-покрытия. Три группы: обвязка (нет логики для unit-тестов), пакеты с только integration-тестами, и `pkg/postgres` (pgx-специфика, тоже только integration).
 
 ```
-internal/gen|/cmd$|/config$|/bootstrap$|/interfaces/.*grpc$|/application/ports$|pkg/logger$|pkg/health$|pkg/grpc/server$|pkg/nullable$|pkg/redis$|pkg/metrics$|pkg/ratelimit$|/infrastructure/postgres_repo$|/infrastructure/redis_repo$|/infrastructure/clients$
+internal/gen|/cmd$|/config$|/bootstrap$|/interfaces/.*grpc$|/application/ports$|pkg/logger$|pkg/health$|pkg/grpc/server$|pkg/nullable$|pkg/redis$|pkg/metrics$|pkg/ratelimit$|pkg/postgres$|/infrastructure/postgres_repo$|/infrastructure/redis_repo$|/infrastructure/clients$
 ```
 
 - `INTEGRATION_PACKAGES` — явный список пакетов, покрываемых integration-тестами.
