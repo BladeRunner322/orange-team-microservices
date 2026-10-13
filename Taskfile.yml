@@ -6,6 +6,11 @@ env:
   COMPOSE_FILE: infra/compose.app.yml:infra/compose.infra.yml
   COMPOSE_ENV_FILES: .env
 
+vars:
+  # Паттерны пакетов, исключаемых из coverage:
+  # обвязка, сгенерированный код, точки входа — unit-тесты не имеют смысла.
+  COVERAGE_EXCLUDE: 'internal/gen|/cmd$|/config$|/bootstrap$|/interfaces/.*grpc$|/application/ports$|pkg/logger$|pkg/health$|pkg/grpc/server$|pkg/nullable$|pkg/redis$|pkg/metrics$|pkg/ratelimit$'
+
 includes:
   auth:      ./taskfiles/auth.yml
   gateway:   ./taskfiles/gateway.yml
@@ -36,33 +41,9 @@ tasks:
     desc: Run unit tests (compact — one line per package with coverage)
     cmds: [go test -short -cover ./...]
 
-  test-verbose:
-    desc: Run unit tests with verbose per-test output
-    cmds: [go test -v ./...]
-
   test-integration:
     desc: Run integration tests with Testcontainers
     cmds: [go test -tags=integration -v ./...]
-
-  test-all:
-    desc: Run unit and integration tests
-    cmds:
-      - task: test
-      - task: test-integration
-
-  test-cover-summary:
-    desc: Coverage table per function with total (compact terminal output)
-    cmds:
-      - mkdir -p coverage
-      - go test -short -coverprofile=coverage/coverage.out ./... > /dev/null
-      - go tool cover -func=coverage/coverage.out
-
-  test-cover-worst:
-    desc: 20 least-covered functions (where to write tests next)
-    cmds:
-      - mkdir -p coverage
-      - go test -short -coverprofile=coverage/coverage.out ./... > /dev/null
-      - go tool cover -func=coverage/coverage.out | sort -k3 -n | head -20
 
   test-cover:
     desc: HTML coverage report with line-by-line highlighting

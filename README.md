@@ -2180,5 +2180,6 @@ task <service-name>:migrate-create -- create_users_table
 - [ADR-019: Эволюция в сторону микросервисов](docs/adr/019-microservices-evolution.md) — roadmap: независимый деплой, failure isolation, event bus, tracing
 - [ADR-020: Circuit Breaker и Retry для gRPC-клиентов](docs/adr/020-circuit-breaker-and-retry.md) — fail-fast, retry read-методов, client-side метрики
 - [ADR-021: Независимый деплой сервисов](docs/adr/021-independent-deployment.md) — разделение compose, semver, точечный деплой изменённых сервисов
+- [ADR-022: Стратегия тестирования](docs/adr/022-testing-strategy.md) — unit, integration, e2e, что не покрываем
 
 Подробнее — в [docs/adr/README.md](docs/adr/README.md).
