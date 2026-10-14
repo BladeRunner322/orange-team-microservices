@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package habits;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "internal/gen/api/habits";
+
+service HabitsService {
+  // Создать новую привычку. name обязателен, description опционален.
+  rpc CreateHabit(CreateHabitRequest) returns (Habit);
+
+  // Одна привычка по id. Возвращает и удалённые (с is_deleted=true).
+  rpc GetHabit(GetHabitRequest) returns (Habit);
+
+  // Список активных привычек пользователя + стрик + выполнено сегодня.
+  rpc GetHabits(GetHabitsRequest) returns (GetHabitsResponse);
+
+  // Патч. Поля: name, description. Оба optional.
+  rpc PatchHabit(PatchHabitRequest) returns (Habit);
+
+  // Soft delete. Идемпотентно.
+  rpc DeleteHabit(DeleteHabitRequest) returns (DeleteHabitResponse);
+
+  // Отметить выполнение. date — сегодня или до 7 дней назад.
+  rpc CompleteHabit(CompleteHabitRequest) returns (CompleteHabitResponse);
+
+  // Снять отметку. Тоже до 7 дней.
+  rpc UncompleteHabit(UncompleteHabitRequest) returns (UncompleteHabitResponse);
+
+  // История выполнений за период.
+  rpc GetCompletions(GetCompletionsRequest) returns (GetCompletionsResponse);
+}
+
+message CreateHabitRequest {
+  string name        = 1;
+  string description = 2;
+}
+
+message GetHabitRequest {
+  string id = 1;
+}
+
+message GetHabitsRequest {
+  // пусто — user_id берётся из metadata
+}
+
+message PatchHabitRequest {
+  string          id          = 1;
+  optional string name        = 2;
+  optional string description = 3;
+}
+
+message DeleteHabitRequest {
+  string id = 1;
+}
+
+message CompleteHabitRequest {
+  string id = 1;
+  // date в формате YYYY-MM-DD. Если пусто — используется сегодня.
+  string date = 2;
+}
+
+message UncompleteHabitRequest {
+  string id   = 1;
+  string date = 2;
+}
+
+message GetCompletionsRequest {
+  string id = 1;
+  // Период в формате YYYY-MM-DD. Если пусто — последние 30 дней.
+  string from = 2;
+  string to   = 3;
+}
+
+message Habit {
+  string                    id              = 1;
+  string                    user_id         = 2;
+  string                    name            = 3;
+  string                    description     = 4;
+  int32                     streak          = 5;
+  bool                      completed_today = 6;
+  bool                      is_deleted      = 7;
+  google.protobuf.Timestamp created_at      = 8;
+  google.protobuf.Timestamp updated_at      = 9;
+}
+
+message GetHabitsResponse {
+  repeated Habit habits = 1;
+}
+
+message DeleteHabitResponse {
+  // пусто
+}
+
+message CompleteHabitResponse {
+  // пусто
+}
+
+message UncompleteHabitResponse {
+  // пусто
+}
+
+message Completion {
+  string                    habit_id   = 1;
+  string                    date       = 2;
+  google.protobuf.Timestamp created_at = 3;
+}
+
+message GetCompletionsResponse {
+  repeated Completion completions = 1;
+}
