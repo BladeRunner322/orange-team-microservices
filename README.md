@@ -2188,5 +2188,6 @@ task <service-name>:migrate-create -- create_users_table
 - [ADR-020: Circuit Breaker и Retry для gRPC-клиентов](docs/adr/020-circuit-breaker-and-retry.md) — fail-fast, retry read-методов, client-side метрики
 - [ADR-021: Независимый деплой сервисов](docs/adr/021-independent-deployment.md) — разделение compose, semver, точечный деплой изменённых сервисов
 - [ADR-022: Стратегия тестирования](docs/adr/022-testing-strategy.md) — unit, integration, e2e, что не покрываем
+- [ADR-023: Сервис привычек (Habits)](docs/adr/023-habits.md) — трекер привычек, стрики, отметки выполнения
 
 Подробнее — в [docs/adr/README.md](docs/adr/README.md).

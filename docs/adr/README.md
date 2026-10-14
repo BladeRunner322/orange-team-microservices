@@ -34,6 +34,7 @@
 - [ADR-020: Circuit Breaker и Retry для gRPC-клиентов](020-circuit-breaker-and-retry.md)
 - [ADR-021: Независимый деплой сервисов](021-independent-deployment.md)
 - [ADR-022: Стратегия тестирования](022-testing-strategy.md)
+- [ADR-023: Сервис привычек (Habits)](023-habits.md)
 
 ## Как добавить
 
