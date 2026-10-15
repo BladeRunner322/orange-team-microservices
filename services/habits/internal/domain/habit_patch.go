@@ -9,6 +9,8 @@ type HabitPatch struct {
 
 // NewHabitPatch создаёт патч из опциональных полей.
 func NewHabitPatch(name *Name, description *Description) HabitPatch {
-	// TODO
-	return HabitPatch{}
+	return HabitPatch{
+		Name:        name,
+		Description: description,
+	}
 }
