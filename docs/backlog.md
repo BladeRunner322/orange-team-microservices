@@ -9,6 +9,27 @@
 - При закрытии задачи — обновить статус в ADR, потом удалить строку отсюда.
 - Задачи «по триггеру» не начинаем до наступления триггера — они здесь как напоминание.
 
+## 🚧 В работе
+
+### Habits (ADR-023)
+
+Трекер привычек. Полный контекст — [ADR-023](adr/023-habits.md).
+
+| Шаг | Что | Ветка | Оценка |
+|---|---|---|---|
+| ✅ | Domain (VO, сущности, ошибки) + тесты 100% | `feat/habits-domain` | ~2 ч |
+| 2 | Infrastructure (postgres_repo, mapper, интеграционные тесты) | `feat/habits-infrastructure` | ~4 ч |
+| 3 | Usecases (8 usecase + common + моки + unit-тесты) | `feat/habits-usecases` | ~5 ч |
+| 4 | gRPC-сервер + bootstrap + config + main | `feat/habits-grpc-and-bootstrap` | ~3 ч |
+| 5 | Compose + Taskfile + .env.enc + CI matrix | `feat/habits-compose-and-taskfile` | ~2 ч |
+| 6 | Gateway-хендлеры + маршруты | `feat/habits-gateway` | ~3 ч |
+
+Осталось: ~17 часов. После шага 6 Habits готов к деплою в прод.
+
+### После Habits — Kafka + Notification (ADR-024)
+
+Фиксируется в [ADR-024](adr/024-kafka-notification.md). Ждёт завершения Habits.
+
 ## 🟡 Стоит сделать в ближайшее время
 
 | Что | ADR | Оценка | Комментарий |
@@ -47,7 +68,6 @@
 | Статический анализ импортов `pkg/**` | [ADR-021](adr/021-independent-deployment.md) | Если `pkg/**` начнёт меняться часто |
 | Blue-green / canary | [ADR-012](adr/012-ci-cd-optimization.md), [ADR-021](adr/021-independent-deployment.md) | Появление SLA |
 | RS256 + JWKS вместо HS256 | [ADR-004](adr/004-microservices-patterns.md) | Второй потребитель JWT / требование не раздавать общий секрет / Auth стал bottleneck валидации |
-| Kafka + сервис Notification | [ADR-024](adr/024-kafka-notification.md) | После завершения Habits |
 
 ## Что НЕ делаем (явно зафиксировано)
 
