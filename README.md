@@ -2189,5 +2189,6 @@ task <service-name>:migrate-create -- create_users_table
 - [ADR-021: Независимый деплой сервисов](docs/adr/021-independent-deployment.md) — разделение compose, semver, точечный деплой изменённых сервисов
 - [ADR-022: Стратегия тестирования](docs/adr/022-testing-strategy.md) — unit, integration, e2e, что не покрываем
 - [ADR-023: Сервис привычек (Habits)](docs/adr/023-habits.md) — трекер привычек, стрики, отметки выполнения
+- [ADR-024: Kafka и сервис Notification](docs/adr/024-kafka-notification.md) — event bus, асинхронные уведомления
 
 Подробнее — в [docs/adr/README.md](docs/adr/README.md).
