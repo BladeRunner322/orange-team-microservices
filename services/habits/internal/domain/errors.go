@@ -14,7 +14,8 @@ var (
 	// ErrInvalidDescription — description > 500 символов после trim.
 	ErrInvalidDescription = errors.New("invalid description")
 
-	// ErrInvalidDate — дата в будущем или старше 7 дней.
+	// ErrInvalidDate — некорректная дата: невалидный формат (VO)
+	// или нарушение бизнес-правила (usecase: в будущем, старше 7 дней).
 	ErrInvalidDate = errors.New("invalid date")
 
 	// ErrUnauthenticated — нет user_id в context.
