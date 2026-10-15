@@ -35,6 +35,7 @@
 - [ADR-021: Независимый деплой сервисов](021-independent-deployment.md)
 - [ADR-022: Стратегия тестирования](022-testing-strategy.md)
 - [ADR-023: Сервис привычек (Habits)](023-habits.md)
+- [ADR-024: Асинхронное взаимодействие через Kafka и сервис Notification](024-kafka-notification.md)
 
 ## Как добавить
 

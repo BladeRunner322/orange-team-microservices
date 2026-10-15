@@ -47,6 +47,7 @@
 | Статический анализ импортов `pkg/**` | [ADR-021](adr/021-independent-deployment.md) | Если `pkg/**` начнёт меняться часто |
 | Blue-green / canary | [ADR-012](adr/012-ci-cd-optimization.md), [ADR-021](adr/021-independent-deployment.md) | Появление SLA |
 | RS256 + JWKS вместо HS256 | [ADR-004](adr/004-microservices-patterns.md) | Второй потребитель JWT / требование не раздавать общий секрет / Auth стал bottleneck валидации |
+| Kafka + сервис Notification | [ADR-024](adr/024-kafka-notification.md) | После завершения Habits |
 
 ## Что НЕ делаем (явно зафиксировано)
 
