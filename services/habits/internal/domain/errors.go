@@ -1,5 +1,3 @@
-// Package domain — доменная модель Habits-сервиса:
-// сущность Habit, Completion, value objects и ошибки.
 package domain
 
 import "errors"
@@ -20,4 +18,6 @@ var (
 
 	// ErrUnauthenticated — нет user_id в context.
 	ErrUnauthenticated = errors.New("unauthenticated")
+
+	ErrHabitNameExists  = errors.New("habit with this name already exists")
 )
