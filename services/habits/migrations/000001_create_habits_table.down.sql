@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS habits.habits;
+
+DROP SCHEMA IF EXISTS habits;

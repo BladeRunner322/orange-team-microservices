@@ -185,4 +185,11 @@ HabitsService:
 
 ## Статус
 
-**В плане.** ADR фиксирует решения. Реализация — отдельные PR.
+**В работе.**
+
+- ✅ Domain (VO, сущности, ошибки) — покрыт unit-тестами.
+- ✅ Infrastructure (postgres_repo, mappers, models, интеграционные тесты на Testcontainers).
+- ⬜ Usecases.
+- ⬜ gRPC-сервер + bootstrap.
+- ⬜ Compose + Taskfile.
+- ⬜ Gateway-хендлеры.

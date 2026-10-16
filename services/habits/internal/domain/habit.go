@@ -1,3 +1,5 @@
+// Package domain — доменная модель Habits-сервиса:
+// сущность Habit, Completion, value objects и ошибки.
 package domain
 
 import (
