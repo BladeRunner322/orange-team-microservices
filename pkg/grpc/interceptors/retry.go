@@ -17,9 +17,10 @@ import (
 // например "/auth.AuthService/ValidateToken". Методы вне списка вызываются
 // напрямую, без retry (см. ADR-020, п.3).
 //
-// Ретраятся только транспортные ошибки: codes.Unavailable и
-// codes.DeadlineExceeded. Логические (NotFound, InvalidArgument,
-// PermissionDenied и т.п.) возвращаются клиенту сразу.
+// Ретраятся только транспортные ошибки: codes.Unavailable. Логические
+// (NotFound, InvalidArgument, PermissionDenied и т.п.) возвращаются
+// клиенту сразу. codes.DeadlineExceeded не ретраится — см. комментарий
+// к WithCodes ниже.
 //
 // target — имя downstream ("auth-service:50051"), используется как label
 // в метрике grpc_client_retry_attempts_total.
