@@ -393,7 +393,7 @@ orange-team-microservices/
 │   │   ├── .env.enc                  # зашифрованный .env (SOPS + age)
 │   │   └── Dockerfile
 │   │
-│   ├── habits/                       # 🚧 В РАБОТЕ (шаги 1–2 из 6 закрыты, ADR-023)
+│   ├── habits/                       # 🚧 В РАБОТЕ (шаги 1–3 из 6 закрыты, ADR-023)
 │   │   ├── cmd/                      # точка входа (main.go)
 │   │   ├── config/                   # конфигурация (envconfig)
 │   │   ├── internal/
