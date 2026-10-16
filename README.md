@@ -81,15 +81,16 @@ cd orange-team-microservices
 ```
 2. Настройте переменные окружения
 
-В проекте **пять файлов `.env`** — по одному на каждый контекст:
+В проекте **шесть файлов `.env`** — по одному на каждый контекст:
 
 - **Корневой `.env`** — порты для `docker-compose` и Grafana.
 - **`services/auth/.env`** — переменные Auth Service.
 - **`services/gateway/.env`** — переменные Gateway Service.
 - **`services/profiles/.env`** — переменные Profiles Service.
 - **`services/exercises/.env`** — переменные Exercises Service.
+- **`services/habits/.env`** — переменные Habits Service.
 
-У каждого есть шаблон `.env.example`. Скопируйте все пять:
+У каждого есть шаблон `.env.example`. Скопируйте все шесть:
 
 ```bash
 cp .env.example .env
@@ -97,6 +98,7 @@ cp services/auth/.env.example services/auth/.env
 cp services/gateway/.env.example services/gateway/.env
 cp services/profiles/.env.example services/profiles/.env
 cp services/exercises/.env.example services/exercises/.env
+cp services/habits/.env.example services/habits/.env
 ```
 
 Затем заполните секреты в каждом из них.
@@ -129,7 +131,11 @@ cp services/exercises/.env.example services/exercises/.env
 
 - `POSTGRES_PASSWORD` — пароль для PostgreSQL
 
-> ⚠️ Все пять `.env` добавлены в `.gitignore` и **не коммитятся** в репозиторий. Секреты хранятся только локально.
+**В `services/habits/.env`:**
+
+- `POSTGRES_PASSWORD` — пароль для PostgreSQL
+
+> ⚠️ Все шесть `.env` добавлены в `.gitignore` и **не коммитятся** в репозиторий. Секреты хранятся только локально.
 
 3. Сгенерируйте TLS-сертификаты для разработки
 
@@ -387,8 +393,23 @@ orange-team-microservices/
 │   │   ├── .env.enc                  # зашифрованный .env (SOPS + age)
 │   │   └── Dockerfile
 │   │
-│   ├── habits/                       # 📋 В ПЛАНЕ (не реализован)
-│   │   └── ... (аналогично)
+│   ├── habits/                       # 🚧 В РАБОТЕ (шаги 1–2 из 6 закрыты, ADR-023)
+│   │   ├── cmd/                      # точка входа (main.go)
+│   │   ├── config/                   # конфигурация (envconfig)
+│   │   ├── internal/
+│   │   │   ├── bootstrap/            # сборка зависимостей приложения
+│   │   │   ├── domain/               # Habit, Completion, VO (name, description, date)
+│   │   │   ├── application/
+│   │   │   │   ├── ports/            # интерфейсы HabitRepository, CompletionRepository
+│   │   │   │   └── usecases/         # 8 usecase (создание, отметки, стрики)
+│   │   │   ├── infrastructure/
+│   │   │   │   └── postgres_repo/    # реализация репозиториев для PostgreSQL
+│   │   │   └── interfaces/
+│   │   │       └── habitsgrpc/       # gRPC-сервер (обработчики HabitsService)
+│   │   ├── migrations/               # SQL-миграции для habits_db
+│   │   ├── .env.example              # шаблон переменных Habits Service
+│   │   ├── .env.enc                  # зашифрованный .env (SOPS + age)
+│   │   └── Dockerfile
 │   │
 │   ├── workouts/                     # 📋 В ПЛАНЕ (не реализован)
 │   │   └── ... (аналогично)
@@ -417,7 +438,12 @@ orange-team-microservices/
 │       ├── 016-network-security.md
 │       ├── 017-alerting.md
 │       ├── 018-storage-retention.md
-│       └── 019-microservices-evolution.md
+│       ├── 019-microservices-evolution.md
+│       ├── 020-circuit-breaker-and-retry.md
+│       ├── 021-independent-deployment.md
+│       ├── 022-testing-strategy.md
+│       ├── 023-habits.md
+│       └── 024-kafka-notification.md
 │
 ├── scripts/                          # скрипты (бэкапы, вспомогательное)
 │   ├── backup-db.sh                  # дамп БД + выгрузка в S3
@@ -741,9 +767,12 @@ orange-team-microservices/
 | **Profiles** | Health / Ready / Metrics | HTTP | `8080` | `8082` | `8092` | Смещение +10, переопределяется в `infra/compose.app.yml`
 | **Exercises** | gRPC | gRPC | `50053` | `50053` | `50063` | Смещение +10 |
 | **Exercises** | Health / Ready / Metrics | HTTP | `8080` | `8083` | `8093` | Смещение +10, переопределяется в `infra/compose.app.yml` |
+| **Habits** | gRPC | gRPC | `50054` | `50054` | `50064` | Смещение +10 |
+| **Habits** | Health / Ready / Metrics | HTTP | `8080` | `8084` | `8094` | Смещение +10, переопределяется в `infra/compose.app.yml` |
 | **PostgreSQL (Auth)** | База данных | TCP | `5432` | `5432` | — | Используется через Docker, проброс на хост |
 | **PostgreSQL (Profiles)** | База данных | TCP | `5432` | `5433` | — | Используется через Docker, проброс на хост |
 | **PostgreSQL (Exercises)** | База данных | TCP | `5432` | `5434` | — | Используется через Docker, проброс на хост | |
+| **PostgreSQL (Habits)** | База данных | TCP | `5432` | `5435` | — | Используется через Docker, проброс на хост | |
 | **Redis Auth** | Refresh-токены | TCP | `6379` | `6379` | — | Только для Auth Service |
 | **Redis Gateway** | Rate limiting | TCP | `6379` | `6380` | — | Только для Gateway Service |
 | **Prometheus** | Метрики | HTTP | `9090` | `9090` | — | Только в Docker |
@@ -760,8 +789,8 @@ orange-team-microservices/
   Redis: `redis-auth` → `6379`, `redis-gateway` → `6380` (разные порты на хосте, чтобы не конфликтовать).
 
 - **Локальная разработка** — порты приложений сдвинуты на **+10**:  
-  `50061`, `8090`, `8091`, `50062`, `8092`, `50063`, `8093` — чтобы не конфликтовать с запущенными Docker-контейнерами.  
-  PostgreSQL и оба Redis для локальной разработки используются из Docker через проброс на `localhost` (`5432`, `5433`, `5434`, `6379`, `6380`).
+  `50061`, `8090`, `8091`, `50062`, `8092`, `50063`, `8093`, `50064`, `8094` — чтобы не конфликтовать с запущенными Docker-контейнерами.  
+  PostgreSQL и оба Redis для локальной разработки используются из Docker через проброс на `localhost` (`5432`, `5433`, `5434`, `5435`, `6379`, `6380`).
 
 - **Gateway** внутри Docker слушает на `8081` и пробрасывается на хост на `8081` — это сделано намеренно, чтобы не конфликтовать с Auth на `8080`.
 
@@ -1453,7 +1482,7 @@ nmap -Pn -p 22,80,443,3000,3100,50051,50052,50053,5432,5433,5434,6379,6380,8080,
 
 ### Требования к серверу
 
-Стек состоит из 19+ контейнеров (4 сервиса, 3×PostgreSQL, 2×Redis,
+Стек состоит из 20 контейнеров (4 сервиса, 3×PostgreSQL, 2×Redis,
 Prometheus, Alertmanager, node-exporter, Grafana, Loki, Promtail, Caddy,
 Cloudflare WARP). Для комфортной работы нужен сервер со следующими
 характеристиками:
@@ -2042,13 +2071,14 @@ task <service-name>:migrate-create -- create_users_table
 
 ## Переменные окружения
 
-В проекте **пять файлов `.env`** — по одному на каждый контекст:
+В проекте **шесть файлов `.env`** — по одному на каждый контекст:
 
 - **Корневой `.env`** — порты для `docker-compose` и Grafana.
 - **`services/auth/.env`** — переменные Auth Service.
 - **`services/gateway/.env`** — переменные Gateway Service.
 - **`services/profiles/.env`** — переменные Profiles Service.
 - **`services/exercises/.env`** — переменные Exercises Service.
+- **`services/habits/.env`** — переменные Habits Service.
 
 У каждого есть шаблон `.env.example` (в той же папке). Реальные `.env` в `.gitignore` и **не коммитятся**.
 
@@ -2143,6 +2173,23 @@ task <service-name>:migrate-create -- create_users_table
 | `POSTGRES_USER` | `test` | Пользователь БД |
 | `POSTGRES_PASSWORD` | — | Пароль БД |
 | `POSTGRES_DB` | `exercises_db` | Имя базы данных |
+| `POSTGRES_TIMEOUT` | `30s` | Таймаут операций с БД |
+| `ENABLE_TLS` | `true` | Использовать TLS для gRPC |
+| `TLS_CERT_FILE` | `/app/certs/server.crt` | Путь к сертификату (внутри контейнера) |
+| `TLS_KEY_FILE` | `/app/certs/server.key` | Путь к приватному ключу |
+
+### `services/habits/.env`
+
+| Переменная | Значение по умолчанию | Назначение |
+|------------|----------------------|------------|
+| `GRPC_PORT` | `:50054` | Порт gRPC-сервера (внутри контейнера) |
+| `HTTP_PORT` | `:8080` | Порт HTTP-сервера для /health, /ready и /metrics (внутри контейнера) |
+| `ENABLE_REFLECTION` | `true` | gRPC reflection (для grpcurl). В проде — `false` |
+| `POSTGRES_HOST` | `postgres-habits` | Хост PostgreSQL внутри Docker-сети |
+| `POSTGRES_PORT` | `5432` | Порт PostgreSQL |
+| `POSTGRES_USER` | `test` | Пользователь БД |
+| `POSTGRES_PASSWORD` | — | Пароль БД |
+| `POSTGRES_DB` | `habits_db` | Имя базы данных |
 | `POSTGRES_TIMEOUT` | `30s` | Таймаут операций с БД |
 | `ENABLE_TLS` | `true` | Использовать TLS для gRPC |
 | `TLS_CERT_FILE` | `/app/certs/server.crt` | Путь к сертификату (внутри контейнера) |
