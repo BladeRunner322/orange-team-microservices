@@ -53,10 +53,11 @@
 | `version` | INTEGER NOT NULL DEFAULT 0 | Optimistic locking |
 | `workout_id` | UUID NOT NULL | FK → `workouts.id`, `ON DELETE CASCADE` |
 | `exercise_id` | UUID NOT NULL | Ссылка на Exercises **без cross-service FK** (ADR-004) |
+| `difficulty` | SMALLINT NOT NULL | **Снапшот** `difficulty` упражнения на момент добавления (ADR-008) |
 | `weight` | INTEGER | Для weight-типа |
 | `sets` | INTEGER | Для weight-типа |
 | `reps` | INTEGER | Для weight-типа |
-| `duration` | INTEGER | Для duration-типа |
+| `duration` | INTEGER | Для duration-типа, ≤ 86400 (24 часа) |
 | `completed` | BOOLEAN NOT NULL DEFAULT false | |
 | `exercise_load` | INTEGER NOT NULL DEFAULT 0 | Вычисляется доменом, снапшот |
 | `created_at` | TIMESTAMPTZ NOT NULL DEFAULT NOW() | |
@@ -71,6 +72,10 @@
 
 **Почему `exercise_load` хранится, а не считается на лету.** Это снапшот на момент отметки. Если пользователь изменит `weight`/`reps` в упражнении, старые расчёты не должны пересчитываться ретроактивно — тот же принцип, что `difficulty` в ADR-008. Пересчёт `workout_score` использует уже зафиксированный `exercise_load`.
 
+**Почему `difficulty` снапшотится в `workout_exercises`, а не читается live из Exercises.** ADR-008 фиксирует: `difficulty` — снапшот. Если admin завтра поменяет сложность упражнения с 5 на 9, старые тренировки не должны пересчитываться — пользователь уже получил score по старой сложности. Снапшот в `workout_exercises.difficulty` гарантирует, что `recalculateScore` использует значение на момент создания упражнения в тренировке.
+
+**Побочный плюс:** `recalculateScore` не зовёт `Exercises.GetExercise` для `difficulty`. Единственные вызовы Exercises — при `CreateWorkoutExercise` (валидация `type` и чтение `difficulty` для снапшота) и `PatchWorkoutExercise` (валидация `type`). N+1 из `recalculateScore` исчезает.
+
 ### 2. Score и коэффициент
 
 **Формула score** (переносится из монолита без изменений, `domain/score.go`):
@@ -80,6 +85,8 @@ K = coefficient / 100_000
 effective_load = Σ (exercise_load_i × difficulty_i) для completed упражнений
 score = min(10_000, round(10_000 × K × effective_load / (1 + K × effective_load)))
 ```
+
+`exercise_load_i` и `difficulty_i` берутся из `workout_exercises` (обе колонки — снапшоты). `recalculateScore` не зовёт Exercises.
 
 Реализация — целочисленная (`saturatedScore`, `addLoadWithLimit`), чтобы избежать floating-point погрешностей и переполнения. Константы:
 - `maximumWorkoutScore = 10_000`
@@ -118,6 +125,24 @@ coeff = clamp(1 + (BMI - 18) × 9 / 17, 1, 10)
 - Gateway возвращает `409 Conflict`. Клиент перечитывает и повторяет.
 
 **Тот же паттерн для `workout_exercises`.**
+
+### 3.1. Транзакция вокруг мутации и пересчёта score
+
+Любая операция, которая меняет `workout_exercises` **и** пересчитывает `workouts.workout_score`, выполняется в **одной транзакции** через `WorkoutRepository.WithTx`.
+
+Порядок внутри `WithTx`:
+1. `UPDATE workout_exercises` (с version) — если 0 rows, `ErrConflict`.
+2. `recalculateScore` → `UPDATE workouts` (с version) — если 0 rows, `ErrConflict`.
+3. Commit.
+
+**Почему без транзакции плохо.** Между шагом 1 и 2 другой клиент может патчить эту же тренировку. Оба читают `workout_exercises`, оба считают score, оба пытаются обновить `workouts` с одним `version`. Один выигрывает, второй получает 409 — но **его патч упражнения уже сохранён** (шаг 1 закоммичен). Клиент видит ошибку, хотя данные изменились, а `workout_score` рассинхронизирован с реальностью до следующей мутации.
+
+**С транзакцией** — либо обе операции прошли, либо ни одна. При конфликте откат обеих, клиент перечитывает и повторяет. Инвариант «`workout_score` всегда соответствует содержимому `workout_exercises`» держится.
+
+**Что это требует от репозиториев:**
+- `WorkoutRepository.WithTx(ctx, fn func(WorkoutRepository) error) error` — по образцу `HabitRepository`/`ExerciseRepository`/`ProfileRepository`.
+- `WorkoutExerciseRepository` получает метод `WithTx` с **тем же** `*postgres.Tx` (репозитории работают в одной транзакции через общий `tx`).
+- В bootstrap оба репозитория получают общий `*postgres.PgxPool`.
 
 ### 4. Агрегат vs два репозитория
 
@@ -172,6 +197,10 @@ WorkoutsService:
 
 **`GetUserScore`** — для агрегации в Gateway (`GET /users/me`).
 
+**Права доступа:** только для **своего** `user_id`. Gateway кладёт `user_id` из JWT в metadata, Workouts проверяет: `metadata.user_id == request.user_id`. Если не совпало — `PermissionDenied` (HTTP 403).
+
+Чужие очки через этот метод получить нельзя. Leaderboard (когда появится) будет читать batch-методом `GetUsersScores(ids)` с другим auth (service-to-service, без user metadata) — отдельный ADR.
+
 ### 8. HTTP-маршруты через Gateway
 
 | Метод | Путь | Назначение |
@@ -188,14 +217,40 @@ WorkoutsService:
 
 Плюс **агрегация `/users/me`** в Gateway: параллельно `Profiles.GetMyProfile` + `Workouts.GetUserScore`. Это не отдельный маршрут, а изменение существующего (сейчас `/users/me` возвращает только профиль).
 
+#### Агрегация `/users/me` и fallback
+
+Хендлер Gateway вызывает два downstream параллельно через `errgroup.WithContext`.
+
+**Профиль (Profiles) — обязателен:**
+- Profiles 5xx → весь `/users/me` возвращает 503. Без профиля ответ бессмысленен.
+
+**Очки (Workouts) — опционален, fallback:**
+- Workouts успех → `workout_score: <int>`, `workout_score_available: true`.
+- Workouts 5xx / CB открыт / timeout → `workout_score: 0`, `workout_score_available: false`. Профиль всё равно отдаётся, HTTP-статус 200.
+
+**Обоснование:**
+- `/users/me` — самый частый эндпоинт. Пользователь должен видеть свой профиль, даже если Workouts временно лёг.
+- `workout_score_available: false` сигнализирует клиенту «score недоступен, не показывай 0 как реальный». Клиент сам решает: скрыть поле или показать `—`.
+- Circuit Breaker на клиенте к Workouts → мгновенный fail-fast, fallback срабатывает без задержки.
+
+**Fallback — только для этого эндпоинта.** Остальные маршруты Gateway (`/login`, `/workouts`, `/exercises`, `/habits`) fail-fast при ошибке downstream. Это осознанно: там fallback даст ложное «успешно», что хуже, чем явная ошибка.
+
 ### 9. Валидация
 
 - `status` — только `planned`, `in_progress`, `completed`, `cancelled`. Переходы — по state machine в `domain/workout.go`.
 - `intensity` — 1–10 или NULL.
 - `weight`, `sets`, `reps` — обязательны для weight-типа, NULL для duration-типа.
-- `duration` — обязателен для duration-типа, NULL для weight-типа.
+- `duration` — обязателен для duration-типа, NULL для weight-типа. **Максимум 86400 (24 часа).** Валидация в VO `Duration`.
 - `completed` — можно поставить только когда тренировка в `in_progress`. Снять можно всегда (кроме `completed`/`cancelled` статуса тренировки).
 - Нельзя перевести тренировку в `completed`, если ни одно упражнение не отмечено completed.
+
+**Инварианты `started_at` / `completed_at` — домен ставит автоматически, пользователь не присылает:**
+
+- `status = in_progress` и `started_at == nil` → домен ставит `started_at = time.Now().UTC()`.
+- `status = completed` и `completed_at == nil` → домен ставит `completed_at = time.Now().UTC()`.
+- Уже заполненное поле не перезаписывается (идемпотентность при повторном патче).
+
+В proto и HTTP-DTO полей `started_at` / `completed_at` в `PatchWorkout` **нет** — они управляются только доменом.
 
 Валидация типа-специфичных полей — `WorkoutExercise.ValidateForWorkoutExerciseType(type)`. Это доменное правило, тестируется в `domain`.
 
@@ -210,6 +265,7 @@ WorkoutsService:
 
 - **События `workout.completed` в Kafka** — ADR-024, после Notification. Сначала Workouts стабильно работает через sync gRPC.
 - **Batch `Exercises.GetExercisesByIds`** — для MVP N+1 при `recalculateScore` приемлем. Триггер для batch — когда `recalculateScore` станет горячим.
+- **Пагинация `GetWorkouts`** — MVP возвращает весь список. Триггер: 100+ тренировок у одного пользователя и p95 > 500ms. Тогда — `page`/`limit` в proto.
 - **Кэш `GetUserScore` в Redis** — по ADR-002, при росте нагрузки. Триггер — `GET /users/me` станет bottleneck.
 - **Пессимистичные блокировки** — обоснование в п.3.
 - **`UpdateUserWorkoutScore`** — не переносим, `user_workout_score` не хранится (ADR-002).
