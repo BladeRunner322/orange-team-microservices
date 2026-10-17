@@ -1,4 +1,13 @@
 // Package main — точка входа Habits-сервиса.
+//
+// Отвечает за:
+//   - загрузку конфигурации
+//   - инициализацию логгера
+//   - запуск bootstrap
+//   - обработку graceful shutdown (SIGINT, SIGTERM)
+//
+// gRPC на порту 50054, HTTP (health/ready/metrics) на 8080.
+// См. docs/adr/023-habits.md.
 package main
 
 import (
@@ -14,19 +23,55 @@ import (
 )
 
 func main() {
-	// TODO: копия из Exercises/Profiles с изменённым именем "habits"
+	// 1. Инициализация логгера
 	log, err := logger.NewLogger(logger.MustLoad())
 	if err != nil {
-		fmt.Println("failed to init logger:", err)
+		fmt.Println("failed to init application logger:", err)
 		os.Exit(1)
 	}
 	defer log.Close()
 
-	_ = log
-	_ = config.MustLoad()
-	_ = bootstrap.New
-	_ = os.Interrupt
-	_ = signal.Notify
-	_ = syscall.SIGTERM
-	_ = time.Second
+	log.Info("starting habits service")
+
+	// 2. Загрузка конфигурации сервиса (порт, рефлексия)
+	cfg := config.MustLoad()
+	log.Info("config loaded", "port", cfg.GRPCPort)
+
+	// 3. Сборка приложения: БД → репозитории → use cases → gRPC-сервер
+	app, err := bootstrap.New(cfg, log)
+	if err != nil {
+		log.Error("failed to bootstrap app", "error", err)
+		os.Exit(1)
+	}
+	defer app.Close()
+
+	// 4. Запуск gRPC-сервера в горутине
+	go func() {
+		if err := app.Run(); err != nil {
+			log.Error("server failed", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// 5. Ожидание сигнала завершения (Ctrl+C / SIGTERM)
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	log.Info("waiting for signal...")
+	<-stop
+
+	log.Info("signal received, shutting down...")
+
+	// 6. Graceful shutdown с таймаутом 5 секунд
+	done := make(chan struct{})
+	go func() {
+		app.GracefulStop()
+		close(done)
+	}()
+	select {
+	case <-done:
+		log.Info("server stopped gracefully")
+	case <-time.After(5 * time.Second):
+		log.Warn("graceful stop timeout, forcing stop")
+		app.Stop()
+	}
 }

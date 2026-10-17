@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -10,6 +11,7 @@ import (
 	grpcserver "github.com/BladeRunner322/orange-team-microservices/pkg/grpc/server"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/health"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/pgconfig"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
 	"github.com/BladeRunner322/orange-team-microservices/services/habits/config"
 	"github.com/BladeRunner322/orange-team-microservices/services/habits/internal/application/usecases"
@@ -28,44 +30,142 @@ type App struct {
 	httpServer *http.Server
 }
 
-// New — сборка зависимостей по образцу Exercises/Profiles:
-//  1. Postgres pool
-//  2. HabitRepository + CompletionRepository
-//  3. Usecases (8 штук)
-//  4. gRPC-сервер с интерсепторами (WithUserID: true)
-//  5. HTTP-сервер /health /ready /metrics
+// New — сборка зависимостей по образцу Exercises/Profiles.
 func New(cfg config.Config, log *logger.Logger) (*App, error) {
-	// TODO
-	return nil, nil
+	ctx := context.Background()
+
+	// ============================================================
+	// 1. ПОДКЛЮЧЕНИЕ К POSTGRESQL
+	// ============================================================
+	pgCfg := pgconfig.MustLoad()
+	pool, err := postgres.NewPgxPool(ctx, pgCfg)
+	if err != nil {
+		return nil, fmt.Errorf("connect to postgres: %w", err)
+	}
+	log.Info("postgres connection pool created")
+
+	// ============================================================
+	// 2. РЕПОЗИТОРИИ (реализация для habits)
+	// ============================================================
+	habitRepo := postgres_repo.NewHabitRepository(pool)
+	completionRepo := postgres_repo.NewCompletionRepository(pool)
+
+	// ============================================================
+	// 3. USE CASES
+	// ============================================================
+	createHabitUC := usecases.NewCreateHabit(habitRepo, log)
+	getHabitUC := usecases.NewGetHabit(habitRepo, completionRepo, log)
+	getHabitsUC := usecases.NewGetHabits(habitRepo, completionRepo, log)
+	patchHabitUC := usecases.NewPatchHabit(habitRepo, log)
+	deleteHabitUC := usecases.NewDeleteHabit(habitRepo, log)
+	completeHabitUC := usecases.NewCompleteHabit(habitRepo, completionRepo, log)
+	uncompleteHabitUC := usecases.NewUncompleteHabit(habitRepo, completionRepo, log)
+	getCompletionsUC := usecases.NewGetCompletions(habitRepo, completionRepo, log)
+	log.Info("use cases initialized")
+
+	// ============================================================
+	// 4. gRPC СЕРВЕР С ИНТЕРСЕПТОРАМИ
+	// ============================================================
+	s, err := grpcserver.New(grpcserver.Config{
+		EnableTLS:        cfg.EnableTLS,
+		TLSCertFile:      cfg.TLSCertFile,
+		TLSKeyFile:       cfg.TLSKeyFile,
+		EnableReflection: cfg.EnableReflection,
+		WithUserID:       true, // Habits читает user_id из metadata
+		Logger:           log,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create grpc server: %w", err)
+	}
+
+	habits.RegisterHabitsServiceServer(s, habitsgrpc.NewServer(
+		createHabitUC,
+		getHabitUC,
+		getHabitsUC,
+		patchHabitUC,
+		deleteHabitUC,
+		completeHabitUC,
+		uncompleteHabitUC,
+		getCompletionsUC,
+	))
+	log.Info("gRPC server registered")
+
+	// ============================================================
+	// 5. gRPC ЛИСТЕНЕР
+	// ============================================================
+	lis, err := net.Listen("tcp", cfg.GRPCPort)
+	if err != nil {
+		return nil, fmt.Errorf("failed to listen: %w", err)
+	}
+	log.Info("gRPC listener created", "addr", cfg.GRPCPort)
+
+	// ============================================================
+	// 6. HTTP СЕРВЕР (HEALTHCHECK + METRICS + READINESS)
+	// ============================================================
+	healthMux := http.NewServeMux()
+	healthMux.HandleFunc("/health", health.HealthHandler("habits"))
+	healthMux.HandleFunc("/ready", health.ReadyHandler(map[string]health.Check{
+		"postgres": health.PostgresCheck(pool),
+	}))
+	healthMux.Handle("/metrics", health.MetricsHandler())
+
+	httpSrv := &http.Server{
+		Addr:         cfg.HTTPPort,
+		Handler:      healthMux,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 5 * time.Second,
+	}
+
+	go func() {
+		log.Info("HTTP server listening", "addr", cfg.HTTPPort, "endpoints", "/health, /ready, /metrics")
+		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Error("HTTP server failed", "error", err)
+		}
+	}()
+
+	// ============================================================
+	// 7. СБОРКА APP
+	// ============================================================
+	return &App{
+		grpcServer: s,
+		listener:   lis,
+		logger:     log,
+		config:     cfg,
+		pool:       pool,
+		httpServer: httpSrv,
+	}, nil
 }
 
 // Run запускает gRPC-сервер.
 func (a *App) Run() error {
-	// TODO
-	return nil
+	a.logger.Info("Habits service listening", "addr", a.config.GRPCPort)
+	return a.grpcServer.Serve(a.listener)
 }
 
-// GracefulStop останавливает gRPC-сервер.
+// GracefulStop останавливает gRPC-сервер, дожидаясь завершения текущих запросов.
 func (a *App) GracefulStop() {
-	// TODO
+	a.grpcServer.GracefulStop()
 }
 
 // Stop принудительно останавливает gRPC-сервер.
 func (a *App) Stop() {
-	// TODO
+	a.grpcServer.Stop()
 }
 
-// Close закрывает БД, HTTP, логи.
+// Close закрывает ресурсы в обратном порядке: HTTP, БД.
 func (a *App) Close() {
-	// TODO
-}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-var _ = context.Background
-var _ = http.NewServeMux
-var _ = time.Second
-var _ = habits.RegisterHabitsServiceServer
-var _ = grpcserver.New
-var _ = health.HealthHandler
-var _ = usecases.NewCreateHabit
-var _ = postgres_repo.NewHabitRepository
-var _ = habitsgrpc.NewServer
+	if a.httpServer != nil {
+		if err := a.httpServer.Shutdown(ctx); err != nil {
+			a.logger.Error("HTTP server shutdown error", "error", err)
+		}
+	}
+
+	if a.pool != nil {
+		a.pool.Close()
+	}
+
+	a.logger.Info("all resources closed")
+}
