@@ -163,12 +163,14 @@ task docker-up
 - PostgreSQL Auth (порт 5432) — для Auth Service
 - PostgreSQL Profiles (порт 5433) — для Profiles Service
 - PostgreSQL Exercises (порт 5434) — для Exercises Service
+- PostgreSQL Habits (порт 5435) — для Habits Service
 - Redis Auth (порт 6379) — для refresh-токенов
 - Redis Gateway (порт 6380) — для rate limiting
-- Миграции Auth, Profiles и Exercises (создание таблиц)
+- Миграции Auth, Profiles, Exercises и Habits (создание таблиц)
 - Auth-сервис (gRPC, порт 50051)
 - Profiles-сервис (gRPC, порт 50052)
 - Exercises-сервис (gRPC, порт 50053)
+- Habits-сервис (gRPC, порт 50054)
 - Gateway-сервис (HTTP, порт 8081)
 - Мониторинг (Prometheus, Grafana, Loki, Promtail)
 
@@ -698,9 +700,9 @@ orange-team-microservices/
 
 ### Что реализовано сейчас
 
-- **PostgreSQL:** `postgres-auth` (порт 5432) → `auth_db`; `postgres-profiles` (порт 5433) → `profiles_db`; `postgres-exercises` (порт 5434) → `exercises_db`
+- **PostgreSQL:** `postgres-auth` (порт 5432) → `auth_db`; `postgres-profiles` (порт 5433) → `profiles_db`; `postgres-exercises` (порт 5434) → `exercises_db`; `postgres-habits` (порт 5435) → `habits_db`
 - **Redis:** `redis-auth` (порт 6379) — refresh-токены; `redis-gateway` (порт 6380) — rate limiting
-- **Миграции:** `migrate-auth` → для `auth_db`; `migrate-profiles` → для `profiles_db`; `migrate-exercises` → для `exercises_db`
+- **Миграции:** `migrate-auth` → для `auth_db`; `migrate-profiles` → для `profiles_db`; `migrate-exercises` → для `exercises_db`; `migrate-habits` → для `habits_db`
 - **Мониторинг:** Prometheus (9090), Grafana (3000), Alertmanager (9093) — см. [ADR-017](docs/adr/017-alerting.md)
 - **Метрики хоста:** node-exporter (9100) — CPU, RAM, диск
 - **Логи:** Loki (3100), Promtail (9080), retention 30 дней — см. [ADR-018](docs/adr/018-storage-retention.md)
@@ -1018,6 +1020,56 @@ Exercises предоставляет HTTP-эндпоинты для провер
 curl http://localhost:8083/health
 curl http://localhost:8083/ready
 curl http://localhost:8083/metrics
+```
+
+> 💡 `/health` и `/ready` используются Docker healthcheck'ом (в compose проверяется `/ready`). `/metrics` скрейпится Prometheus.
+
+### Habits (трекер привычек)
+
+- Назначение: личные ежедневные привычки пользователя, отметки выполнения, стрики.
+
+- Протокол: gRPC
+
+- gRPC-методы: `CreateHabit`, `GetHabit`, `GetHabits`, `PatchHabit`, `DeleteHabit`, `CompleteHabit`, `UncompleteHabit`, `GetCompletions`
+
+- Порт: 50054
+
+- БД: PostgreSQL (схема habits, таблицы `habits` и `habit_completions`)
+
+- **Lifecycle** (см. [ADR-023](docs/adr/023-habits.md)):
+  - Ежедневные привычки (без сложных расписаний в MVP).
+  - Стрик вычисляется на лету — не хранится.
+  - Отметки и снятия — только за сегодня и до 7 дней назад.
+  - DELETE — soft через `deleted_at`, идемпотентен.
+  - `user_id` приходит из gRPC metadata (ставит Gateway).
+
+- Команды:
+
+  | Команда | Назначение |
+  |---------|------------|
+  | `task habits:run` | Запуск локально с зависимостями (gRPC `50064`, HTTP `8094`) |
+  | `task habits:logs` | Просмотр логов Habits |
+  | `task habits:psql` | Консоль psql для `habits_db` |
+  | `task habits:migrate-create -- <name>` | Создать новую миграцию |
+
+#### Healthcheck и readiness
+
+Habits предоставляет HTTP-эндпоинты для проверки состояния:
+
+| Эндпоинт | Назначение | Ответ |
+|----------|------------|-------|
+| `/health` | Liveness — процесс жив | `{"status":"ok","service":"habits"}` |
+| `/ready` | Readiness — PostgreSQL доступен | `{"status":"ok","checks":{"postgres":"ok"}}` или `503` |
+| `/metrics` | Prometheus-метрики | text/plain |
+
+**Порт:** `8080` (Docker) / `8094` (локально)
+
+Проверка:
+
+```bash
+curl http://localhost:8084/health
+curl http://localhost:8084/ready
+curl http://localhost:8084/metrics
 ```
 
 > 💡 `/health` и `/ready` используются Docker healthcheck'ом (в compose проверяется `/ready`). `/metrics` скрейпится Prometheus.
@@ -1482,7 +1534,7 @@ nmap -Pn -p 22,80,443,3000,3100,50051,50052,50053,5432,5433,5434,6379,6380,8080,
 
 ### Требования к серверу
 
-Стек состоит из 20 контейнеров (4 сервиса, 3×PostgreSQL, 2×Redis,
+Стек состоит из 23 контейнеров (5 сервисов, 4×PostgreSQL, 2×Redis,
 Prometheus, Alertmanager, node-exporter, Grafana, Loki, Promtail, Caddy,
 Cloudflare WARP). Для комфортной работы нужен сервер со следующими
 характеристиками:
