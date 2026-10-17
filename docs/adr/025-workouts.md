@@ -57,7 +57,7 @@
 | `weight` | INTEGER | Для weight-типа |
 | `sets` | INTEGER | Для weight-типа |
 | `reps` | INTEGER | Для weight-типа |
-| `duration` | INTEGER | Для duration-типа, ≤ 86400 (24 часа) |
+| `duration` | INTEGER | Для duration-типа, 1 ≤ duration ≤ 86400 (24 часа) |
 | `completed` | BOOLEAN NOT NULL DEFAULT false | |
 | `exercise_load` | INTEGER NOT NULL DEFAULT 0 | Вычисляется доменом, снапшот |
 | `created_at` | TIMESTAMPTZ NOT NULL DEFAULT NOW() | |
@@ -111,12 +111,16 @@ coeff = clamp(1 + (BMI - 18) × 9 / 17, 1, 10)
 
 Считается в конструкторе `NewWorkoutExercise` и при `ApplyPatch` для полей, влияющих на нагрузку.
 
+**Когда запускается `recalculateScore`.** Только при мутации `workout_exercises` (`Create` / `Patch` / `Delete`) в тренировках со статусом `planned` или `in_progress`. Для `completed` / `cancelled` мутации запрещены на уровне домена (`Workout.CanModifyWorkoutExercise() == false`), поэтому usecase даже не доходит до `recalculateScore`.
+
+Следствие: `workout.workout_score` меняется только пока тренировка активна. После `completed` он фиксирован — как и `personal_score_coefficient` (снапшот).
+
 ### 3. Optimistic locking (`version`), не пессимистичный `FOR UPDATE`
 
 **Отличие от ADR-007 F-2.** В Profiles и Exercises мы выбрали `SELECT ... FOR UPDATE`: патчи редкие, ресурс админский/личный, ждать 200мс не больно. В Workouts другая природа:
 
 - Патчи частые (пользователь тренируется в реальном времени).
-- `recalculateScore` — это read-modify-write: читает `workout_exercises`, зовёт `Exercises.GetExercise` для difficulty (N gRPC-вызовов), пишет `workout.workout_score`. Под `FOR UPDATE` workout был бы заблокирован на всё время gRPC-вызовов.
+- `CreateWorkoutExercise` и `PatchWorkoutExercise` **до** транзакции делают gRPC-вызов `Exercises.GetExercise(id)` (валидация `type`). Под `FOR UPDATE` workout был бы заблокирован на время сетевого вызова в другой сервис — а это непредсказуемо (до таймаута).
 - Конфликты редкие (один пользователь в одном окне).
 
 **Как работает:**
@@ -131,8 +135,8 @@ coeff = clamp(1 + (BMI - 18) × 9 / 17, 1, 10)
 Любая операция, которая меняет `workout_exercises` **и** пересчитывает `workouts.workout_score`, выполняется в **одной транзакции** через `WorkoutRepository.WithTx`.
 
 Порядок внутри `WithTx`:
-1. `UPDATE workout_exercises` (с version) — если 0 rows, `ErrConflict`.
-2. `recalculateScore` → `UPDATE workouts` (с version) — если 0 rows, `ErrConflict`.
+1. `WorkoutExerciseRepository.Update(ctx, exercise)` — `UPDATE workout_exercises` с version. Если 0 rows — `ErrConflict`, транзакция откатывается.
+2. `recalculateScore` — читает `workout_exercises` (уже обновлённые в tx), считает score, вызывает `WorkoutRepository.Update(ctx, workout)` — `UPDATE workouts` с version. Если 0 rows — `ErrConflict`, откат.
 3. Commit.
 
 **Почему без транзакции плохо.** Между шагом 1 и 2 другой клиент может патчить эту же тренировку. Оба читают `workout_exercises`, оба считают score, оба пытаются обновить `workouts` с одним `version`. Один выигрывает, второй получает 409 — но **его патч упражнения уже сохранён** (шаг 1 закоммичен). Клиент видит ошибку, хотя данные изменились, а `workout_score` рассинхронизирован с реальностью до следующей мутации.
@@ -140,9 +144,9 @@ coeff = clamp(1 + (BMI - 18) × 9 / 17, 1, 10)
 **С транзакцией** — либо обе операции прошли, либо ни одна. При конфликте откат обеих, клиент перечитывает и повторяет. Инвариант «`workout_score` всегда соответствует содержимому `workout_exercises`» держится.
 
 **Что это требует от репозиториев:**
-- `WorkoutRepository.WithTx(ctx, fn func(WorkoutRepository) error) error` — по образцу `HabitRepository`/`ExerciseRepository`/`ProfileRepository`.
-- `WorkoutExerciseRepository` получает метод `WithTx` с **тем же** `*postgres.Tx` (репозитории работают в одной транзакции через общий `tx`).
-- В bootstrap оба репозитория получают общий `*postgres.PgxPool`.
+- `WorkoutRepository.WithTx(ctx, fn func(WorkoutRepository, WorkoutExerciseRepository) error) error` — открывает транзакцию, создаёт **оба** репозитория, привязанных к одному `*postgres.Tx`, передаёт их в callback. По образцу существующих `WithTx`, но с двумя репозиториями в аргументе (потому что `recalculateScore` ходит в оба).
+- Оба репозитория получают `NewWithTx(pool, tx)` — конструктор с транзакцией (или `NewRepository(pool)` для работы без транзакции).
+- В bootstrap создаются обычные репозитории на `*postgres.PgxPool`; `WithTx` создаёт временные с `tx` внутри callback.
 
 ### 4. Агрегат vs два репозитория
 
@@ -158,7 +162,7 @@ coeff = clamp(1 + (BMI - 18) × 9 / 17, 1, 10)
 
 По ADR-002: `SUM(workout_score) WHERE user_id = ? AND status = 'completed'`, считается на лету.
 
-В Workouts это отдельный gRPC-метод **`GetUserScore(user_id) → int`**. Gateway в `GET /users/me` параллельно зовёт `Profiles.GetProfile` и `Workouts.GetUserScore`, склеивает в один ответ (ADR-002, ADR-009).
+В Workouts это отдельный gRPC-метод **`GetUserScore() → int64`** (без параметра, `user_id` из metadata). Gateway в `GET /users/me` параллельно зовёт `Profiles.GetMyProfile` и `Workouts.GetUserScore`, склеивает в один ответ (ADR-002, ADR-009).
 
 `UpdateUserWorkoutScore` из монолита **не переносится**.
 
@@ -169,7 +173,7 @@ Habits не зовёт другие сервисы (ADR-023). Workouts — зо�
 | Кто | Кого | Когда | Зачем |
 |---|---|---|---|
 | Workouts | Profiles | `CreateWorkout` | `GetProfile(user_id)` → коэффициент |
-| Workouts | Exercises | `CreateWorkoutExercise`, `PatchWorkoutExercise`, `recalculateScore` | `GetExercise(id)` → `type` (валидация) и `difficulty` (score) |
+| Workouts | Exercises | `CreateWorkoutExercise`, `PatchWorkoutExercise` | `GetExercise(id)` → `type` (валидация) и `difficulty` (снапшот при создании) |
 
 Циклических зависимостей нет (ADR-009). Gateway остаётся единственной точкой входа.
 
@@ -195,11 +199,16 @@ WorkoutsService:
 
 **`user_id` приходит из metadata.** Gateway пробрасывает `x-user-id`, Workouts читает из context (как Habits/Profiles/Exercises).
 
-**`GetUserScore`** — для агрегации в Gateway (`GET /users/me`).
+**`GetUserScore`** — для агрегации в Gateway (`GET /users/me`). `user_id` берётся только из metadata (ставит Gateway из JWT), параметра в запросе нет. Аналог `Profiles.GetMyProfile`.
 
-**Права доступа:** только для **своего** `user_id`. Gateway кладёт `user_id` из JWT в metadata, Workouts проверяет: `metadata.user_id == request.user_id`. Если не совпало — `PermissionDenied` (HTTP 403).
+**Proto:**
 
-Чужие очки через этот метод получить нельзя. Leaderboard (когда появится) будет читать batch-методом `GetUsersScores(ids)` с другим auth (service-to-service, без user metadata) — отдельный ADR.
+- `GetUserScoreRequest` — пустой (как `GetMyProfileRequest`).
+- `GetUserScoreResponse` — `int64 score`. `int64` — запас на случай больших агрегатов (за карьеру пользователь может накопить больше 2^31 очков).
+
+**Права доступа:** только свои очки. Других вариантов нет — параметра `user_id` в запросе нет, взять чужое невозможно.
+
+Leaderboard (когда появится) будет читать batch-методом `GetUsersScores(ids)` с другим auth (service-to-service, без user metadata) — отдельный ADR.
 
 ### 8. HTTP-маршруты через Gateway
 
@@ -208,7 +217,7 @@ WorkoutsService:
 | GET | `/workouts` | Список тренировок |
 | POST | `/workouts` | Создать |
 | GET | `/workouts/{workoutId}` | Одна тренировка |
-| PATCH | `/workouts/{workoutId}` | Патч (status, started_at, completed_at, intensity) |
+| PATCH | `/workouts/{workoutId}` | Патч (status, intensity) |
 | DELETE | `/workouts/{workoutId}` | Удалить |
 | POST | `/workouts/{workoutId}/exercises` | Добавить упражнение |
 | GET | `/workouts/{workoutId}/exercises` | Список упражнений тренировки |
@@ -239,16 +248,24 @@ WorkoutsService:
 
 - `status` — только `planned`, `in_progress`, `completed`, `cancelled`. Переходы — по state machine в `domain/workout.go`.
 - `intensity` — 1–10 или NULL.
-- `weight`, `sets`, `reps` — обязательны для weight-типа, NULL для duration-типа.
-- `duration` — обязателен для duration-типа, NULL для weight-типа. **Максимум 86400 (24 часа).** Валидация в VO `Duration`.
+- `exercise_id` — **immutable** после создания `workout_exercise`. Менять упражнение нельзя — только `DeleteWorkoutExercise` + `CreateWorkoutExercise`. В `PatchWorkoutExerciseRequest` поля `exercise_id` нет (аналог `type` в ADR-008).
+- `weight` — обязателен для weight-типа, NULL для duration-типа. **Допустимый диапазон: 1–1000** (кг). `1 ≤ weight ≤ 1000`. Валидация в VO `Weight`.
+- `sets` — обязателен для weight-типа, NULL для duration-типа. **Допустимый диапазон: 1–100**. `1 ≤ sets ≤ 100`. Валидация в VO `Sets`.
+- `reps` — обязателен для weight-типа, NULL для duration-типа. **Допустимый диапазон: 1–1000**. `1 ≤ reps ≤ 1000`. Валидация в VO `Reps`.
+- `duration` — обязателен для duration-типа, NULL для weight-типа. **Допустимый диапазон: 1–86400** (24 часа). `1 ≤ duration ≤ 86400`. Валидация в VO `Duration`.
 - `completed` — можно поставить только когда тренировка в `in_progress`. Снять можно всегда (кроме `completed`/`cancelled` статуса тренировки).
 - Нельзя перевести тренировку в `completed`, если ни одно упражнение не отмечено completed.
+- **Переход `planned → completed` запрещён.** Обязательный маршрут: `planned → in_progress → completed`. Гарантирует, что у завершённой тренировки `started_at` всегда заполнен (ставится при переходе в `in_progress`).
+- **Переход из `completed` / `cancelled` в любой другой статус запрещён.** Терминальные состояния.
+
+Валидация числовых полей (`1 ≤ weight ≤ 1000`, `1 ≤ sets ≤ 100`, `1 ≤ reps ≤ 1000`, `1 ≤ duration ≤ 86400`) — в VO (`Weight`, `Sets`, `Reps`, `Duration`), тестируется в `domain`.
 
 **Инварианты `started_at` / `completed_at` — домен ставит автоматически, пользователь не присылает:**
 
 - `status = in_progress` и `started_at == nil` → домен ставит `started_at = time.Now().UTC()`.
 - `status = completed` и `completed_at == nil` → домен ставит `completed_at = time.Now().UTC()`.
 - Уже заполненное поле не перезаписывается (идемпотентность при повторном патче).
+- Переход `planned → completed` запрещён (см. выше), поэтому к моменту `completed_at` поле `started_at` гарантированно заполнено.
 
 В proto и HTTP-DTO полей `started_at` / `completed_at` в `PatchWorkout` **нет** — они управляются только доменом.
 
@@ -264,10 +281,9 @@ WorkoutsService:
 ### 11. Что НЕ делаем
 
 - **События `workout.completed` в Kafka** — ADR-024, после Notification. Сначала Workouts стабильно работает через sync gRPC.
-- **Batch `Exercises.GetExercisesByIds`** — для MVP N+1 при `recalculateScore` приемлем. Триггер для batch — когда `recalculateScore` станет горячим.
 - **Пагинация `GetWorkouts`** — MVP возвращает весь список. Триггер: 100+ тренировок у одного пользователя и p95 > 500ms. Тогда — `page`/`limit` в proto.
 - **Кэш `GetUserScore` в Redis** — по ADR-002, при росте нагрузки. Триггер — `GET /users/me` станет bottleneck.
-- **Пессимистичные блокировки** — обоснование в п.3.
+- **Пессимистичные блокировки (`FOR UPDATE`)** — не используем в Workouts, обоснование в п.3 (в Profiles/Exercises используем — ADR-007 F-2).
 - **`UpdateUserWorkoutScore`** — не переносим, `user_workout_score` не хранится (ADR-002).
 
 ### 12. Совместимость с ADR-024 (будущая Kafka)
@@ -284,7 +300,7 @@ Workouts разрабатывается **без** публикации собы
 - `domain/` — score, коэффициент, state machine, `exercise_load` остаются как есть.
 - `infrastructure/postgres_repo/` — схема БД не меняется.
 - `interfaces/workoutsgrpc/` — `GetUserScore` остаётся синхронным.
-- 8 из 9 usecase — без изменений.
+- **9 из 10 usecase — без изменений** (только `PatchWorkout` получает одну строку `publisher.Publish`).
 - Sync gRPC к Profiles и Exercises — не заменяется на async (ответ нужен в момент операции).
 
 **Добавление Outbox** (если понадобится по триггеру ADR-024) — замена реализации `EventPublisher`, usecase не трогаются. Интерфейс `Publish(ctx, event) error` стабилен.
@@ -301,16 +317,17 @@ Workouts разрабатывается **без** публикации собы
 
 **Минусы:**
 
-- **N+1 при `GetWorkoutExercises` и `recalculateScore`.** Одна тренировка на 10 упражнений = 10 вызовов `Exercises.GetExercise`. Для MVP — приемлемо (latency ~10-30мс с CB/Retry). При росте — batch-метод.
+- **Sync gRPC в Exercises перед мутацией.** `CreateWorkoutExercise` и `PatchWorkoutExercise` ждут `Exercises.GetExercise(id)` до начала транзакции. Если Exercises лежит — операция падает (CB/Retry помогают, но не устраняют зависимость).
 - **Optimistic locking даёт 409 конфликты.** При параллельном патче одного упражнения (два окна) второй клиент получит конфликт. Для тренировки это редкий сценарий, клиент перечитывает.
 - **`GetUserScore` — это `SUM` по всем completed-тренировкам пользователя.** На больших историях — медленно. Индекс `(user_id, status)` помогает, но при миллионах тренировок понадобится материализованное представление.
 - **Профиль может быть не заполнен** — тренировка создастся, но score минимальный. Не блокируем создание — клиент сам решает.
+- **Fallback `/users/me` скрывает деградацию.** При падении Workouts клиент получит `workout_score: 0, workout_score_available: false`. Если клиент не проверяет флаг — покажет «0 очков» как реальное значение.
 
 **Когда пересмотреть:**
 
-- Если `recalculateScore` станет горячим → batch `GetExercisesByIds` в Exercises (триггер — p95 > 100мс).
 - Если `GetUserScore` тормозит → кэш в Redis на 30–60с, или материализованное представление (триггер — p95 > 100мс).
 - Если конфликты 409 станут частыми → пересмотреть optimistic locking на пессимистичный (триггер — >5% запросов в 409).
+- Если `Exercises.GetExercise` станет узким местом перед мутацией → batch `GetExercisesByIds` в Exercises для `GET /workouts/{id}/exercises` (в Gateway-агрегации) — триггер p95 > 100мс.
 - Если появится публичный лидерборд → Leaderboard перестаёт звать `Workouts.GetUserScore` синхронно, начинается кэш/события (ADR-024, Уровень 3).
 
 ## Связанные решения
@@ -320,18 +337,19 @@ Workouts разрабатывается **без** публикации собы
 - [ADR-004: Паттерны микросервисов](004-microservices-patterns.md) — Database per Service, sync gRPC.
 - [ADR-005: Распределение портов](005-port-allocation.md) — 50055 / 8085 / 5436.
 - [ADR-007: Известные проблемы](007-known-issues.md) — F-2 (пессимистичная блокировка в Profiles/Exercises — здесь другой выбор, обосновано).
-- [ADR-008: Жизненный цикл упражнения](008-exercise-lifecycle.md) — `difficulty` snapshot, `type` immutable, N+1 принят осознанно.
+- [ADR-008: Жизненный цикл упражнения](008-exercise-lifecycle.md) — `difficulty` snapshot, `type` immutable.
 - [ADR-009: Карта зависимостей](009-service-dependencies.md) — Workouts → Profiles, Workouts → Exercises.
 - [ADR-011: Naming conventions](011-naming-and-code-style.md) — стиль кода.
 - [ADR-023: Сервис привычек](023-habits.md) — ориентир по структуре.
+- [ADR-024: Kafka и сервис Notification](024-kafka-notification.md) — будущие события `workout.completed` (п.12).
 
 ## Статус
 
-**В работе.**
+**Запланировано.** Ни один шаг ещё не начат.
 
 - ⬜ Domain (VO, сущности, score, coefficient) — покрыт unit-тестами.
 - ⬜ Infrastructure (postgres_repo, mappers, integration tests).
-- ⬜ Usecases (9 usecase + common + recalculateScore + моки + unit-тесты).
+- ⬜ Usecases (10 usecase + common + recalculateScore + моки + unit-тесты).
 - ⬜ gRPC-сервер + bootstrap + config + main.
 - ⬜ Compose + Taskfile + `.env.enc` + CI matrix.
 - ⬜ Gateway-хендлеры + маршруты + агрегация `/users/me`.
