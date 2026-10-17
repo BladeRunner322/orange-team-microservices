@@ -577,6 +577,22 @@ orange-team-microservices/
 │  • Порт: :50053                                                            │
 │  • HTTP: /health, /ready, /metrics (:8080)                                 │
 └────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│                      HABITS SERVICE  (✅ ГОТОВ)                            │
+│                                                                            │
+│  gRPC-методы:                                                              │
+│  • CreateHabit, GetHabit, GetHabits, PatchHabit, DeleteHabit               │
+│  • CompleteHabit, UncompleteHabit, GetCompletions                          │
+│                                                                            │
+│  • Личный трекер привычек (ежедневные, без расписаний в MVP)               │
+│  • Стрик вычисляется на лету — не хранится (ADR-023)                       │
+│  • Отметки/снятия — только сегодня и до 7 дней назад                       │
+│  • Soft delete через deleted_at, идемпотентный DELETE (ADR-007 F-3)        │
+│  • БД: habits_db (PostgreSQL)                                              │
+│  • Порт: :50054                                                            │
+│  • HTTP: /health, /ready, /metrics (:8080)                                 │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Целевая архитектура
@@ -669,25 +685,25 @@ orange-team-microservices/
                ▼                 ▼                 ▼
 ┌──────────────────────┐ ┌───────────────────┐ ┌─────────────────────┐
 │   HABITS SERVICE     │ │  WORKOUTS         │ │  LEADERBOARD        │
-│   (📋 В ПЛАНЕ)       │ │  SERVICE          │ │  SERVICE            │
+│   (✅ ГОТОВ)         │ │  SERVICE          │ │  SERVICE            │
 │                      │ │  (📋 В ПЛАНЕ)     │ │  (📋 В ПЛАНЕ)       │
 │  gRPC-методы:        │ │                   │ │                     │
 │  • GetHabits         │ │  gRPC-методы:     │ │  gRPC-методы:       │
-│  • CreateHabit       │ │  • GetWorkouts    │ │  • GetDaily         │
-│  • CompleteHabit     │ │  • GetWorkout     │ │  • GetWeekly        │
-│  • DeleteHabit       │ │  • CreateWorkout  │ │  • GetMonthly       │
-│                      │ │  • PatchWorkout   │ │                     │
-│                      │ │  • DeleteWorkout  │ │  БД: PostgreSQL     │
-│  БД: PostgreSQL      │ │  • CreateWorkout  │ │  └── leaderboard_db │
-│  └── habits_db       │ │    Exercise       │ │      └── snapshots  │
-│      └── habits      │ │  • GetWorkout     │ │      └── entries    │
-│                      │ │    Exercises      │ │                     │
-│                      │ │  • PatchWorkout   │ │                     │
-│  Порт: :50054        │ │    Exercise       │ │                     │
-│                      │ │  • DeleteWorkout  │ │  Порт: :50056       │
-│                      │ │    Exercise       │ │                     │
+│  • GetHabit          │ │  • GetWorkouts    │ │  • GetDaily         │
+│  • CreateHabit       │ │  • GetWorkout     │ │  • GetWeekly        │
+│  • PatchHabit        │ │  • CreateWorkout  │ │  • GetMonthly       │
+│  • DeleteHabit       │ │  • PatchWorkout   │ │                     │
+│  • CompleteHabit     │ │  • DeleteWorkout  │ │  БД: PostgreSQL     │
+│  • UncompleteHabit   │ │  • CreateWorkout  │ │  └── leaderboard_db │
+│  • GetCompletions    │ │    Exercise       │ │      └── snapshots  │
+│                      │ │  • GetWorkout     │ │      └── entries    │
+│  БД: PostgreSQL      │ │    Exercises      │ │                     │
+│  └── habits_db       │ │  • PatchWorkout   │ │                     │
+│      ├── habits      │ │    Exercise       │ │  Порт: :50056       │
+│      └── habit_      │ │  • DeleteWorkout  │ │                     │
+│          completions │ │    Exercise       │ │                     │
 │                      │ │                   │ │                     │
-│                      │ │  БД: PostgreSQL   │ │                     │
+│  Порт: :50054        │ │  БД: PostgreSQL   │ │                     │
 │                      │ │  └── workouts_db  │ │                     │
 │                      │ │      └── workouts │ │                     │
 │                      │ │      └── workout_ │ │                     │
