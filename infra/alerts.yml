@@ -3,7 +3,7 @@ groups:
     interval: 30s
     rules:
       - alert: ServiceDown
-        expr: up{job=~"auth|gateway|profiles|exercises"} == 0
+        expr: up{job=~"auth|gateway|profiles|exercises|habits"} == 0
         for: 2m
         labels:
           severity: critical
