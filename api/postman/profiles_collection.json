@@ -1,0 +1,209 @@
+{
+  "info": {
+    "name": "2. Profiles — /users/me",
+    "description": "CRUD по профилю: lazy-create, patch, null-сброс, delete. Требует, чтобы Setup был прогнан раньше.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. GET — пустой профиль (lazy-create)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": { "raw": "{{base_url}}/users/me", "host": ["{{base_url}}"], "path": ["users", "me"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.test('Profile empty', function () {",
+              "    pm.expect(jsonData).to.have.property('user_id');",
+              "    pm.expect(jsonData.profile_completed).to.be.false;",
+              "    pm.expect(jsonData).to.not.have.property('sex');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. PATCH — заполнить все 4 поля",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sex\": \"male\",\n  \"weight_kg\": 80.5,\n  \"birth_date\": \"1990-05-15\",\n  \"height_cm\": 180\n}"
+        },
+        "url": { "raw": "{{base_url}}/users/me", "host": ["{{base_url}}"], "path": ["users", "me"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.test('Profile completed', function () {",
+              "    pm.expect(jsonData.profile_completed).to.be.true;",
+              "    pm.expect(jsonData.sex).to.eql('male');",
+              "    pm.expect(jsonData.weight_kg).to.eql(80.5);",
+              "    pm.expect(jsonData.birth_date).to.eql('1990-05-15');",
+              "    pm.expect(jsonData.height_cm).to.eql(180);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. GET — проверка сохранения",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": { "raw": "{{base_url}}/users/me", "host": ["{{base_url}}"], "path": ["users", "me"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.test('Profile saved', function () {",
+              "    pm.expect(jsonData.profile_completed).to.be.true;",
+              "    pm.expect(jsonData.sex).to.eql('male');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. PATCH — только одно поле",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"weight_kg\": 82.0\n}" },
+        "url": { "raw": "{{base_url}}/users/me", "host": ["{{base_url}}"], "path": ["users", "me"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.test('Only weight changed', function () {",
+              "    pm.expect(jsonData.weight_kg).to.eql(82.0);",
+              "    pm.expect(jsonData.sex).to.eql('male');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. PATCH — null (сброс поля)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"weight_kg\": null\n}" },
+        "url": { "raw": "{{base_url}}/users/me", "host": ["{{base_url}}"], "path": ["users", "me"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.test('weight cleared, profile_completed = false', function () {",
+              "    pm.expect(jsonData).to.not.have.property('weight_kg');",
+              "    pm.expect(jsonData.profile_completed).to.be.false;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. PATCH — невалидный weight → 400",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"weight_kg\": 999\n}" },
+        "url": { "raw": "{{base_url}}/users/me", "host": ["{{base_url}}"], "path": ["users", "me"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 400', function () { pm.response.to.have.status(400); });",
+              "pm.test('Error mentions weight', function () {",
+              "    pm.expect(pm.response.json().error).to.include('weight');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. DELETE — 204",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": { "raw": "{{base_url}}/users/me", "host": ["{{base_url}}"], "path": ["users", "me"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 204', function () { pm.response.to.have.status(204); });",
+              "pm.test('Body empty', function () { pm.expect(pm.response.text()).to.be.empty; });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. GET — после DELETE (lazy-create)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": { "raw": "{{base_url}}/users/me", "host": ["{{base_url}}"], "path": ["users", "me"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.test('Profile re-created empty', function () {",
+              "    pm.expect(jsonData.profile_completed).to.be.false;",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

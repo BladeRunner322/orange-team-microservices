@@ -62,6 +62,70 @@ tasks:
       - echo "Coverage report saved to coverage/coverage.html"
 
   # ============================================================
+  #  POSTMAN (E2E через Gateway)
+  # ============================================================
+
+  postman:
+    desc: 'Run Postman E2E (starts app stack, stops after; args: task postman -- habits)'
+    silent: true
+    cmds:
+      - |
+        set -e
+        if [ ! -f .env ]; then
+          echo "❌ .env not found. Run: task sops:decrypt" >&2
+          exit 1
+        fi
+        if [ ! -x api/postman/run.sh ]; then
+          echo "❌ api/postman/run.sh not executable. Run: chmod +x api/postman/run.sh" >&2
+          exit 1
+        fi
+        if ! command -v npx >/dev/null 2>&1; then
+          echo "❌ npx not found. Install Node.js (nvm or apt install nodejs npm)." >&2
+          exit 1
+        fi
+
+        APP_COMPOSE="docker compose -f infra/compose.app.yml --env-file .env"
+
+        WAS_RUNNING=0
+        if docker ps --format '{{.Names}}' | grep -q '^gateway-service$'; then
+          WAS_RUNNING=1
+        fi
+
+        cleanup() {
+          if [ "$WAS_RUNNING" = "0" ]; then
+            echo ""
+            echo "→ Stopping app stack"
+            $APP_COMPOSE stop >/dev/null 2>&1
+          else
+            echo ""
+            echo "→ App stack was already running — leaving it up"
+          fi
+        }
+        trap cleanup EXIT
+
+        echo "→ Building images"
+        $APP_COMPOSE build --quiet
+
+        echo "→ Starting containers"
+        $APP_COMPOSE up -d --no-build >/dev/null
+
+        echo "→ Waiting for gateway on :8081"
+        for i in $(seq 1 30); do
+          if curl -sf -o /dev/null http://localhost:8081/health; then
+            echo "  gateway is up"
+            break
+          fi
+          if [ "$i" = "30" ]; then
+            echo "❌ gateway did not start in 30s" >&2
+            exit 1
+          fi
+          sleep 1
+        done
+
+        echo ""
+        ./api/postman/run.sh {{.CLI_ARGS}}
+
+  # ============================================================
   #  DOCKER
   # ============================================================
 
