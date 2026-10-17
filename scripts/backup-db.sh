@@ -35,9 +35,9 @@ S3_RETENTION_DAYS="${S3_RETENTION_DAYS:-30}"
 
 # Список сервисов, у которых есть PostgreSQL.
 # Контейнер называется <service>-postgres, БД — <service>_db.
-# При добавлении нового сервиса (Habits, Workouts, Leaderboard) —
+# При добавлении нового сервиса (Workouts, Leaderboard) —
 # просто дописать имя в массив.
-SERVICES=(auth profiles exercises)
+SERVICES=(auth profiles exercises habits)
 
 mkdir -p "${TARGET_DIR}"
 
