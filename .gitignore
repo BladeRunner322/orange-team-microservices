@@ -11,6 +11,10 @@ backup-metrics/
 # Секреты внутри сервисов (per-service .env)
 services/*/.env
 
+# Postman: реальный env (с токенами после прогона) — не коммитим.
+# В git только api/postman/env.example.json
+api/postman/env.json
+
 # TLS-сертификаты (генерируются локально)
 certs/
 
@@ -54,4 +58,3 @@ age-key.txt
 key.txt
 
 # Шифрованные .env — в git (НЕ игнорируем)
-# services/*/.env.enc

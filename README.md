@@ -293,8 +293,13 @@ orange-team-microservices/
 │   ├── leaderboard/
 │   │   └── leaderboard.proto
 │   └── postman/                      # коллекции Postman
-│       ├── gateway_collection.json
-│       └── rate_limit_collection.json
+│       ├── env.json                  # Environment: base_url, токены, id
+│       ├── setup_collection.json     # Prerequisites: регистрация, логины, токены
+│       ├── auth_collection.json      # Auth: refresh, logout, ошибки
+│       ├── profiles_collection.json  # Profiles: /users/me
+│       ├── exercises_collection.json # Exercises: CRUD + RBAC
+│       ├── habits_collection.json    # Habits: CRUD + отметки + стрики
+│       └── rate_limit_collection.json # Rate limiting (самодостаточный)
 │
 ├── internal/
 │   └── gen/                          # сгенерированный код из proto
@@ -2078,47 +2083,67 @@ task test-cover
 
 Пакеты обвязки (точки входа, конфиги, DI-сборка, сгенерированный код) и тонкие обёртки — unit-тестами не покрываются. Полный список — в `COVERAGE_EXCLUDE` в `Taskfile.yml` и в [ADR-022](docs/adr/022-testing-strategy.md).
 
-### Postman-коллекция
+### Postman-коллекции
 
-Для тестирования HTTP API Gateway через Postman подготовлена готовая коллекция:
+Postman-тесты разбиты по сервисам — каждая коллекция самодостаточна при условии, что `Setup` прогнан раньше. Переменные между коллекциями передаются через **environment** (`pm.environment.get` / `pm.environment.set`), поэтому нужен один активный environment.
 
-- **Расположение:** `api/postman/gateway_collection.json`
-- **Покрытие:** 86 проверок (50 запросов, организованы в 7 папок)
-- **Структура:** Healthcheck, Auth (Register, Login/Refresh/Logout), Profiles (`/users/me`), Exercises (CRUD + RBAC), Stubs, Errors
-- **Автоматизация:** pre-request скрипт генерирует уникальный email; `access_token`, `refresh_token`, `userId` сохраняются в collection variables. Environment не требуется — работает сразу после импорта.
+**Файлы** (`api/postman/`):
+
+| Файл | Назначение | Порядок прогона |
+|---|---|---|
+| `env.json` | Environment: `base_url=http://localhost:8081` (Docker), токены, id. | — (импортируется один раз) |
+| `setup_collection.json` | Регистрация юзера, логин юзера, логин админа. Пишет `accessToken`, `refreshToken`, `adminToken`, `userId` в environment. | 1 |
+| `auth_collection.json` | Refresh с rotation, logout, негативные сценарии. | 2 |
+| `profiles_collection.json` | `/users/me`: lazy-create, patch, null-сброс, delete. | 3 |
+| `exercises_collection.json` | Exercises: CRUD + RBAC. | 4 |
+| `habits_collection.json` | Habits: CRUD + отметки + стрики. | 5 |
+| `rate_limit_collection.json` | Rate limiting. Самодостаточен, порядок не важен. | — |
 
 **Что покрыто:**
 
-- Healthcheck
-- Регистрация (успех, дубликат, невалидный email, слабый пароль)
-- Логин (успех, неверные учётные данные)
-- Обновление токенов через `/refresh` (успех, невалидный refresh)
-- Logout и проверка, что refresh после logout не работает
-- `/users/me` — профиль пользователя: GET (lazy-create), PATCH (все поля, частичный патч, null-сброс, невалидное значение), DELETE, повторный GET
-- `/exercises` — CRUD: GET (список, по id), POST (admin, дубликат, валидация), PATCH (admin), DELETE (admin, идемпотентный, soft delete через `is_deleted=true`)
-- Защищённые эндпоинты (с токеном, без токена, с невалидным токеном)
-- RBAC: `POST /exercises` от non-admin → 403, чтение от user → 200
-- Заглушки для будущих сервисов (Workouts, Leaderboard)
+- **Setup** — регистрация (успех), логин юзера (успех), логин админа (успех).
+- **Auth** — refresh с rotation (старый refresh становится невалидным), refresh с невалидным токеном → 401, защищённые эндпоинты без токена / с невалидным токеном → 401, logout → refresh после logout не работает.
+- **Profiles** — GET (lazy-create, `profile_completed=false`), PATCH (все 4 поля, частичный патч, null-сброс, невалидный weight → 400), DELETE → 204, повторный GET после DELETE (снова пустой).
+- **Exercises** — RBAC (`POST` от user → 403), POST (admin, success + duplicate → 409 + validation → 400), GET (список, по id, not found → 404), PATCH (admin: difficulty, name), DELETE (admin: 204, повторный → 204, soft delete через `is_deleted=true`).
+- **Habits** — GET (пустой список), POST (success + validation → 400 + duplicate → 409), GET (список, по id, not found → 404), PATCH (name), POST `/complete` (сегодня → 204, повторно → идемпотентно, будущее → 400), GET `/completions` (история + invalid period → 400), DELETE `/complete` → `completed_today=false`, DELETE (204 + идемпотентный повтор + deleted not in list).
 
 **Как использовать:**
 
-1. Импортируй файл `api/postman/gateway_collection.json` в Postman.
-2. Убедись, что переменная `base_url` = `http://localhost:8081` (Docker) или `http://localhost:8091` (локально).
-3. Запусти коллекцию через **Run collection** — все тесты должны пройти.
+1. Открой Postman → **Environments** → **Import** → выбери `env.json`. Активируй его.
+2. Импортируй коллекции `setup_collection.json`, `auth_collection.json`, `profiles_collection.json`, `exercises_collection.json`, `habits_collection.json`.
+3. Прогоняй коллекции **по порядку** через **Run collection**:
+   - Setup (генерирует email, регистрирует юзера, получает токены).
+   - Auth.
+   - Profiles.
+   - Exercises.
+   - Habits.
 
-> 💡 Environment не нужен — коллекция использует collection variables. Достаточно импортировать JSON и нажать **Run collection**.
+> 💡 `base_url` в `env.json` — `http://localhost:8081` (Docker, `task docker-up`). Для локального запуска Gateway (`task gateway:run`) поменяй на `http://localhost:8091`.
 
-**Переменные коллекции:**
+> 💡 Без прогона Setup остальные коллекции упадут — в environment не будет `accessToken` / `adminToken` / `userId`. При повторном прогоне сбрось `email` в environment, чтобы получить нового юзера (иначе Register упадёт с 409).
 
-| Переменная | Назначение |
-|------------|------------|
-| `base_url` | Адрес Gateway |
-| `accessToken` | JWT access-токен (заполняется после login и обновляется при refresh) |
-| `refreshToken` | Refresh-токен (заполняется после login, обновляется при refresh, удаляется при logout) |
-| `userId` | ID пользователя (заполняется после register) |
-| `email` | Уникальный email (генерируется pre-request скриптом) |
-| `password` | Пароль по умолчанию |
-| `fullName` | Полное имя пользователя |
+**Переменные environment:**
+
+| Переменная | Кто пишет | Назначение |
+|------------|-----------|------------|
+| `base_url` | — (руками / env-файл) | Адрес Gateway |
+| `email` | Setup (pre-request) | Уникальный email, генерируется автоматически |
+| `password` | — | Пароль юзера по умолчанию |
+| `fullName` | — | Полное имя юзера |
+| `adminEmail` / `adminPassword` | — | Учётка админа (должна быть в БД) |
+| `accessToken` | Setup, Auth (refresh) | JWT access-токен |
+| `refreshToken` | Setup, Auth (refresh) | Refresh-токен (rotation) |
+| `adminToken` | Setup | JWT admin-токен (для RBAC-мутаций) |
+| `userId` | Setup | ID юзера (после register) |
+| `exerciseId` | Exercises (POST) | ID созданного упражнения |
+| `habitId` | Habits (POST) | ID созданной привычки |
+
+> ⚠️ `adminEmail` / `adminPassword` в environment — это учётка, которая должна существовать в `auth_db` с ролью `admin`. Создать вручную:
+> ```bash
+> docker exec -it auth-postgres psql -U test -d auth_db \
+>   -c "INSERT INTO auth.users (id, email, password_hash, full_name, role) VALUES (gen_random_uuid(), 'admin@example.com', '<bcrypt-хэш>', 'Admin', 'admin');"
+> ```
+> Проще: сначала зарегистрировать через `POST /register`, потом вручную поменять `role='admin'` в БД и перелогиниться.
 
 #### Rate Limiting коллекция
 

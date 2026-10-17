@@ -1,0 +1,495 @@
+{
+  "info": {
+    "name": "4. Habits",
+    "description": "CRUD + отметки + стрики. Требует, чтобы Setup был прогнан раньше.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. GET /habits — пустой список",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": { "raw": "{{base_url}}/habits", "host": ["{{base_url}}"], "path": ["habits"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.test('Empty array', function () {",
+              "    pm.expect(jsonData).to.be.an('array');",
+              "    pm.expect(jsonData).to.be.empty;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. POST /habits — создать",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Пить воду (Postman)\",\n  \"description\": \"2 литра в день\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/habits", "host": ["{{base_url}}"], "path": ["habits"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+              "const jsonData = pm.response.json();",
+              "pm.test('Response has id, name, description', function () {",
+              "    pm.expect(jsonData).to.have.property('id');",
+              "    pm.expect(jsonData).to.have.property('name', 'Пить воду (Postman)');",
+              "    pm.expect(jsonData).to.have.property('description', '2 литра в день');",
+              "    pm.expect(jsonData).to.have.property('streak', 0);",
+              "    pm.expect(jsonData).to.have.property('completed_today', false);",
+              "});",
+              "pm.environment.set('habitId', jsonData.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. POST /habits — validation → 400 (пустое имя)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/habits", "host": ["{{base_url}}"], "path": ["habits"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 400', function () { pm.response.to.have.status(400); });",
+              "pm.test('Validation mentions required', function () {",
+              "    pm.expect(pm.response.json().error).to.include('required');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. POST /habits — duplicate name → 409",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Пить воду (Postman)\",\n  \"description\": \"Другое\"\n}"
+        },
+        "url": { "raw": "{{base_url}}/habits", "host": ["{{base_url}}"], "path": ["habits"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 409', function () { pm.response.to.have.status(409); });",
+              "pm.test('Error mentions already exists', function () {",
+              "    pm.expect(pm.response.json().error).to.include('already exists');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. GET /habits — список содержит созданную",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": { "raw": "{{base_url}}/habits", "host": ["{{base_url}}"], "path": ["habits"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.test('Array contains created habit', function () {",
+              "    pm.expect(jsonData).to.be.an('array');",
+              "    const found = jsonData.find(h => h.id === pm.environment.get('habitId'));",
+              "    pm.expect(found).to.not.be.undefined;",
+              "    pm.expect(found.name).to.eql('Пить воду (Postman)');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. GET /habits/{id} — by id",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{base_url}}/habits/{{habitId}}",
+          "host": ["{{base_url}}"],
+          "path": ["habits", "{{habitId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.test('Correct habit returned', function () {",
+              "    pm.expect(jsonData.id).to.eql(pm.environment.get('habitId'));",
+              "    pm.expect(jsonData).to.have.property('streak');",
+              "    pm.expect(jsonData).to.have.property('completed_today');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. GET /habits/{id} — not found → 404",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{base_url}}/habits/00000000-0000-0000-0000-000000000000",
+          "host": ["{{base_url}}"],
+          "path": ["habits", "00000000-0000-0000-0000-000000000000"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 404', function () { pm.response.to.have.status(404); });",
+              "pm.test('Error mentions not found', function () {",
+              "    pm.expect(pm.response.json().error).to.include('not found');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. PATCH /habits/{id} — name",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Пить воду (updated)\"\n}" },
+        "url": {
+          "raw": "{{base_url}}/habits/{{habitId}}",
+          "host": ["{{base_url}}"],
+          "path": ["habits", "{{habitId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.test('Name updated', function () {",
+              "    pm.expect(jsonData.name).to.eql('Пить воду (updated)');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. POST /habits/{id}/complete — сегодня",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{base_url}}/habits/{{habitId}}/complete",
+          "host": ["{{base_url}}"],
+          "path": ["habits", "{{habitId}}", "complete"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 204', function () { pm.response.to.have.status(204); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. GET /habits/{id} — completed_today=true, streak=1",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{base_url}}/habits/{{habitId}}",
+          "host": ["{{base_url}}"],
+          "path": ["habits", "{{habitId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.test('completed_today=true, streak=1', function () {",
+              "    pm.expect(jsonData.completed_today).to.be.true;",
+              "    pm.expect(jsonData.streak).to.eql(1);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. POST /habits/{id}/complete — повторно (идемпотентно)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{base_url}}/habits/{{habitId}}/complete",
+          "host": ["{{base_url}}"],
+          "path": ["habits", "{{habitId}}", "complete"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 204 (idempotent)', function () { pm.response.to.have.status(204); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. POST /habits/{id}/complete — будущее → 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\n  \"date\": \"2999-12-31\"\n}" },
+        "url": {
+          "raw": "{{base_url}}/habits/{{habitId}}/complete",
+          "host": ["{{base_url}}"],
+          "path": ["habits", "{{habitId}}", "complete"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 400', function () { pm.response.to.have.status(400); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. GET /habits/{id}/completions — история",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{base_url}}/habits/{{habitId}}/completions",
+          "host": ["{{base_url}}"],
+          "path": ["habits", "{{habitId}}", "completions"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.test('Array with at least one completion', function () {",
+              "    pm.expect(jsonData).to.be.an('array');",
+              "    pm.expect(jsonData.length).to.be.at.least(1);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14. GET /habits/{id}/completions — invalid period → 400",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{base_url}}/habits/{{habitId}}/completions?from=2999-01-01&to=2000-01-01",
+          "host": ["{{base_url}}"],
+          "path": ["habits", "{{habitId}}", "completions"],
+          "query": [
+            { "key": "from", "value": "2999-01-01" },
+            { "key": "to", "value": "2000-01-01" }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 400', function () { pm.response.to.have.status(400); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15. DELETE /habits/{id}/complete — снять отметку",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{base_url}}/habits/{{habitId}}/complete",
+          "host": ["{{base_url}}"],
+          "path": ["habits", "{{habitId}}", "complete"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 204', function () { pm.response.to.have.status(204); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16. GET /habits/{id} — completed_today=false",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{base_url}}/habits/{{habitId}}",
+          "host": ["{{base_url}}"],
+          "path": ["habits", "{{habitId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.test('completed_today=false', function () {",
+              "    pm.expect(jsonData.completed_today).to.be.false;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17. DELETE /habits/{id} — soft delete",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{base_url}}/habits/{{habitId}}",
+          "host": ["{{base_url}}"],
+          "path": ["habits", "{{habitId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 204', function () { pm.response.to.have.status(204); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18. DELETE /habits/{id} — repeat (idempotent)",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{base_url}}/habits/{{habitId}}",
+          "host": ["{{base_url}}"],
+          "path": ["habits", "{{habitId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 204 (idempotent)', function () { pm.response.to.have.status(204); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19. GET /habits — deleted not in list",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": { "raw": "{{base_url}}/habits", "host": ["{{base_url}}"], "path": ["habits"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.test('Deleted habit not in list', function () {",
+              "    const found = jsonData.find(h => h.id === pm.environment.get('habitId'));",
+              "    pm.expect(found).to.be.undefined;",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
