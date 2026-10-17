@@ -36,6 +36,7 @@
 - [ADR-022: Стратегия тестирования](022-testing-strategy.md)
 - [ADR-023: Сервис привычек (Habits)](023-habits.md)
 - [ADR-024: Асинхронное взаимодействие через Kafka и сервис Notification](024-kafka-notification.md)
+- [ADR-025: Сервис тренировок (Workouts)](025-workouts.md)
 
 ## Как добавить
 
