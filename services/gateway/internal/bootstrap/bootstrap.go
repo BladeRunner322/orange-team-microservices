@@ -18,6 +18,7 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/infrastructure/clients"
 	authhandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/auth"
 	exerciseshandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/exercises"
+	habitshandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/habits"
 	profileshandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/profiles"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/proxy"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/middleware"
@@ -30,6 +31,7 @@ type App struct {
 	authClient      *clients.AuthClient
 	profilesClient  *clients.ProfilesClient
 	exercisesClient *clients.ExercisesClient
+	habitsClient    *clients.HabitsClient
 	redisClient     *redis.Client
 }
 
@@ -73,7 +75,19 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		"retry_enabled", cfg.RetryEnabled,
 	)
 
-	// 4. Redis-клиент для rate limiting
+	// 4. gRPC-клиент к Habits Service
+	habitsClient, err := clients.NewHabitsClient(ctx, buildGRPCConfig(cfg.HabitsGRPCAddr, cfg))
+	if err != nil {
+		return nil, fmt.Errorf("create habits client: %w", err)
+	}
+	log.Info("habits gRPC client created",
+		"addr", cfg.HabitsGRPCAddr,
+		"timeout", cfg.Timeout,
+		"cb_enabled", cfg.CBEnabled,
+		"retry_enabled", cfg.RetryEnabled,
+	)
+
+	// 5. Redis-клиент для rate limiting
 	redisClient, err := redis.NewClient(ctx, redis.Config{
 		Addr:     cfg.RedisAddr,
 		Password: cfg.RedisPassword,
@@ -84,10 +98,10 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	}
 	log.Info("redis client created", "addr", cfg.RedisAddr)
 
-	// 5. Rate limiter
+	// 6. Rate limiter
 	limiter := ratelimit.NewLimiter(redisClient.Client)
 
-	// 6. Trusted proxies для определения IP клиента
+	// 7. Trusted proxies для определения IP клиента
 	trustedProxies, err := middleware.ParseTrustedProxies(cfg.TrustedProxies)
 	if err != nil {
 		return nil, fmt.Errorf("parse trusted proxies: %w", err)
@@ -98,22 +112,23 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		log.Info("trusted proxies not configured — X-Forwarded-For will be ignored")
 	}
 
-	// 7. Readiness checks (Redis + gRPC-клиенты)
+	// 8. Readiness checks (Redis + gRPC-клиенты)
 	readinessChecks := map[string]health.Check{
 		"redis":     health.RedisCheck(redisClient),
 		"auth":      authClient.IsHealthy,
 		"profiles":  profilesClient.IsHealthy,
 		"exercises": exercisesClient.IsHealthy,
+		"habits":    habitsClient.IsHealthy,
 	}
 
-	// 8. Роутер
+	// 9. Роутер
 	r := chi.NewRouter()
 	r.Use(middleware.RequestIDMiddleware)
 	r.Use(middleware.LoggerMiddleware(log))
 	r.Use(chimid.Recoverer)
 	r.Use(middleware.HTTPMetricsMiddleware)
 
-	// 9. Служебные эндпоинты (без rate limit).
+	// 10. Служебные эндпоинты (без rate limit).
 	//
 	// /health, /ready и /metrics опрашиваются инфраструктурой (Docker
 	// healthcheck, Prometheus, внешний LB) с фиксированной частотой.
@@ -125,7 +140,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Handle("/metrics", health.MetricsHandler())
 	})
 
-	// 10. Публичные маршруты (rate limit по IP/email).
+	// 11. Публичные маршруты (rate limit по IP/email).
 	rateLimitPublic := middleware.RateLimitMiddleware(limiter, trustedProxies, cfg.RateLimit, log)
 
 	r.Group(func(r chi.Router) {
@@ -137,7 +152,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Post("/logout", authhandlers.LogoutHandler(authClient))
 	})
 
-	// 11. Защищённые маршруты (обычные пользователи, без RBAC)
+	// 12. Защищённые маршруты (обычные пользователи, без RBAC)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(authClient))
 		r.Use(middleware.RateLimitMiddleware(limiter, trustedProxies, cfg.RateLimit, log))
@@ -152,10 +167,14 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Get("/exercises/{exerciseId}", exerciseshandlers.GetExerciseHandler(exercisesClient))
 
 		// Habits
-		r.Get("/habits", proxy.Handler)
-		r.Post("/habits", proxy.Handler)
-		r.Post("/habits/{habitId}/complete", proxy.Handler)
-		r.Delete("/habits/{habitId}", proxy.Handler)
+		r.Get("/habits", habitshandlers.GetHabitsHandler(habitsClient))
+		r.Post("/habits", habitshandlers.CreateHabitHandler(habitsClient))
+		r.Get("/habits/{habitId}", habitshandlers.GetHabitHandler(habitsClient))
+		r.Patch("/habits/{habitId}", habitshandlers.PatchHabitHandler(habitsClient))
+		r.Delete("/habits/{habitId}", habitshandlers.DeleteHabitHandler(habitsClient))
+		r.Post("/habits/{habitId}/complete", habitshandlers.CompleteHabitHandler(habitsClient))
+		r.Delete("/habits/{habitId}/complete", habitshandlers.UncompleteHabitHandler(habitsClient))
+		r.Get("/habits/{habitId}/completions", habitshandlers.GetCompletionsHandler(habitsClient))
 
 		// Workouts
 		r.Get("/workouts", proxy.Handler)
@@ -174,7 +193,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Get("/leaderboard/monthly", proxy.Handler)
 	})
 
-	// 12. Admin-only маршруты (RBAC: role == admin)
+	// 13. Admin-only маршруты (RBAC: role == admin)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.AuthMiddleware(authClient))
 		r.Use(middleware.RateLimitMiddleware(limiter, trustedProxies, cfg.RateLimit, log))
@@ -186,7 +205,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Delete("/exercises/{exerciseId}", exerciseshandlers.DeleteExerciseHandler(exercisesClient))
 	})
 
-	// 13. HTTP-сервер
+	// 14. HTTP-сервер
 	httpSrv := &http.Server{
 		Addr:         cfg.HTTPPort,
 		Handler:      r,
@@ -202,6 +221,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		authClient:      authClient,
 		profilesClient:  profilesClient,
 		exercisesClient: exercisesClient,
+		habitsClient:    habitsClient,
 		redisClient:     redisClient,
 	}, nil
 }
@@ -231,6 +251,10 @@ func (a *App) Close() {
 
 	if a.exercisesClient != nil {
 		a.exercisesClient.Close()
+	}
+
+	if a.habitsClient != nil {
+		a.habitsClient.Close()
 	}
 
 	if a.redisClient != nil {
