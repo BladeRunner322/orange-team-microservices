@@ -14,13 +14,14 @@ vars:
   UNIT_COVERAGE_EXCLUDE: 'internal/gen|/cmd$|/config$|/bootstrap$|/interfaces/.*grpc$|/application/ports$|pkg/logger$|pkg/health$|pkg/grpc/server$|pkg/nullable$|pkg/redis$|pkg/metrics$|pkg/ratelimit$|pkg/postgres$|/infrastructure/postgres_repo$|/infrastructure/redis_repo$|/infrastructure/clients$'
 
   # Явный список пакетов, покрываемых integration-тестами.
-  INTEGRATION_PACKAGES: './pkg/postgres/... ./pkg/ratelimit/... ./services/auth/internal/infrastructure/postgres_repo/... ./services/auth/internal/infrastructure/redis_repo/... ./services/profiles/internal/infrastructure/postgres_repo/... ./services/exercises/internal/infrastructure/postgres_repo/...'
+  INTEGRATION_PACKAGES: './pkg/postgres/... ./pkg/ratelimit/... ./services/auth/internal/infrastructure/postgres_repo/... ./services/auth/internal/infrastructure/redis_repo/... ./services/profiles/internal/infrastructure/postgres_repo/... ./services/exercises/internal/infrastructure/postgres_repo/... ./services/habits/internal/infrastructure/postgres_repo/...'
 
 includes:
   auth:      ./taskfiles/auth.yml
   gateway:   ./taskfiles/gateway.yml
   profiles:  ./taskfiles/profiles.yml
   exercises: ./taskfiles/exercises.yml
+  habits:    ./taskfiles/habits.yml
 
 tasks:
   # ============================================================
@@ -105,6 +106,7 @@ tasks:
       - sops --encrypt --input-type dotenv --filename-override services/gateway/.env services/gateway/.env > services/gateway/.env.enc
       - sops --encrypt --input-type dotenv --filename-override services/profiles/.env services/profiles/.env > services/profiles/.env.enc
       - sops --encrypt --input-type dotenv --filename-override services/exercises/.env services/exercises/.env > services/exercises/.env.enc
+      - sops --encrypt --input-type dotenv --filename-override services/habits/.env services/habits/.env > services/habits/.env.enc
       - sops --encrypt --input-type binary --filename-override scripts/rclone.conf scripts/rclone.conf > scripts/rclone.conf.enc
 
   sops:decrypt:
@@ -115,6 +117,7 @@ tasks:
       - sops --decrypt --input-type dotenv --filename-override services/gateway/.env services/gateway/.env.enc > services/gateway/.env
       - sops --decrypt --input-type dotenv --filename-override services/profiles/.env services/profiles/.env.enc > services/profiles/.env
       - sops --decrypt --input-type dotenv --filename-override services/exercises/.env services/exercises/.env.enc > services/exercises/.env
+      - sops --decrypt --input-type dotenv --filename-override services/habits/.env services/habits/.env.enc > services/habits/.env
       - sops --decrypt --input-type binary --filename-override scripts/rclone.conf scripts/rclone.conf.enc > scripts/rclone.conf
 
   secrets:generate:

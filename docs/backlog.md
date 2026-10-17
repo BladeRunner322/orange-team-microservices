@@ -21,10 +21,10 @@
 | ✅ | Infrastructure (postgres_repo, mapper, интеграционные тесты) | `feat/habits-infrastructure` | ~4 ч |
 | ✅ | Usecases (8 usecase + common + моки + unit-тесты) | `feat/habits-usecases` | ~5 ч |
 | ✅ | gRPC-сервер + bootstrap + config + main | `feat/habits-grpc-and-bootstrap` | ~3 ч |
-| 5 | Compose + Taskfile + .env.enc + CI matrix | `feat/habits-compose-and-taskfile` | ~2 ч |
+| ✅ | Compose + Taskfile + .env.enc + CI matrix | `feat/habits-compose-and-taskfile` | ~2 ч |
 | 6 | Gateway-хендлеры + маршруты | `feat/habits-gateway` | ~3 ч |
 
-Осталось: ~5 часов. После шага 6 Habits готов к деплою в прод.
+Осталось: ~3 часа. После шага 6 Habits готов к деплою в прод.
 
 ### После Habits — Kafka + Notification (ADR-024)
 
