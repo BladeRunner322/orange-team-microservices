@@ -9,7 +9,7 @@ COPY vendor /app/vendor
 COPY . .
 
 # Сборка с vendor
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor -o /exercises ./services/exercises/cmd
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor -o /habits ./services/habits/cmd
 
 # Финальный образ
 FROM alpine:3.23
@@ -18,7 +18,7 @@ RUN apk add --no-cache ca-certificates tzdata curl
 
 WORKDIR /app
 
-COPY --from=builder /exercises /app/exercises
+COPY --from=builder /habits /app/habits
 
 ENV TZ=UTC
 
