@@ -24,4 +24,4 @@ ENV TZ=UTC
 
 EXPOSE 50054 8080
 
-CMD ["/app/habbits"]
+CMD ["/app/habits"]
