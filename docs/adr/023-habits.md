@@ -190,6 +190,6 @@ HabitsService:
 - ✅ Domain (VO, сущности, ошибки) — покрыт unit-тестами.
 - ✅ Infrastructure (postgres_repo, mappers, models, интеграционные тесты на Testcontainers).
 - ✅ Usecases — 8 usecase + common + моки репозиториев + unit-тесты.
-- ⬜ gRPC-сервер + bootstrap.
+- ✅ gRPC-сервер + bootstrap + config + main — 8 RPC, маппинг доменных ошибок в gRPC-коды, graceful shutdown.
 - ⬜ Compose + Taskfile.
 - ⬜ Gateway-хендлеры.
