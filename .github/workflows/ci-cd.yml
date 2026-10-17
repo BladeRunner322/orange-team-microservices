@@ -64,6 +64,9 @@ jobs:
       - name: Build Exercises Service (smoke test)
         run: go build -v ./services/exercises/cmd/...
 
+      - name: Build Habits Service (smoke test)
+        run: go build -v ./services/habits/cmd/...
+
       - name: Run Integration Tests
         run: go test -tags=integration -v -timeout=15m ./...
 
@@ -83,6 +86,7 @@ jobs:
       gateway_changed: ${{ steps.compute.outputs.gateway_changed }}
       profiles_changed: ${{ steps.compute.outputs.profiles_changed }}
       exercises_changed: ${{ steps.compute.outputs.exercises_changed }}
+      habits_changed: ${{ steps.compute.outputs.habits_changed }}
       infra_changed: ${{ steps.compute.outputs.infra_changed }}
       # matrix — JSON-массив сервисов, которые надо собрать. Пустой [] — нечего собирать.
       matrix: ${{ steps.compute.outputs.matrix }}
@@ -113,6 +117,10 @@ jobs:
               - services/exercises/**
               - api/exercises/**
               - internal/gen/api/exercises/**
+            habits:
+              - services/habits/**
+              - api/habits/**
+              - internal/gen/api/habits/**
             pkg:
               - pkg/**
               - go.mod
@@ -130,6 +138,7 @@ jobs:
           RAW_GATEWAY: ${{ steps.changed.outputs.gateway_any_changed }}
           RAW_PROFILES: ${{ steps.changed.outputs.profiles_any_changed }}
           RAW_EXERCISES: ${{ steps.changed.outputs.exercises_any_changed }}
+          RAW_HABITS: ${{ steps.changed.outputs.habits_any_changed }}
           RAW_PKG: ${{ steps.changed.outputs.pkg_any_changed }}
           RAW_INFRA: ${{ steps.changed.outputs.infra_any_changed }}
           IS_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
@@ -143,15 +152,17 @@ jobs:
             gateway=true
             profiles=true
             exercises=true
+            habits=true
             infra=false
           else
             auth="${RAW_AUTH:-false}"
             gateway="${RAW_GATEWAY:-false}"
             profiles="${RAW_PROFILES:-false}"
             exercises="${RAW_EXERCISES:-false}"
+            habits="${RAW_HABITS:-false}"
             infra="${RAW_INFRA:-false}"
 
-            # Изменения в pkg/** влияют на все четыре сервиса.
+            # Изменения в pkg/** влияют на все пять сервисов.
             # Осознанный компромисс — статический анализ импортов
             # сложнее, чем выгода (см. ADR-021 п.1).
             if [ "${RAW_PKG:-false}" = "true" ]; then
@@ -159,6 +170,7 @@ jobs:
               gateway=true
               profiles=true
               exercises=true
+              habits=true
             fi
           fi
 
@@ -166,7 +178,7 @@ jobs:
           any=false
           if [ "$auth" = "true" ] || [ "$gateway" = "true" ] \
              || [ "$profiles" = "true" ] || [ "$exercises" = "true" ] \
-             || [ "$infra" = "true" ]; then
+             || [ "$habits" = "true" ] || [ "$infra" = "true" ]; then
             any=true
           fi
 
@@ -176,6 +188,7 @@ jobs:
           [ "$gateway" = "true" ]   && services+=(gateway)
           [ "$profiles" = "true" ]  && services+=(profiles)
           [ "$exercises" = "true" ] && services+=(exercises)
+          [ "$habits" = "true" ]    && services+=(habits)
 
           if [ ${#services[@]} -eq 0 ]; then
             matrix="[]"
@@ -189,6 +202,7 @@ jobs:
             echo "gateway_changed=$gateway"
             echo "profiles_changed=$profiles"
             echo "exercises_changed=$exercises"
+            echo "habits_changed=$habits"
             echo "infra_changed=$infra"
             echo "matrix=$matrix"
           } >> "$GITHUB_OUTPUT"
@@ -200,6 +214,7 @@ jobs:
           echo "gateway:           ${{ steps.compute.outputs.gateway_changed }}"
           echo "profiles:          ${{ steps.compute.outputs.profiles_changed }}"
           echo "exercises:         ${{ steps.compute.outputs.exercises_changed }}"
+          echo "habits:            ${{ steps.compute.outputs.habits_changed }}"
           echo "infra:             ${{ steps.compute.outputs.infra_changed }}"
           echo "matrix:            ${{ steps.compute.outputs.matrix }}"
   
@@ -305,6 +320,7 @@ jobs:
           GATEWAY_CHANGED:   ${{ needs.changed-services.outputs.gateway_changed }}
           PROFILES_CHANGED:  ${{ needs.changed-services.outputs.profiles_changed }}
           EXERCISES_CHANGED: ${{ needs.changed-services.outputs.exercises_changed }}
+          HABITS_CHANGED:    ${{ needs.changed-services.outputs.habits_changed }}
           INFRA_CHANGED:     ${{ needs.changed-services.outputs.infra_changed }}
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -312,7 +328,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           # appleboy/ssh-action не пробрасывает env с раннера автоматически —
           # переменные надо явно перечислить в envs.
-          envs: AUTH_CHANGED,GATEWAY_CHANGED,PROFILES_CHANGED,EXERCISES_CHANGED,INFRA_CHANGED
+          envs: AUTH_CHANGED,GATEWAY_CHANGED,PROFILES_CHANGED,EXERCISES_CHANGED,HABITS_CHANGED,INFRA_CHANGED
           script: |
             set -e
 
@@ -395,6 +411,11 @@ jobs:
               SERVICES="${SERVICES} exercises"
               echo "→ Running migrate-exercises"
               docker compose run --rm migrate-exercises
+            fi
+            if [ "${HABITS_CHANGED}" = "true" ]; then
+              SERVICES="${SERVICES} habits"
+              echo "→ Running migrate-habits"
+              docker compose run --rm migrate-habits
             fi
 
             # Ранний выход, если нечего делать (не должно случаться —
