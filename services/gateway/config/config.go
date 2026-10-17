@@ -28,6 +28,7 @@ type Config struct {
 	AuthGRPCAddr      string        `envconfig:"AUTH_GRPC_ADDR" required:"true"`
 	ProfilesGRPCAddr  string        `envconfig:"PROFILES_GRPC_ADDR" required:"true"`
 	ExercisesGRPCAddr string        `envconfig:"EXERCISES_GRPC_ADDR" required:"true"`
+	HabitsGRPCAddr    string        `envconfig:"HABITS_GRPC_ADDR" required:"true"`
 	Timeout           time.Duration `envconfig:"GATEWAY_TIMEOUT" default:"10s"`
 
 	// GRPCClientTLSMode — режим TLS для исходящих gRPC-соединений

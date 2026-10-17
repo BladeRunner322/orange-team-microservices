@@ -192,4 +192,4 @@ HabitsService:
 - ✅ Usecases — 8 usecase + common + моки репозиториев + unit-тесты.
 - ✅ gRPC-сервер + bootstrap + config + main — 8 RPC, маппинг доменных ошибок в gRPC-коды, graceful shutdown.
 - ✅ Compose + Taskfile + `.env.enc` + CI matrix — сервис в `compose.app.yml`, `taskfiles/habits.yml`, `sops`, `prometheus`, `alerts`, `backup-db.sh`, `ci-cd.yml`.
-- ⬜ Gateway-хендлеры.
+- ✅ Gateway-хендлеры и маршруты — 8 HTTP-эндпоинтов, клиент к Habits, readiness-check.
