@@ -2390,5 +2390,6 @@ task <service-name>:migrate-create -- create_users_table
 - [ADR-022: Стратегия тестирования](docs/adr/022-testing-strategy.md) — unit, integration, e2e, что не покрываем
 - [ADR-023: Сервис привычек (Habits)](docs/adr/023-habits.md) — трекер привычек, стрики, отметки выполнения
 - [ADR-024: Kafka и сервис Notification](docs/adr/024-kafka-notification.md) — event bus, асинхронные уведомления
+- [ADR-025: Сервис тренировок (Workouts)](docs/adr/025-workouts.md) — тренировки, score, optimistic locking, зависимости от Profiles и Exercises
 
 Подробнее — в [docs/adr/README.md](docs/adr/README.md).
