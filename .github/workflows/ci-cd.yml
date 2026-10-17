@@ -301,6 +301,7 @@ jobs:
           sops --decrypt --input-type dotenv --filename-override services/gateway/.env services/gateway/.env.enc > services/gateway/.env
           sops --decrypt --input-type dotenv --filename-override services/profiles/.env services/profiles/.env.enc > services/profiles/.env
           sops --decrypt --input-type dotenv --filename-override services/exercises/.env services/exercises/.env.enc > services/exercises/.env
+          sops --decrypt --input-type dotenv --filename-override services/habits/.env services/habits/.env.enc > services/habits/.env
           sops --decrypt --input-type binary --filename-override scripts/rclone.conf scripts/rclone.conf.enc > scripts/rclone.conf
 
       - name: Upload .env and rclone.conf files to server
@@ -309,7 +310,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          source: ".env,services/auth/.env,services/gateway/.env,services/profiles/.env,services/exercises/.env,scripts/rclone.conf"
+          source: ".env,services/auth/.env,services/gateway/.env,services/profiles/.env,services/exercises/.env,services/habits/.env,scripts/rclone.conf"
           target: "/root/projects/orange-team-microservices"
           overwrite: true
 
