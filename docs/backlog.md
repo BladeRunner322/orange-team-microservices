@@ -11,24 +11,26 @@
 
 ## 🚧 В работе
 
-### Habits (ADR-023)
+### Workouts (ADR-025)
 
-Трекер привычек. Полный контекст — [ADR-023](adr/023-habits.md).
+Сервис тренировок. Полный контекст — [ADR-025](adr/025-workouts.md).
+Зовёт Profiles (коэффициент) и Exercises (справочник). Публикует `workout.completed` (ADR-024, в будущем).
 
 | Шаг | Что | Ветка | Оценка |
 |---|---|---|---|
-| ✅ | Domain (VO, сущности, ошибки) + тесты 100% | `feat/habits-domain` | ~2 ч |
-| ✅ | Infrastructure (postgres_repo, mapper, интеграционные тесты) | `feat/habits-infrastructure` | ~4 ч |
-| ✅ | Usecases (8 usecase + common + моки + unit-тесты) | `feat/habits-usecases` | ~5 ч |
-| ✅ | gRPC-сервер + bootstrap + config + main | `feat/habits-grpc-and-bootstrap` | ~3 ч |
-| ✅ | Compose + Taskfile + .env.enc + CI matrix | `feat/habits-compose-and-taskfile` | ~2 ч |
-| ✅ | Gateway-хендлеры + маршруты | `feat/habits-gateway` | ~3 ч |
+| 1 | ADR-025 (схема БД, контракты, зависимости, score) | `docs/adr-025-workouts` | ~2 ч |
+| 2 | Domain (VO, сущности, ошибки, расчёт score) + тесты 100% | `feat/workouts-domain` | ~3 ч |
+| 3 | Infrastructure (postgres_repo, mapper, интеграционные тесты) | `feat/workouts-infrastructure` | ~4 ч |
+| 4 | Usecases (Create, Get, Patch, Delete, Score) + моки + unit-тесты | `feat/workouts-usecases` | ~5 ч |
+| 5 | gRPC-сервер + bootstrap + config + main | `feat/workouts-grpc-and-bootstrap` | ~3 ч |
+| 6 | Compose + Taskfile + .env.enc + CI matrix | `feat/workouts-compose-and-taskfile` | ~2 ч |
+| 7 | Gateway-хендлеры + маршруты + агрегация `/users/me` | `feat/workouts-gateway` | ~3 ч |
 
-**Habits готов к деплою в прод.** Шаги 1–6 закрыты.
+Осталось: ~22 часа. После шага 7 Workouts готов к деплою в прод.
 
-### После Habits — Kafka + Notification (ADR-024)
+### После Workouts — Kafka + Notification (ADR-024)
 
-Фиксируется в [ADR-024](adr/024-kafka-notification.md). Ждёт завершения Habits.
+Фиксируется в [ADR-024](adr/024-kafka-notification.md). Ждёт завершения Workouts.
 
 ## 🟡 Стоит сделать в ближайшее время
 
