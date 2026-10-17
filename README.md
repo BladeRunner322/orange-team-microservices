@@ -293,7 +293,8 @@ orange-team-microservices/
 │   ├── leaderboard/
 │   │   └── leaderboard.proto
 │   └── postman/                      # коллекции Postman
-│       ├── env.json                  # Environment: base_url, токены, id
+│       ├── env.example.json          # шаблон environment (base_url, токены, id)
+│       ├── run.sh                    # прогон всех коллекций по порядку
 │       ├── setup_collection.json     # Prerequisites: регистрация, логины, токены
 │       ├── auth_collection.json      # Auth: refresh, logout, ошибки
 │       ├── profiles_collection.json  # Profiles: /users/me
@@ -2091,13 +2092,34 @@ Postman-тесты разбиты по сервисам — каждая кол�
 
 | Файл | Назначение | Порядок прогона |
 |---|---|---|
-| `env.json` | Environment: `base_url=http://localhost:8081` (Docker), токены, id. | — (импортируется один раз) |
+| `env.example.json` | Шаблон environment: `base_url=http://localhost:8081` (Docker), токены, id. При первом запуске `run.sh` копирует его в `env.json`. | — (используется через `env.json`) |
+| `run.sh` | Скрипт для автоматического прогона всех коллекций по порядку через Newman (`npx newman`). | — |
 | `setup_collection.json` | Регистрация юзера, логин юзера, логин админа. Пишет `accessToken`, `refreshToken`, `adminToken`, `userId` в environment. | 1 |
 | `auth_collection.json` | Refresh с rotation, logout, негативные сценарии. | 2 |
 | `profiles_collection.json` | `/users/me`: lazy-create, patch, null-сброс, delete. | 3 |
 | `exercises_collection.json` | Exercises: CRUD + RBAC. | 4 |
 | `habits_collection.json` | Habits: CRUD + отметки + стрики. | 5 |
-| `rate_limit_collection.json` | Rate limiting. Самодостаточен, порядок не важен. | — |
+| `rate_limit_collection.json` | Rate limiting. Самодостаточен, порядок не важен (в `run.sh` идёт последним). | — |
+
+**Автоматический прогон (Newman + Docker):**
+
+Запустить всё одной командой (поднимет Docker-стек, прогонит тесты, погасит стек):
+```bash
+task postman
+```
+
+Или прогнать только конкретные коллекции:
+```bash
+task postman -- habits
+task postman -- setup auth profiles
+```
+
+Скрипт `api/postman/run.sh` делает то же самое без управления Docker (если стек уже запущен):
+```bash
+./api/postman/run.sh
+```
+
+При первом запуске скрипт создаёт `env.json` из `env.example.json`. Переменные (токены, id) сохраняются между коллекциями автоматически (`--export-environment`). Файл `env.json` добавлен в `.gitignore`, так как содержит реальные токены.
 
 **Что покрыто:**
 
@@ -2107,9 +2129,9 @@ Postman-тесты разбиты по сервисам — каждая кол�
 - **Exercises** — RBAC (`POST` от user → 403), POST (admin, success + duplicate → 409 + validation → 400), GET (список, по id, not found → 404), PATCH (admin: difficulty, name), DELETE (admin: 204, повторный → 204, soft delete через `is_deleted=true`).
 - **Habits** — GET (пустой список), POST (success + validation → 400 + duplicate → 409), GET (список, по id, not found → 404), PATCH (name), POST `/complete` (сегодня → 204, повторно → идемпотентно, будущее → 400), GET `/completions` (история + invalid period → 400), DELETE `/complete` → `completed_today=false`, DELETE (204 + идемпотентный повтор + deleted not in list).
 
-**Как использовать:**
+**Как использовать (ручной прогон в Postman):**
 
-1. Открой Postman → **Environments** → **Import** → выбери `env.json`. Активируй его.
+1. Открой Postman → **Environments** → **Import** → выбери `env.json` (если его нет, скопируй `env.example.json` в `env.json`). Активируй его.
 2. Импортируй коллекции `setup_collection.json`, `auth_collection.json`, `profiles_collection.json`, `exercises_collection.json`, `habits_collection.json`.
 3. Прогоняй коллекции **по порядку** через **Run collection**:
    - Setup (генерирует email, регистрирует юзера, получает токены).
@@ -2118,7 +2140,7 @@ Postman-тесты разбиты по сервисам — каждая кол�
    - Exercises.
    - Habits.
 
-> 💡 `base_url` в `env.json` — `http://localhost:8081` (Docker, `task docker-up`). Для локального запуска Gateway (`task gateway:run`) поменяй на `http://localhost:8091`.
+> 💡 `base_url` в `env.example.json` — `http://localhost:8081` (Docker, `task docker-up`). Для локального запуска Gateway (`task gateway:run`) поменяй на `http://localhost:8091` в `env.json` перед прогоном.
 
 > 💡 Без прогона Setup остальные коллекции упадут — в environment не будет `accessToken` / `adminToken` / `userId`. При повторном прогоне сбрось `email` в environment, чтобы получить нового юзера (иначе Register упадёт с 409).
 
@@ -2151,7 +2173,7 @@ Postman-тесты разбиты по сервисам — каждая кол�
 
 - **Расположение:** `api/postman/rate_limit_collection.json`
 - **Покрытие:** 9 проверок (5 успешных попыток, 6-я → 429, Retry-After, 7-я → 429)
-- **Автоматизация:** pre-request скрипт генерирует уникальный email, чтобы каждый запуск имел своё ведро
+- **Автоматизация:** pre-request скрипт генерирует уникальный email, чтобы каждый запуск имел своё ведро. Запускается автоматически в `task postman` (в самом конце).
 
 **Что покрыто:**
 
