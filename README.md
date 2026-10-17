@@ -119,6 +119,7 @@ cp services/habits/.env.example services/habits/.env
 - `AUTH_GRPC_ADDR` — адрес Auth Service (по умолчанию `auth-service:50051`)
 - `PROFILES_GRPC_ADDR` — адрес Profiles Service (по умолчанию `profiles-service:50052`)
 - `EXERCISES_GRPC_ADDR` — адрес Exercises Service (по умолчанию `exercises-service:50053`)
+- `HABITS_GRPC_ADDR` — адрес Habits Service (по умолчанию `habits-service:50054`)
 - `GRPC_CLIENT_TLS_MODE` — режим TLS для исходящих gRPC-соединений (`disabled` / `insecure` / `verify`). По умолчанию `insecure` — для self-signed сертификатов в dev/staging.
 - `REDIS_PASSWORD` — пароль для Redis (rate limiting, можно тот же или отдельный)
 - `TRUSTED_PROXIES` — CIDR-список доверенных прокси через запятую. **В проде обязательно.** Если пусто, `X-Forwarded-For` игнорируется, и IP клиента берётся из `RemoteAddr` — а там в проде всегда IP Caddy, а не клиента. Следствие: rate limit по IP (`/refresh` — 20/мин) становится общим для всех клиентов сразу. В docker-стеке проекта значение — subnet docker-сети: `docker network inspect orange-team-microservices_default | grep Subnet`, обычно `172.18.0.0/16`. См. [ADR-016](docs/adr/016-network-security.md).
@@ -395,7 +396,7 @@ orange-team-microservices/
 │   │   ├── .env.enc                  # зашифрованный .env (SOPS + age)
 │   │   └── Dockerfile
 │   │
-│   ├── habits/                       # 🚧 В РАБОТЕ (шаги 1–4 из 6 закрыты, ADR-023)
+│   ├── habits/                       # ✅ ГОТОВ — Habits Service (трекер привычек)
 │   │   ├── cmd/                      # точка входа (main.go)
 │   │   ├── config/                   # конфигурация (envconfig)
 │   │   ├── internal/
@@ -497,7 +498,7 @@ orange-team-microservices/
 
 ### Что реализовано сейчас
 
-Актуально на текущий момент работают четыре сервиса: **Auth**, **Gateway**, **Profiles** и **Exercises**. Остальные (Habits, Workouts, Leaderboard) — в плане.
+Актуально на текущий момент работают пять сервисов: **Auth**, **Gateway**, **Profiles**, **Exercises** и **Habits**. Остальные (Workouts, Leaderboard) — в плане.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
@@ -1144,10 +1145,14 @@ curl http://localhost:8081/metrics
 | POST | `/exercises` | Создать упражнение → Exercises.CreateExercise | ✅ | **admin** |
 | PATCH | `/exercises/{exerciseId}` | Патч упражнения → Exercises.PatchExercise | ✅ | **admin** |
 | DELETE | `/exercises/{exerciseId}` | Soft delete → Exercises.DeleteExercise | ✅ | **admin** |
-| GET | `/habits` | Список привычек (заглушка) | ✅ | — |
-| POST | `/habits` | Создать привычку (заглушка) | ✅ | — |
-| POST | `/habits/{habitId}/complete` | Отметить выполнение (заглушка) | ✅ | — |
-| DELETE | `/habits/{habitId}` | Удалить привычку (заглушка) | ✅ | — |
+| GET | `/habits` | Список привычек со стриками → Habits.GetHabits | ✅ | — |
+| GET | `/habits/{habitId}` | Привычка по ID → Habits.GetHabit | ✅ | — |
+| POST | `/habits` | Создать привычку → Habits.CreateHabit | ✅ | — |
+| PATCH | `/habits/{habitId}` | Патч привычки → Habits.PatchHabit | ✅ | — |
+| DELETE | `/habits/{habitId}` | Soft delete → Habits.DeleteHabit | ✅ | — |
+| POST | `/habits/{habitId}/complete` | Отметить выполнение → Habits.CompleteHabit | ✅ | — |
+| DELETE | `/habits/{habitId}/complete` | Снять отметку → Habits.UncompleteHabit | ✅ | — |
+| GET | `/habits/{habitId}/completions` | История за период → Habits.GetCompletions | ✅ | — |
 | GET | `/workouts` | Список тренировок (заглушка) | ✅ | — |
 | POST | `/workouts` | Создать тренировку (заглушка) | ✅ | — |
 | GET | `/workouts/{workoutId}` | Тренировка по ID (заглушка) | ✅ | — |
@@ -1564,7 +1569,7 @@ Docker Compose v2.24+, SSH-доступ для деплоя.
 
 - **Pull Request в `main`** → запускается только **CI** (тесты, сборка, smoke-тест).
 - **Push в `main`** (после вливания PR) → запускается **CD** (сборка образов, публикация в GHCR, деплой на сервер). Собираются и деплоятся только изменённые сервисы (см. [ADR-021](docs/adr/021-independent-deployment.md)).
-- **Push git-тега `v*`** (например, `v0.1.0`) → релиз: собираются все 4 сервиса, публикуются с дополнительным тегом `:v0.1.0`. Semver.
+- **Push git-тега `v*`** (например, `v0.1.0`) → релиз: собираются все 5 сервисов, публикуются с дополнительным тегом `:v0.1.0`. Semver.
 
 ### CI (Continuous Integration)
 
@@ -1573,7 +1578,7 @@ Docker Compose v2.24+, SSH-доступ для деплоя.
 - Установка Go.
 - Кеширование модулей.
 - `go test -v ./... -short` — юнит-тесты.
-- `go build` для `auth`, `gateway`, `profiles` и `exercises` — smoke-тест сборки.
+- `go build` для `auth`, `gateway`, `profiles`, `exercises` и `habits` — smoke-тест сборки.
 - `go test -tags=integration -v -timeout=15m ./...` — интеграционные тесты (Testcontainers).
 
 Интеграционные тесты добавляют к CI ~3-5 минут. Если CI зелёный — PR готов к слиянию.
@@ -1582,7 +1587,7 @@ Docker Compose v2.24+, SSH-доступ для деплоя.
 
 При пуше в `main`:
 
-1. `changed-services` определяет по файлам, какие сервисы и/или инфраструктура изменились. Outputs: `auth_changed`, `gateway_changed`, `profiles_changed`, `exercises_changed`, `infra_changed`, `matrix` (JSON-массив сервисов на сборку).
+1. `changed-services` определяет по файлам, какие сервисы и/или инфраструктура изменились. Outputs: `auth_changed`, `gateway_changed`, `profiles_changed`, `exercises_changed`, `habits_changed`, `infra_changed`, `matrix` (JSON-массив сервисов на сборку).
 2. Собираются Docker-образы **только для изменённых сервисов** через **matrix** (параллельно). Если менялся `pkg/**` — все 4 сервиса. Если только `infra/**` — matrix пустая, сборка пропускается.
 3. Образы публикуются в **GitHub Container Registry** с тегами:
    - `:latest` — текущий прод.
@@ -2193,6 +2198,7 @@ task <service-name>:migrate-create -- create_users_table
 | `AUTH_GRPC_ADDR` | `auth-service:50051` | Адрес Auth Service для gRPC-вызовов |
 | `PROFILES_GRPC_ADDR` | `profiles-service:50052` | Адрес Profiles Service для gRPC-вызовов |
 | `EXERCISES_GRPC_ADDR` | `exercises-service:50053` | Адрес Exercises Service для gRPC-вызовов |
+| `HABITS_GRPC_ADDR` | `habits-service:50054` | Адрес Habits Service для gRPC-вызовов |
 | `GATEWAY_TIMEOUT` | `10s` | Таймаут gRPC-запросов к Auth, Profiles и Exercises |
 | `TRUSTED_PROXIES` | — | CIDR-список доверенных прокси через запятую. Пусто — X-Forwarded-For игнорируется |
 | `REDIS_ADDR` | `redis-gateway:6379` | Адрес Redis (свой инстанс) внутри Docker-сети |
