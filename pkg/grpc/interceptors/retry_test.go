@@ -14,9 +14,9 @@ import (
 
 func TestRetryInterceptor(t *testing.T) {
 	const (
-		methodInWhitelist  = "/test.Service/GetThing"
+		methodInWhitelist    = "/test.Service/GetThing"
 		methodOutOfWhitelist = "/test.Service/CreateThing"
-		target             = "test-service:50051"
+		target               = "test-service:50051"
 	)
 
 	// newInterceptor создаёт interceptor с быстрым backoff для тестов.

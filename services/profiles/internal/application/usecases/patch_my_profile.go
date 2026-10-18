@@ -58,7 +58,7 @@ func (uc *PatchMyProfile) Execute(ctx context.Context, patch domain.ProfilePatch
 
 		return nil
 	})
-	
+
 	if err != nil {
 		return domain.Profile{}, err
 	}
