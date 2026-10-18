@@ -42,6 +42,7 @@
 | `workout_score` | INTEGER NOT NULL DEFAULT 0 | Пересчитывается при мутации упражнений |
 | `intensity` | INTEGER | NULL, 1–10, задаёт пользователь |
 | `personal_score_coefficient` | INTEGER NOT NULL | Снапшот на момент создания (ADR-001) |
+| `deleted_at` | TIMESTAMPTZ | NULL пока не удалено (soft delete) |
 | `created_at` | TIMESTAMPTZ NOT NULL DEFAULT NOW() | |
 | `updated_at` | TIMESTAMPTZ NOT NULL DEFAULT NOW() | |
 
@@ -64,8 +65,8 @@
 | `updated_at` | TIMESTAMPTZ NOT NULL DEFAULT NOW() | |
 
 **Индексы:**
-- `idx_workouts_user_id` на `workouts(user_id)` — для `GetWorkouts` и `GetUserScore`.
-- `idx_workouts_user_status` на `workouts(user_id, status)` — для `GetUserScore` (только `completed`).
+- `idx_workouts_user_id_active` — partial, на `workouts(user_id) WHERE deleted_at IS NULL` — для `GetWorkouts`.
+- `idx_workouts_user_status_active` — partial, на `workouts(user_id, status) WHERE deleted_at IS NULL` — для `GetUserScore`.
 - `idx_workout_exercises_workout_id` на `workout_exercises(workout_id)` — для `GetWorkoutExercises`.
 
 **Почему `exercise_id` без FK.** Ссылка между сервисами. Exercises живёт в своей БД, в `workouts_db` его нет. Целостность обеспечивается на уровне usecase: перед INSERT Workouts зовёт `Exercises.GetExercise(id)` — если 404, возвращает `NotFound`.
@@ -148,6 +149,40 @@ coeff = clamp(1 + (BMI - 18) × 9 / 17, 1, 10)
 - Оба репозитория получают `NewWithTx(pool, tx)` — конструктор с транзакцией (или `NewRepository(pool)` для работы без транзакции).
 - В bootstrap создаются обычные репозитории на `*postgres.PgxPool`; `WithTx` создаёт временные с `tx` внутри callback.
 
+### 3.2. Soft delete (удаление тренировки)
+
+DELETE тренировки — **soft delete**. Строка не удаляется физически, в `workouts.workouts` ставится `deleted_at = NOW()`.
+
+**Зачем.** Пользователь может случайно удалить тренировку, где уже начислены очки и выполнены упражнения. Физическое удаление необратимо: `user_workout_score` мгновенно падает на `workout_score`, история упражнений теряется. Soft delete сохраняет данные — восстановление возможно (через SQL или будущий `RestoreWorkout`, если понадобится).
+
+**Что меняется в схеме.**
+- Колонка `workouts.workouts.deleted_at TIMESTAMPTZ` (NULL — активна).
+- Partial-индексы `WHERE deleted_at IS NULL` (см. п.1).
+
+**Что НЕ меняется.**
+- `workout_exercises` **не удаляются** при soft delete. `ON DELETE CASCADE` срабатывает только при физическом `DELETE` (например, в purge-скрипте, если появится).
+- `workout_score` при удалении **не сбрасывается** — остаётся как был. Просто перестаёт учитываться в `GetUserScore` (см. ниже).
+
+**Поведение по методам репозитория:**
+
+| Метод | Фильтр `deleted_at IS NULL`? | Обоснование |
+|---|---|---|
+| `WorkoutRepository.GetByID` | **Нет** | Возвращает и удалённые с флагом `is_deleted`. Аналогично `GetExercise` в ADR-008 |
+| `WorkoutRepository.GetByUserID` | **Да** | Список тренировок — только активные |
+| `WorkoutRepository.Update` | **Да** | Нельзя патчить удалённую |
+| `WorkoutRepository.MarkDeleted` | **Да** | Уже удалена → 0 rows → идемпотентность |
+| `WorkoutRepository.GetUserScore` | **Да** | Удалённые не входят в SUM |
+
+**Методы `WorkoutExerciseRepository` не меняются** — они работают со своей таблицей. Но usecase `CreateWorkoutExercise`, `PatchWorkoutExercise`, `DeleteWorkoutExercise`, `GetWorkoutExercises` **проверяют `workout.IsDeleted()`** и возвращают `ErrWorkoutNotFound`, если тренировка удалена. Мутации упражнений на удалённой тренировке запрещены.
+
+**Идемпотентность (ADR-007 F-3).** `DeleteWorkout.Execute` перехватывает `ErrWorkoutNotFound` от `MarkDeleted` и возвращает `nil`. Повторный DELETE — не ошибка.
+
+**Proto.** В `Workout` добавлено `bool is_deleted`. Gateway возвращает его клиенту — по аналогии с `is_deleted` в Exercises и Habits.
+
+**Gateway.** `GET /workouts/{id}` возвращает 200 с `is_deleted: true` для удалённой. `GET /workouts` (список) — только активные. `DELETE /workouts/{id}` возвращает 204 (идемпотентно). Аналогично Habits (ADR-023 п.6).
+
+**Purge не делаем.** Удалённые тренировки остаются в БД навсегда. Триггер для purge-скрипта (если появится) — рост БД > 10 ГБ или GDPR-требование «стереть всё через N дней».
+
 ### 4. Агрегат vs два репозитория
 
 `workouts` и `workout_exercises` — два агрегата. `workout_exercises` ссылается на `workouts` через FK, но это не «один большой агрегат». Следствия:
@@ -160,7 +195,7 @@ coeff = clamp(1 + (BMI - 18) × 9 / 17, 1, 10)
 
 ### 5. `user_workout_score` не хранится
 
-По ADR-002: `SUM(workout_score) WHERE user_id = ? AND status = 'completed'`, считается на лету.
+По ADR-002: `SUM(workout_score) WHERE user_id = ? AND status = 'completed' AND deleted_at IS NULL`, считается на лету.
 
 В Workouts это отдельный gRPC-метод **`GetUserScore() → int64`** (без параметра, `user_id` из metadata). Gateway в `GET /users/me` параллельно зовёт `Profiles.GetMyProfile` и `Workouts.GetUserScore`, склеивает в один ответ (ADR-002, ADR-009).
 
@@ -285,6 +320,8 @@ Leaderboard (когда появится) будет читать batch-мето
 - **Кэш `GetUserScore` в Redis** — по ADR-002, при росте нагрузки. Триггер — `GET /users/me` станет bottleneck.
 - **Пессимистичные блокировки (`FOR UPDATE`)** — не используем в Workouts, обоснование в п.3 (в Profiles/Exercises используем — ADR-007 F-2).
 - **`UpdateUserWorkoutScore`** — не переносим, `user_workout_score` не хранится (ADR-002).
+- **Purge удалённых тренировок** — soft delete оставляет строки навсегда. Триггер для purge-скрипта: рост БД > 10 ГБ или GDPR-требование.
+- **`RestoreWorkout`** — восстанавливать удалённые тренировки через API не планируем. `deleted_at` ставится, но обратной операции в proto нет. Если понадобится — отдельный usecase и RPC.
 
 ### 12. Совместимость с ADR-024 (будущая Kafka)
 

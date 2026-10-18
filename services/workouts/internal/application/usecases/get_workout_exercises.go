@@ -28,6 +28,13 @@ func NewGetWorkoutExercises(
 }
 
 func (uc *GetWorkoutExercises) Execute(ctx context.Context, workoutID uuid.UUID) ([]domain.WorkoutExercise, error) {
-	// TODO: userID, check ownership, ListByWorkout
+	// TODO:
+	//  1. userID from ctx
+	//  2. workout := workoutRepo.GetByID(ctx, userID, workoutID)
+	//     - если ErrWorkoutNotFound → domain.ErrWorkoutNotFound
+	//     - если workout.UserID() != userID → domain.ErrWorkoutNotFound
+	//  3. if workout.IsDeleted() { return domain.ErrWorkoutNotFound }  // soft delete
+	//  4. exercises := exerciseRepo.ListByWorkout(ctx, workoutID)
+	//     - возвращает make([]domain.WorkoutExercise, 0) при пустом списке (не nil)
 	return []domain.WorkoutExercise{}, nil
 }

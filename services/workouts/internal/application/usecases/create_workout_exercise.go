@@ -42,9 +42,11 @@ func (uc *CreateWorkoutExercise) Execute(
 ) (domain.WorkoutExercise, error) {
 	// TODO:
 	//  1. userID from ctx
-	//  2. workout := workoutRepo.GetByID; check ownership + CanModifyWorkoutExercise
-	//  3. exerciseInfo := exercisesClient.GetExercise(ctx, exerciseID)
-	//  4. construct domain.NewWorkoutExercise
-	//  5. workoutRepo.WithTx -> exerciseRepo.Create + recalculateScore
+	//  2. workout := workoutRepo.GetByID; check ownership
+	//  3. if workout.IsDeleted() { return ErrWorkoutNotFound }  // soft delete
+	//  4. if !workout.CanModifyWorkoutExercise() { return ErrCannotModifyWorkoutExercise }
+	//  5. exerciseInfo := exercisesClient.GetExercise(ctx, exerciseID)
+	//  6. construct domain.NewWorkoutExercise
+	//  7. workoutRepo.WithTx -> exerciseRepo.Create + recalculateScore
 	return domain.WorkoutExercise{}, nil
 }

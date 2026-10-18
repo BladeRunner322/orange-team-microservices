@@ -17,6 +17,7 @@ type Workout struct {
 	workoutScore             int
 	intensity                *Intensity
 	personalScoreCoefficient int
+	deletedAt                *time.Time
 	createdAt                time.Time
 	updatedAt                time.Time
 }
@@ -48,6 +49,7 @@ func RestoreWorkout(
 	workoutScore int,
 	intensity *Intensity,
 	personalScoreCoefficient int,
+	deletedAt *time.Time,
 	createdAt time.Time,
 	updatedAt time.Time,
 ) Workout {
@@ -61,6 +63,7 @@ func RestoreWorkout(
 		workoutScore:             workoutScore,
 		intensity:                intensity,
 		personalScoreCoefficient: personalScoreCoefficient,
+		deletedAt:                deletedAt,
 		createdAt:                createdAt,
 		updatedAt:                updatedAt,
 	}
@@ -76,6 +79,8 @@ func (w Workout) CompletedAt() *time.Time       { return w.completedAt }
 func (w Workout) WorkoutScore() int             { return w.workoutScore }
 func (w Workout) Intensity() *Intensity         { return w.intensity }
 func (w Workout) PersonalScoreCoefficient() int { return w.personalScoreCoefficient }
+func (w Workout) DeletedAt() *time.Time         { return w.deletedAt }
+func (w Workout) IsDeleted() bool               { return w.deletedAt != nil }
 func (w Workout) CreatedAt() time.Time          { return w.createdAt }
 func (w Workout) UpdatedAt() time.Time          { return w.updatedAt }
 
@@ -104,3 +109,14 @@ func (w *Workout) SetWorkoutScore(score int) {
 
 // SetVersion нужен для optimistic locking (используется в маппере при восстановлении).
 func (w *Workout) SetVersion(v int) { w.version = v }
+
+// MarkDeleted помечает тренировку удалённой (soft delete).
+// Если уже удалена — no-op (идемпотентность, ADR-007 F-3).
+func (w *Workout) MarkDeleted() {
+	if w.deletedAt != nil {
+		return
+	}
+	now := time.Now().UTC()
+	w.deletedAt = &now
+	w.updatedAt = now
+}
