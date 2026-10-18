@@ -27,6 +27,13 @@ func NewDeleteWorkoutExercise(
 }
 
 func (uc *DeleteWorkoutExercise) Execute(ctx context.Context, workoutID, workoutExerciseID uuid.UUID) error {
-	// TODO: userID, check ownership + CanModifyWorkoutExercise, WithTx -> Delete + recalculateScore
+	// TODO:
+	//  1. userID from ctx
+	//  2. workout := workoutRepo.GetByID(ctx, userID, workoutID)
+	//     - если ErrWorkoutNotFound → domain.ErrWorkoutNotFound
+	//     - если workout.UserID() != userID → domain.ErrWorkoutNotFound
+	//  3. if workout.IsDeleted() { return domain.ErrWorkoutNotFound }  // soft delete
+	//  4. if !workout.CanModifyWorkoutExercise() { return domain.ErrCannotModifyWorkoutExercise }
+	//  5. workoutRepo.WithTx -> exerciseRepo.Delete + recalculateScore
 	return nil
 }

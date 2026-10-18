@@ -17,15 +17,24 @@ type WorkoutModel struct {
 	WorkoutScore             int
 	Intensity                *int
 	PersonalScoreCoefficient int
+	DeletedAt                *time.Time
 	CreatedAt                time.Time
 	UpdatedAt                time.Time
 }
 
 func (m *WorkoutModel) Scan(row postgres.Row) error {
 	return row.Scan(
-		&m.ID, &m.Version, &m.UserID, &m.Status,
-		&m.StartedAt, &m.CompletedAt,
-		&m.WorkoutScore, &m.Intensity, &m.PersonalScoreCoefficient,
-		&m.CreatedAt, &m.UpdatedAt,
+		&m.ID,
+		&m.Version,
+		&m.UserID,
+		&m.Status,
+		&m.StartedAt,
+		&m.CompletedAt,
+		&m.WorkoutScore,
+		&m.Intensity,
+		&m.PersonalScoreCoefficient,
+		&m.DeletedAt,
+		&m.CreatedAt,
+		&m.UpdatedAt,
 	)
 }

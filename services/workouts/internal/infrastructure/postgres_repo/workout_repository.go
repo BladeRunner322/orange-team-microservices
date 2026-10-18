@@ -50,21 +50,27 @@ func (r *WorkoutRepository) GetByID(ctx context.Context, userID uuid.UUID, id uu
 }
 
 func (r *WorkoutRepository) GetByUserID(ctx context.Context, userID uuid.UUID) ([]domain.Workout, error) {
-	// TODO: SELECT ... WHERE user_id = $1 ORDER BY created_at DESC
+	// TODO: SELECT ... WHERE user_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC
 	return []domain.Workout{}, nil
 }
 
 func (r *WorkoutRepository) Update(ctx context.Context, workout domain.Workout) (domain.Workout, error) {
-	// TODO: UPDATE ... SET ..., version = version + 1 WHERE id = $1 AND version = $2 RETURNING ...
+	// TODO: UPDATE ... SET ..., version = version + 1
+	//       WHERE id = $1 AND version = $2 AND deleted_at IS NULL
+	//       RETURNING ...
 	return domain.Workout{}, nil
 }
 
-func (r *WorkoutRepository) Delete(ctx context.Context, userID uuid.UUID, id uuid.UUID) error {
-	// TODO: DELETE FROM workouts.workouts WHERE user_id = $1 AND id = $2
+func (r *WorkoutRepository) MarkDeleted(ctx context.Context, userID uuid.UUID, id uuid.UUID) error {
+	// TODO: UPDATE workouts.workouts
+	//       SET deleted_at = NOW(), updated_at = NOW()
+	//       WHERE user_id = $1 AND id = $2 AND deleted_at IS NULL
+	//       если RowsAffected == 0 → ErrWorkoutNotFound
 	return nil
 }
 
 func (r *WorkoutRepository) GetUserScore(ctx context.Context, userID uuid.UUID) (int64, error) {
-	// TODO: SELECT COALESCE(SUM(workout_score), 0) WHERE user_id = $1 AND status = 'completed'
+	// TODO: SELECT COALESCE(SUM(workout_score), 0) FROM workouts.workouts
+	//       WHERE user_id = $1 AND status = 'completed' AND deleted_at IS NULL
 	return 0, nil
 }

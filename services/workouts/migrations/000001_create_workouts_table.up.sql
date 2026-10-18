@@ -10,15 +10,18 @@ CREATE TABLE IF NOT EXISTS workouts.workouts (
     workout_score              INTEGER NOT NULL DEFAULT 0,
     intensity                  INTEGER,
     personal_score_coefficient INTEGER NOT NULL,
+    deleted_at                 TIMESTAMPTZ,
     created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_workouts_user_id
-    ON workouts.workouts (user_id);
+CREATE INDEX IF NOT EXISTS idx_workouts_user_id_active
+    ON workouts.workouts (user_id)
+    WHERE deleted_at IS NULL;
 
-CREATE INDEX IF NOT EXISTS idx_workouts_user_status
-    ON workouts.workouts (user_id, status);
+CREATE INDEX IF NOT EXISTS idx_workouts_user_status_active
+    ON workouts.workouts (user_id, status)
+    WHERE deleted_at IS NULL;
 
 ALTER TABLE workouts.workouts ADD CONSTRAINT chk_workouts_status
     CHECK (status IN ('planned', 'in_progress', 'completed', 'cancelled'));

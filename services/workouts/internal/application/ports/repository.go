@@ -18,7 +18,7 @@ type WorkoutRepository interface {
 	GetByID(ctx context.Context, userID uuid.UUID, id uuid.UUID) (domain.Workout, error)
 	GetByUserID(ctx context.Context, userID uuid.UUID) ([]domain.Workout, error)
 	Update(ctx context.Context, workout domain.Workout) (domain.Workout, error)
-	Delete(ctx context.Context, userID uuid.UUID, id uuid.UUID) error
+	MarkDeleted(ctx context.Context, userID uuid.UUID, id uuid.UUID) error
 	GetUserScore(ctx context.Context, userID uuid.UUID) (int64, error)
 }
 

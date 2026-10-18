@@ -38,9 +38,16 @@ func (uc *PatchWorkoutExercise) Execute(
 ) (domain.WorkoutExercise, error) {
 	// TODO:
 	//  1. userID from ctx
-	//  2. workout := workoutRepo.GetByID; check ownership + CanModifyWorkoutExercise
-	//  3. exercise := exerciseRepo.GetByID
-	//  4. exerciseInfo := exercisesClient.GetExercise(ctx, exercise.ExerciseID())
-	//  5. workoutRepo.WithTx -> exercise.ApplyPatch + exerciseRepo.Update + recalculateScore
+	//  2. workout := workoutRepo.GetByID(ctx, userID, workoutID)
+	//     - если ErrWorkoutNotFound → domain.ErrWorkoutNotFound
+	//     - если workout.UserID() != userID → domain.ErrWorkoutNotFound (не раскрываем существование)
+	//  3. if workout.IsDeleted() { return domain.ErrWorkoutNotFound }  // soft delete
+	//  4. if !workout.CanModifyWorkoutExercise() { return domain.ErrCannotModifyWorkoutExercise }
+	//  5. exercise := exerciseRepo.GetByID(ctx, workoutID, workoutExerciseID)
+	//     - если ErrWorkoutExerciseNotFound → domain.ErrWorkoutExerciseNotFound
+	//  6. exerciseInfo := exercisesClient.GetExercise(ctx, exercise.ExerciseID())
+	//     - если ошибка → ошибка клиента (Internal / NotFound по контексту)
+	//  7. exercise.ApplyPatch(patch, exerciseInfo.Type)
+	//  8. workoutRepo.WithTx -> exerciseRepo.Update + recalculateScore
 	return domain.WorkoutExercise{}, nil
 }

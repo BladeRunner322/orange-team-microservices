@@ -687,6 +687,7 @@ type Workout struct {
 	PersonalScoreCoefficient int32                  `protobuf:"varint,9,opt,name=personal_score_coefficient,json=personalScoreCoefficient,proto3" json:"personal_score_coefficient,omitempty"`
 	CreatedAt                *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt                *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	IsDeleted                bool                   `protobuf:"varint,12,opt,name=is_deleted,json=isDeleted,proto3" json:"is_deleted,omitempty"`
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
@@ -796,6 +797,13 @@ func (x *Workout) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *Workout) GetIsDeleted() bool {
+	if x != nil {
+		return x.IsDeleted
+	}
+	return false
 }
 
 type GetWorkoutsResponse struct {
@@ -1084,7 +1092,7 @@ const file_workouts_workouts_proto_rawDesc = "" +
 	"\x13workout_exercise_id\x18\x02 \x01(\tR\x11workoutExerciseId\"\x1f\n" +
 	"\x1dDeleteWorkoutExerciseResponse\",\n" +
 	"\x14GetUserScoreResponse\x12\x14\n" +
-	"\x05score\x18\x01 \x01(\x03R\x05score\"\xe8\x03\n" +
+	"\x05score\x18\x01 \x01(\x03R\x05score\"\x87\x04\n" +
 	"\aWorkout\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x05R\aversion\x12\x17\n" +
@@ -1100,7 +1108,9 @@ const file_workouts_workouts_proto_rawDesc = "" +
 	"created_at\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAtB\f\n" +
+	"updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x1d\n" +
+	"\n" +
+	"is_deleted\x18\f \x01(\bR\tisDeletedB\f\n" +
 	"\n" +
 	"_intensity\"D\n" +
 	"\x13GetWorkoutsResponse\x12-\n" +

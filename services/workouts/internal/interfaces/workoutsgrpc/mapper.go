@@ -13,6 +13,7 @@ func ToDomainID(raw string) (uuid.UUID, error) {
 
 func ToProtoWorkout(w domain.Workout) *workouts.Workout {
 	// TODO: заполнить поля, включая *timestamppb.Timestamp для started_at/completed_at/created_at/updated_at
+	//       и bool is_deleted из w.IsDeleted()
 	return nil
 }
 

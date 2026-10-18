@@ -90,6 +90,7 @@ message Workout {
   int32                     personal_score_coefficient = 9;
   google.protobuf.Timestamp created_at                 = 10;
   google.protobuf.Timestamp updated_at                 = 11;
+  bool                      is_deleted                 = 12;
 }
 
 message GetWorkoutsResponse {
