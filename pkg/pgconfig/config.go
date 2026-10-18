@@ -53,6 +53,6 @@ func MustLoad() Config {
 	if err != nil {
 		panic(fmt.Errorf("load postgres config: %w", err))
 	}
-	
+
 	return cfg
 }

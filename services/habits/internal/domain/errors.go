@@ -19,5 +19,5 @@ var (
 	// ErrUnauthenticated — нет user_id в context.
 	ErrUnauthenticated = errors.New("unauthenticated")
 
-	ErrHabitNameExists  = errors.New("habit with this name already exists")
+	ErrHabitNameExists = errors.New("habit with this name already exists")
 )

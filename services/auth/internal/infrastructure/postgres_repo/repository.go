@@ -63,7 +63,7 @@ func (r *Repository) Save(ctx context.Context, user domain.User) error {
 		}
 		return fmt.Errorf("save user: %w", err)
 	}
-	
+
 	return nil
 }
 

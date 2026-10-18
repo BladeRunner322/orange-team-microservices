@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package workouts;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "internal/gen/api/workouts";
+
+service WorkoutsService {
+  rpc CreateWorkout(CreateWorkoutRequest) returns (Workout);
+  rpc GetWorkout(GetWorkoutRequest) returns (Workout);
+  rpc GetWorkouts(GetWorkoutsRequest) returns (GetWorkoutsResponse);
+  rpc PatchWorkout(PatchWorkoutRequest) returns (Workout);
+  rpc DeleteWorkout(DeleteWorkoutRequest) returns (DeleteWorkoutResponse);
+
+  rpc CreateWorkoutExercise(CreateWorkoutExerciseRequest) returns (WorkoutExercise);
+  rpc GetWorkoutExercises(GetWorkoutExercisesRequest) returns (GetWorkoutExercisesResponse);
+  rpc PatchWorkoutExercise(PatchWorkoutExerciseRequest) returns (WorkoutExercise);
+  rpc DeleteWorkoutExercise(DeleteWorkoutExerciseRequest) returns (DeleteWorkoutExerciseResponse);
+
+  rpc GetUserScore(GetUserScoreRequest) returns (GetUserScoreResponse);
+}
+
+message CreateWorkoutRequest {}
+
+message GetWorkoutsRequest {}
+
+message GetUserScoreRequest {}
+
+message GetWorkoutRequest {
+  string id = 1;
+}
+
+message PatchWorkoutRequest {
+  string          id        = 1;
+  optional string status    = 2;
+  optional int32  intensity = 3;
+}
+
+message DeleteWorkoutRequest {
+  string id = 1;
+}
+
+message DeleteWorkoutResponse {}
+
+message CreateWorkoutExerciseRequest {
+  string         workout_id  = 1;
+  string         exercise_id = 2;
+  optional int32 weight      = 3;
+  optional int32 sets        = 4;
+  optional int32 reps        = 5;
+  optional int32 duration    = 6;
+  bool           completed   = 7;
+}
+
+message GetWorkoutExercisesRequest {
+  string workout_id = 1;
+}
+
+message PatchWorkoutExerciseRequest {
+  string         workout_id          = 1;
+  string         workout_exercise_id = 2;
+  optional int32 weight              = 3;
+  optional int32 sets                = 4;
+  optional int32 reps                = 5;
+  optional int32 duration            = 6;
+  optional bool  completed           = 7;
+}
+
+message DeleteWorkoutExerciseRequest {
+  string workout_id          = 1;
+  string workout_exercise_id = 2;
+}
+
+message DeleteWorkoutExerciseResponse {}
+
+message GetUserScoreResponse {
+  int64 score = 1;
+}
+
+message Workout {
+  string                    id                         = 1;
+  int32                     version                    = 2;
+  string                    user_id                    = 3;
+  string                    status                     = 4;
+  google.protobuf.Timestamp started_at                 = 5;
+  google.protobuf.Timestamp completed_at               = 6;
+  int32                     workout_score              = 7;
+  optional int32            intensity                  = 8;
+  int32                     personal_score_coefficient = 9;
+  google.protobuf.Timestamp created_at                 = 10;
+  google.protobuf.Timestamp updated_at                 = 11;
+}
+
+message GetWorkoutsResponse {
+  repeated Workout workouts = 1;
+}
+
+message WorkoutExercise {
+  string                    id            = 1;
+  int32                     version       = 2;
+  string                    workout_id    = 3;
+  string                    exercise_id   = 4;
+  int32                     difficulty    = 5;
+  optional int32            weight        = 6;
+  optional int32            sets          = 7;
+  optional int32            reps          = 8;
+  optional int32            duration      = 9;
+  bool                      completed     = 10;
+  int32                     exercise_load = 11;
+  google.protobuf.Timestamp created_at    = 12;
+  google.protobuf.Timestamp updated_at    = 13;
+}
+
+message GetWorkoutExercisesResponse {
+  repeated WorkoutExercise workout_exercises = 1;
+}

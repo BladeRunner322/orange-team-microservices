@@ -26,8 +26,8 @@ func NewCompletion(habitID uuid.UUID, date Date) Completion {
 // RestoreCompletion восстанавливает отметку из БД.
 func RestoreCompletion(habitID uuid.UUID, date Date, createdAt time.Time) Completion {
 	return Completion{
-		habitID: habitID,
-		date: date,
+		habitID:   habitID,
+		date:      date,
 		createdAt: createdAt,
 	}
 }
