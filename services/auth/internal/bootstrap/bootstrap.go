@@ -96,7 +96,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 
 	// ============================================================
 	// 6. gRPC СЕРВЕР С ИНТЕРСЕПТОРАМИ
-	// =
+	// ============================================================
 	s, err := grpcserver.New(grpcserver.Config{
 		EnableTLS:        cfg.EnableTLS,
 		TLSCertFile:      cfg.TLSCertFile,

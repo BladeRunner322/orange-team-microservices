@@ -149,9 +149,10 @@ func Load() (Config, error) {
 }
 
 func MustLoad() Config {
-	cfg, err := Load()
+	config, err := Load()
 	if err != nil {
-		panic(fmt.Errorf("load gateway config: %w", err))
+		err = fmt.Errorf("get service config %w", err)
+		panic(err)
 	}
-	return cfg
+	return config
 }
