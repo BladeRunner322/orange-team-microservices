@@ -2,18 +2,22 @@ package domain
 
 import "github.com/BladeRunner322/orange-team-microservices/pkg/nullable"
 
-// WorkoutPatch — патч тренировки. nil = не трогать.
+// WorkoutPatch — патч тренировки.
+//
+// Status — NOT NULL в БД, два состояния: не трогать (nil) / установить.
+// Intensity — nullable в БД, три состояния: не трогать (Set=false) /
+// сбросить в NULL (Set=true, Value=nil) / установить (Set=true, Value=&v).
 type WorkoutPatch struct {
-	Status    nullable.Nullable[Status]
-	Intensity nullable.Nullable[Intensity]
+    Status    *Status
+    Intensity nullable.Nullable[Intensity]
 }
 
 func NewWorkoutPatch(
-	status nullable.Nullable[Status],
-	intensity nullable.Nullable[Intensity],
+    status *Status,
+    intensity nullable.Nullable[Intensity],
 ) WorkoutPatch {
-	return WorkoutPatch{
-		Status:    status,
-		Intensity: intensity,
-	}
+    return WorkoutPatch{
+        Status:    status,
+        Intensity: intensity,
+    }
 }

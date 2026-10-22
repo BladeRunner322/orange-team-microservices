@@ -21,6 +21,10 @@ service WorkoutsService {
   rpc GetUserScore(GetUserScoreRequest) returns (GetUserScoreResponse);
 }
 
+message NullableInt32 {
+  optional int32 value = 1;
+}
+
 message CreateWorkoutRequest {}
 
 message GetWorkoutsRequest {}
@@ -34,7 +38,7 @@ message GetWorkoutRequest {
 message PatchWorkoutRequest {
   string          id        = 1;
   optional string status    = 2;
-  optional int32  intensity = 3;
+  NullableInt32   intensity = 3;
 }
 
 message DeleteWorkoutRequest {
