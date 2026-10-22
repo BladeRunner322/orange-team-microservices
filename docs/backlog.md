@@ -19,7 +19,9 @@
 | Шаг | Что | Ветка | Оценка |
 |---|---|---|---|
 | 1 | ADR-025 (схема БД, контракты, зависимости, score) | `docs/adr-025-workouts` | ~2 ч |
-| 2 | Domain (VO, сущности, ошибки, расчёт score) + тесты 100% | `feat/workouts-domain` | ~3 ч |
+| 2a | Domain: VO, сущности, state machine, `exercise_load`, ошибки | `feat/workouts-domain` | ~2 ч |
+| 2b | Domain: расчёт score и coefficient | `feat/workouts-score-coefficient` | ~1 ч |
+| 2c | Domain: unit-тесты (VO, сущности, `ApplyPatch`) | `feat/workouts-domain-tests` | ~2 ч |
 | 3 | Infrastructure (postgres_repo, mapper, интеграционные тесты) | `feat/workouts-infrastructure` | ~4 ч |
 | 4 | Usecases (Create, Get, Patch, Delete, Score) + моки + unit-тесты | `feat/workouts-usecases` | ~5 ч |
 | 5 | gRPC-сервер + bootstrap + config + main | `feat/workouts-grpc-and-bootstrap` | ~3 ч |

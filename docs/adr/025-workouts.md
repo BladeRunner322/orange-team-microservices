@@ -160,8 +160,24 @@ DELETE тренировки — **soft delete**. Строка не удаляе�
 - Partial-индексы `WHERE deleted_at IS NULL` (см. п.1).
 
 **Что НЕ меняется.**
-- `workout_exercises` **не удаляются** при soft delete. `ON DELETE CASCADE` срабатывает только при физическом `DELETE` (например, в purge-скрипте, если появится).
+- `workout_exercises` **не удаляются** при soft delete workout. `ON DELETE CASCADE` срабатывает только при физическом `DELETE` (например, в purge-скрипте, если появится).
 - `workout_score` при удалении **не сбрасывается** — остаётся как был. Просто перестаёт учитываться в `GetUserScore` (см. ниже).
+
+**`workout_exercises` — hard delete, не soft.**
+
+В отличие от `workouts`, `workout_exercises` — **компонент агрегата**, а не самостоятельная сущность. Поэтому:
+
+- На `workout_exercise_id` никто не ссылается — ни БД, ни другой сервис. Физическое удаление ничего не ломает.
+- История привязана к тренировке целиком, не к отдельному упражнению. `workout_score` пересчитывается при любой мутации: удалил упражнение и добавил обратно — тот же score.
+- Терминальные статусы `Workout` (`completed`, `cancelled`) блокируют мутации — финальный состав тренировки неизменяем (`CanModifyWorkoutExercise() == false`).
+- При физическом удалении `Workout` (purge, если понадобится) `ON DELETE CASCADE` сносит все его `workout_exercises` — консистентно, без «полуживых» записей.
+
+**Правило проекта (общее для всех сервисов):**
+
+> **Soft delete — для aggregate roots и сущностей со внешними ссылками** (`Exercise` — ADR-008, `Habit` — ADR-023, `Workout` — здесь).
+> **Hard delete — для компонентов агрегата** (`WorkoutExercise`).
+
+Это же правило определяет, что у `workout_exercises` нет `deleted_at` в схеме (п.1), нет `isDeleted` в domain (`workout_exercise.go`), нет `MarkDeleted` в репозитории — только `Delete`.
 
 **Поведение по методам репозитория:**
 
@@ -183,15 +199,25 @@ DELETE тренировки — **soft delete**. Строка не удаляе�
 
 **Purge не делаем.** Удалённые тренировки остаются в БД навсегда. Триггер для purge-скрипта (если появится) — рост БД > 10 ГБ или GDPR-требование «стереть всё через N дней».
 
-### 4. Агрегат vs два репозитория
+### 4. Агрегат `Workout` и его компоненты
 
-`workouts` и `workout_exercises` — два агрегата. `workout_exercises` ссылается на `workouts` через FK, но это не «один большой агрегат». Следствия:
+`Workout` — **aggregate root**. `WorkoutExercise` — **компонент агрегата** (entity внутри `Workout`), не самостоятельный aggregate root.
 
-- `WorkoutRepository` и `WorkoutExerciseRepository` — два разных репозитория.
-- `recalculateScore` — не метод репозитория, а helper в `usecases/common.go`: он координирует чтение из обоих репозиториев и обновление `workouts.workout_score`.
-- В монолите `WorkoutExercisesRepository.UpdateWorkoutScore` писал в `workouts` из репозитория `workout_exercises` — нарушение границ. В новом проекте: `WorkoutRepository.Update(ctx, workout)` с version.
+Из этого следуют три следствия, уже зафиксированные в других разделах:
 
-**Почему не один репозиторий.** У `workouts` есть свои инварианты (status machine), у `workout_exercises` — свои (тип-специфичные поля, `exercise_load`). Смешивание размывает ответственность и мешает тестировать.
+- **Hard delete для `workout_exercises`** (п.3.2) — компоненты удаляются физически, без soft delete. `ON DELETE CASCADE` срабатывает при удалении корня.
+- **Терминальные статусы `Workout` блокируют мутации компонентов** (п.9) — целостность агрегата важнее, чем удобство.
+- **`workout_exercises` не имеет `user_id`, `deleted_at`** — атрибуты корня, не компонента.
+
+**Почему два репозитория при одном агрегате.** Техническое удобство:
+
+- `workout_exercises` — отдельная таблица, отдельные SQL-запросы (`INSERT` / `UPDATE` / `DELETE` / `SELECT`).
+- В одном репозитории смешались бы методы работы с `workouts` (6 шт.) и с `workout_exercises` (5 шт.) — неудобно тестировать и ревьюить.
+- `WithTx` передаёт **оба** репозитория в callback (п.3.1) — атомарная мутация агрегата возможна.
+
+Это компромисс между DDD-чистотой (один репозиторий на агрегат) и практичностью (два репозитория по таблицам). Осознанный выбор — как в Exercises и Habits.
+
+**Про `recalculateScore`.** Не метод репозитория, а helper в `usecases/common.go`. Координирует чтение из обоих репозиториев и обновление `workouts.workout_score` внутри `WithTx`. В монолите `WorkoutExercisesRepository.UpdateWorkoutScore` писал в `workouts` из репозитория `workout_exercises` — нарушение границ. В новом проекте: `WorkoutRepository.Update(ctx, workout)` с version, вызывается из `recalculateScore`.
 
 ### 5. `user_workout_score` не хранится
 
@@ -236,10 +262,42 @@ WorkoutsService:
 
 **`GetUserScore`** — для агрегации в Gateway (`GET /users/me`). `user_id` берётся только из metadata (ставит Gateway из JWT), параметра в запросе нет. Аналог `Profiles.GetMyProfile`.
 
-**Proto:**
+**Proto для `GetUserScore`:**
 
 - `GetUserScoreRequest` — пустой (как `GetMyProfileRequest`).
 - `GetUserScoreResponse` — `int64 score`. `int64` — запас на случай больших агрегатов (за карьеру пользователь может накопить больше 2^31 очков).
+
+**`PatchWorkoutRequest.intensity` — `NullableInt32` wrapper.**
+
+Поле `intensity` в БД nullable (`INTEGER NULL`). Чтобы различать три состояния в PATCH-запросе, используется wrapper (по образцу Profiles, ADR-001):
+
+```protobuf
+message NullableInt32 {
+  optional int32 value = 1;
+}
+
+message PatchWorkoutRequest {
+  string        id        = 1;
+  optional string status  = 2;
+  NullableInt32 intensity = 3;
+}
+```
+
+Три состояния:
+
+- `intensity = nil` — «не трогать».
+- `intensity = NullableInt32{}` (пустой wrapper) — «сбросить в NULL».
+- `intensity = NullableInt32{value: 5}` — «установить 5».
+
+**`PatchWorkoutExerciseRequest` — без wrapper'ов.**
+
+В БД `weight`, `sets`, `reps`, `duration`, `completed` либо NOT NULL, либо NULL невалиден по типу упражнения (`ValidateForWorkoutExerciseType`). Третьего состояния нет — `optional int32` / `optional bool` достаточно (nil = «не трогать», не-nil = «установить»).
+
+В domain это отражено в типах патчей:
+
+- `WorkoutPatch.Status *Status` — NOT NULL в БД, два состояния.
+- `WorkoutPatch.Intensity nullable.Nullable[Intensity]` — nullable в БД, три состояния.
+- `WorkoutExercisePatch.Weight *Weight`, `Sets *Sets`, `Reps *Reps`, `Duration *Duration`, `Completed *bool` — без nullable, третье состояние невалидно.
 
 **Права доступа:** только свои очки. Других вариантов нет — параметра `user_id` в запросе нет, взять чужое невозможно.
 
@@ -290,8 +348,22 @@ Leaderboard (когда появится) будет читать batch-мето
 - `duration` — обязателен для duration-типа, NULL для weight-типа. **Допустимый диапазон: 1–86400** (24 часа). `1 ≤ duration ≤ 86400`. Валидация в VO `Duration`.
 - `completed` — можно поставить только когда тренировка в `in_progress`. Снять можно всегда (кроме `completed`/`cancelled` статуса тренировки).
 - Нельзя перевести тренировку в `completed`, если ни одно упражнение не отмечено completed.
+**Полная таблица переходов `Workout.Status`:**
+
+| Из | Можно в | Нельзя |
+|---|---|---|
+| `planned` | `in_progress`, `cancelled`, `planned` (self) | `completed` |
+| `in_progress` | `completed`, `cancelled`, `in_progress` (self) | `planned` |
+| `completed` | `completed` (self) | всё остальное |
+| `cancelled` | `cancelled` (self) | всё остальное |
+
+**Правила переходов:**
+
 - **Переход `planned → completed` запрещён.** Обязательный маршрут: `planned → in_progress → completed`. Гарантирует, что у завершённой тренировки `started_at` всегда заполнен (ставится при переходе в `in_progress`).
-- **Переход из `completed` / `cancelled` в любой другой статус запрещён.** Терминальные состояния.
+- **Переход `in_progress → planned` запрещён** — нельзя «отменить» начало тренировки.
+- **Переход в `cancelled` разрешён** из `planned` и `in_progress`.
+- **Переход из `completed` / `cancelled` в любой другой статус запрещён.** Терминальные состояния (метод `Status.IsTerminal() == true`).
+- **Self-transition — разрешён как idempotent no-op.** PATCH с тем же статусом возвращает 200, но ничего не меняет (включая `updated_at`). Это семантика REST PATCH: повторный запрос с тем же значением — no-op, не ошибка. Без этого пользователь, дважды кликнувший «Начать тренировку», получил бы `409 Conflict` на второй клик.
 
 Валидация числовых полей (`1 ≤ weight ≤ 1000`, `1 ≤ sets ≤ 100`, `1 ≤ reps ≤ 1000`, `1 ≤ duration ≤ 86400`) — в VO (`Weight`, `Sets`, `Reps`, `Duration`), тестируется в `domain`.
 
@@ -304,7 +376,7 @@ Leaderboard (когда появится) будет читать batch-мето
 
 В proto и HTTP-DTO полей `started_at` / `completed_at` в `PatchWorkout` **нет** — они управляются только доменом.
 
-Валидация типа-специфичных полей — `WorkoutExercise.ValidateForWorkoutExerciseType(type)`. Это доменное правило, тестируется в `domain`.
+Валидация типа-специфичных полей — `WorkoutExercise.validateForWorkoutExerciseType(type)` (приватный метод; вызывается из `NewWorkoutExercise` и `ApplyPatch`). Это доменное правило, тестируется в `domain`.
 
 ### 10. Идентификаторы и порты
 
@@ -322,6 +394,7 @@ Leaderboard (когда появится) будет читать batch-мето
 - **`UpdateUserWorkoutScore`** — не переносим, `user_workout_score` не хранится (ADR-002).
 - **Purge удалённых тренировок** — soft delete оставляет строки навсегда. Триггер для purge-скрипта: рост БД > 10 ГБ или GDPR-требование.
 - **`RestoreWorkout`** — восстанавливать удалённые тренировки через API не планируем. `deleted_at` ставится, но обратной операции в proto нет. Если понадобится — отдельный usecase и RPC.
+- **CB/Retry на клиентах к Profiles/Exercises — на шаге 4 (usecases).** В skeleton настроены только `GRPC_CLIENT_TLS_MODE` и `WORKOUTS_TIMEOUT` из env (по образцу Gateway). CB/Retry добавятся, когда появятся реальные вызовы — тогда можно осмысленно подобрать пороги (`CBMinRequests`, `CBErrorRate`) и per-target retry-политику (ADR-020 «Когда пересмотреть»).
 
 ### 12. Совместимость с ADR-024 (будущая Kafka)
 
@@ -382,11 +455,14 @@ Workouts разрабатывается **без** публикации собы
 
 ## Статус
 
-**Запланировано.** Ни один шаг ещё не начат.
+**В работе.**
 
-- ⬜ Domain (VO, сущности, score, coefficient) — покрыт unit-тестами.
+- ✅ Skeleton сервиса (proto, config, bootstrap, миграции, domain stubs) — PR `feat/workouts-skeleton-fixes`.
+- ✅ Domain: value objects, сущности (`Workout`, `WorkoutExercise`), state machine (`ApplyPatch`), ошибки, `exercise_load` — ветка `feat/workouts-domain`.
+- ⬜ Domain: `CalculateScore`, `CalculatePersonalScoreCoefficient`, `SaturatedScore`, `AddLoadWithLimit`, `DivideRoundUp` — отдельная ветка после мерджа `feat/workouts-domain`.
+- ⬜ Domain: unit-тесты (VO, сущности, `ApplyPatch`, state machine) — отдельная ветка после мерджа `feat/workouts-domain`.
 - ⬜ Infrastructure (postgres_repo, mappers, integration tests).
 - ⬜ Usecases (10 usecase + common + recalculateScore + моки + unit-тесты).
-- ⬜ gRPC-сервер + bootstrap + config + main.
+- ⬜ gRPC-сервер + bootstrap + config + main (реализация хендлеров).
 - ⬜ Compose + Taskfile + `.env.enc` + CI matrix.
 - ⬜ Gateway-хендлеры + маршруты + агрегация `/users/me`.
