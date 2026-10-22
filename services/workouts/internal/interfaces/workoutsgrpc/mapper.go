@@ -178,5 +178,5 @@ func ToProtoWorkoutExercises(es []domain.WorkoutExercise) []*workouts.WorkoutExe
 	return nil
 }
 
-var _ = fmt.Sprintf       // placeholder — удалить, когда появятся реальные вызовы fmt
-var _ = timestamppb.Now  // placeholder — удалить, когда появится реальный маппинг time.Time
+var _ = fmt.Sprintf     // placeholder — удалить, когда появятся реальные вызовы fmt
+var _ = timestamppb.Now // placeholder — удалить, когда появится реальный маппинг time.Time

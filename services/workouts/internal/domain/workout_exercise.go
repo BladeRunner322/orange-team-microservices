@@ -25,6 +25,10 @@ type WorkoutExercise struct {
 
 // NewWorkoutExercise создаёт новое упражнение в тренировке.
 // exercise_load вычисляется в зависимости от типа упражнения.
+//
+// Возвращает ошибку, если набор полей не соответствует exerciseType
+// (см. validateForWorkoutExerciseType). Уже-валидированные VO
+// (Weight, Sets, Reps, Duration) — ответственность вызывающего.
 func NewWorkoutExercise(
 	workoutID uuid.UUID,
 	exerciseID uuid.UUID,
@@ -36,12 +40,9 @@ func NewWorkoutExercise(
 	completed bool,
 	exerciseType ExerciseType,
 ) (WorkoutExercise, error) {
-	// TODO: валидация типа-специфичных полей через ValidateForWorkoutExerciseType
-	// TODO: расчёт exercise_load:
-	//   - weight: weight × reps × sets
-	//   - duration: duration
 	now := time.Now().UTC()
-	return WorkoutExercise{
+
+	e := WorkoutExercise{
 		id:         uuid.New(),
 		workoutID:  workoutID,
 		exerciseID: exerciseID,
@@ -53,7 +54,15 @@ func NewWorkoutExercise(
 		completed:  completed,
 		createdAt:  now,
 		updatedAt:  now,
-	}, nil
+	}
+
+	if err := e.validateForWorkoutExerciseType(exerciseType); err != nil {
+		return WorkoutExercise{}, err
+	}
+
+	e.recalculateExerciseLoad(exerciseType)
+
+	return e, nil
 }
 
 // RestoreWorkoutExercise восстанавливает упражнение из БД.
@@ -104,22 +113,88 @@ func (e WorkoutExercise) ExerciseLoad() int      { return e.exerciseLoad }
 func (e WorkoutExercise) CreatedAt() time.Time   { return e.createdAt }
 func (e WorkoutExercise) UpdatedAt() time.Time   { return e.updatedAt }
 
-// ApplyPatch применяет патч и пересчитывает exercise_load.
-func (e *WorkoutExercise) ApplyPatch(patch WorkoutExercisePatch, exerciseType ExerciseType) error {
-	// TODO: применить поля, пересчитать exercise_load
+// ApplyPatch применяет патч и пересчитывает exercise_load:
+// каждое поле с не-nil значением устанавливается,
+// nil означает «не трогать».
+//
+// Completed не зависит от типа и применяется всегда.
+// После применения — валидация итогового состояния и пересчёт нагрузки:
+// иначе usecase с recalculateScore получит score по старым данным.
+func (e *WorkoutExercise) ApplyPatch(patch WorkoutExercisePatch, t ExerciseType) error {
+	changed := false
+
+	if err := e.validateForWorkoutExerciseType(t); err != nil {
+		return err
+	}
+
+	if patch.Completed != nil {
+		e.completed = *patch.Completed
+		changed = true
+	}
+
+	switch t {
+	case ExerciseTypeWeight:
+		if patch.Weight != nil {
+			e.weight = patch.Weight
+			changed = true
+		}
+		if patch.Sets != nil {
+			e.sets = patch.Sets
+			changed = true
+		}
+		if patch.Reps != nil {
+			e.reps = patch.Reps
+			changed = true
+		}
+	case ExerciseTypeDuration:
+		if patch.Duration != nil {
+			e.duration = patch.Duration
+			changed = true
+		}
+	}
+
+	if changed {
+		e.recalculateExerciseLoad(t)
+		e.updatedAt = time.Now().UTC()
+	}
+
 	return nil
 }
 
-// ValidateForWorkoutExerciseType проверяет, что поля соответствуют типу упражнения.
-func (e WorkoutExercise) ValidateForWorkoutExerciseType(t ExerciseType) error {
-	// TODO: weight требует weight/sets/reps, duration требует duration
+// validateForWorkoutExerciseType проверяет, что набор полей
+// соответствует типу упражнения (ADR-025 п.9):
+//
+//	weight:   weight, sets, reps заданы; duration = nil
+//	duration: duration задан;          weight, sets, reps = nil
+func (e WorkoutExercise) validateForWorkoutExerciseType(t ExerciseType) error {
+	switch t {
+	case ExerciseTypeWeight:
+		if e.weight == nil || e.sets == nil || e.reps == nil || e.duration != nil {
+			return ErrInvalidWorkoutExerciseForType
+		}
+	case ExerciseTypeDuration:
+		if e.duration == nil || e.weight != nil || e.sets != nil || e.reps != nil {
+			return ErrInvalidWorkoutExerciseForType
+		}
+	default:
+		return ErrInvalidExerciseType
+	}
+
 	return nil
 }
 
-// recalculateExerciseLoad пересчитывает exercise_load по типу.
+// recalculateExerciseLoad пересчитывает exercise_load по типу (ADR-025 п.2):
+//
+//	weight:   weight × reps × sets
+//	duration: duration
+//
+// Вызывается только после validateForWorkoutExerciseType —
+// указатели гарантированно не nil, типы не противоречат полям.
 func (e *WorkoutExercise) recalculateExerciseLoad(t ExerciseType) {
-	// TODO: weight → weight × reps × sets, duration → duration
+	switch t {
+	case ExerciseTypeWeight:
+		e.exerciseLoad = e.weight.Int() * e.reps.Int() * e.sets.Int()
+	case ExerciseTypeDuration:
+		e.exerciseLoad = e.duration.Int()
+	}
 }
-
-// SetVersion нужен для optimistic locking.
-func (e *WorkoutExercise) SetVersion(v int) { e.version = v }

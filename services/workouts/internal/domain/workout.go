@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,7 +25,6 @@ type Workout struct {
 
 // NewWorkout создаёт новую тренировку (status = planned).
 func NewWorkout(userID uuid.UUID, personalScoreCoefficient int) Workout {
-	// TODO: validate userID != uuid.Nil, coefficient in [MinScoreCoefficient, MaxScoreCoefficient]
 	now := time.Now().UTC()
 	return Workout{
 		id:                       uuid.New(),
@@ -85,37 +85,96 @@ func (w Workout) CreatedAt() time.Time          { return w.createdAt }
 func (w Workout) UpdatedAt() time.Time          { return w.updatedAt }
 
 // CanModifyWorkoutExercise сообщает, можно ли менять упражнения в тренировке.
-// Возможно только в planned или in_progress (ADR-025 п.9).
+// Правило «нельзя в терминальном статусе» — ADR-025 п.9. Терминальность
+// определяет VO Status, здесь только бизнес-правило, которое её использует.
 func (w Workout) CanModifyWorkoutExercise() bool {
-	// TODO: status != completed && status != cancelled
-	return false
+	return !w.status.IsTerminal()
 }
 
 // ApplyPatch применяет патч. Включает state machine и инварианты started_at / completed_at.
 func (w *Workout) ApplyPatch(patch WorkoutPatch) error {
-	// TODO: state machine + инварианты:
-	//  - planned → in_progress → completed, без прыжков
-	//  - из completed / cancelled переходить нельзя
-	//  - при in_progress проставить startedAt = NOW, если пусто
-	//  - при completed проставить completedAt = NOW, если пусто
+	// 1. Валидация — до любых мутаций.
+	if patch.Status != nil {
+		next := *patch.Status
+		if next != w.status && !w.canTransitionTo(next) {
+			return fmt.Errorf("%w: %s → %s", ErrInvalidStatusTransition, w.status, next)
+		}
+	}
+
+	// 2. Применение полей — независимы друг от друга.
+	changed := false
+
+	if patch.Intensity.Set {
+		w.intensity = patch.Intensity.Value
+		changed = true
+	}
+
+	if patch.Status != nil && *patch.Status != w.status {
+		w.applyStatusTransition(*patch.Status)
+		changed = true
+	}
+
+	// 3. updated_at — только если реально что-то поменяли.
+	if changed {
+		w.updatedAt = time.Now().UTC()
+	}
+
 	return nil
+}
+
+// applyStatusTransition применяет переход к newStatus и выставляет
+// инварианты started_at / completed_at.
+//
+// Валидация перехода — снаружи (canTransitionTo). Метод вызывается
+// только для валидного перехода, newStatus != w.status.
+func (w *Workout) applyStatusTransition(newStatus Status) {
+	now := time.Now().UTC()
+
+	switch newStatus {
+	case StatusInProgress:
+		if w.startedAt == nil {
+			w.startedAt = &now
+		}
+	case StatusCompleted:
+		if w.completedAt == nil {
+			w.completedAt = &now
+		}
+	}
+
+	w.status = newStatus
+}
+
+// canTransitionTo — таблица разрешённых переходов (ADR-025 п.9).
+//
+//	planned     → in_progress, cancelled
+//	in_progress → completed, cancelled
+//	completed   → запрещено
+//	cancelled   → запрещено
+//
+// Self-transition (same → same) разрешён как idempotent no-op:
+// повторный PATCH с тем же статусом не должен возвращать ошибку.
+func (w Workout) canTransitionTo(next Status) bool {
+	// Self-transition — идемпотентный no-op (REST PATCH).
+	if w.status == next {
+		return true
+	}
+
+	if w.status.IsTerminal() {
+		return false
+	}
+
+	switch w.status {
+	case StatusPlanned:
+		return next == StatusInProgress || next == StatusCancelled
+	case StatusInProgress:
+		return next == StatusCompleted || next == StatusCancelled
+	default:
+		return false
+	}
 }
 
 // SetWorkoutScore обновляет score (вызывается из recalculateScore в usecases).
 func (w *Workout) SetWorkoutScore(score int) {
 	w.workoutScore = score
-	w.updatedAt = time.Now().UTC()
-}
-
-// SetVersion нужен для optimistic locking (используется в маппере при восстановлении).
-func (w *Workout) SetVersion(v int) { w.version = v }
-
-// MarkDeleted помечает тренировку удалённой (soft delete).
-// Если уже удалена — no-op (идемпотентность, ADR-007 F-3).
-func (w *Workout) MarkDeleted() {
-	if w.isDeleted {
-		return
-	}
-	w.isDeleted = true
 	w.updatedAt = time.Now().UTC()
 }
