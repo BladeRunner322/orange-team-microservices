@@ -1,29 +1,31 @@
 package domain
 
-import "github.com/BladeRunner322/orange-team-microservices/pkg/nullable"
-
-// WorkoutExercisePatch — патч упражнения. nil = не трогать.
+// WorkoutExercisePatch — патч упражнения.
+//
+// nil = не трогать. Третьего состояния «сбросить в NULL» нет:
+// для weight-типа weight/sets/reps обязательны, для duration-типа
+// duration обязателен (ValidateForWorkoutExerciseType).
 // exercise_id immutable — в патче отсутствует (ADR-025 п.9).
 type WorkoutExercisePatch struct {
-	Weight    nullable.Nullable[Weight]
-	Sets      nullable.Nullable[Sets]
-	Reps      nullable.Nullable[Reps]
-	Duration  nullable.Nullable[Duration]
-	Completed nullable.Nullable[bool]
+    Weight    *Weight
+    Sets      *Sets
+    Reps      *Reps
+    Duration  *Duration
+    Completed *bool
 }
 
 func NewWorkoutExercisePatch(
-	weight nullable.Nullable[Weight],
-	sets nullable.Nullable[Sets],
-	reps nullable.Nullable[Reps],
-	duration nullable.Nullable[Duration],
-	completed nullable.Nullable[bool],
+    weight *Weight,
+    sets *Sets,
+    reps *Reps,
+    duration *Duration,
+    completed *bool,
 ) WorkoutExercisePatch {
-	return WorkoutExercisePatch{
-		Weight:    weight,
-		Sets:      sets,
-		Reps:      reps,
-		Duration:  duration,
-		Completed: completed,
-	}
+    return WorkoutExercisePatch{
+        Weight:    weight,
+        Sets:      sets,
+        Reps:      reps,
+        Duration:  duration,
+        Completed: completed,
+    }
 }

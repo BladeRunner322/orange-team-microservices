@@ -6,11 +6,13 @@ import (
 
 func WorkoutModelToDomain(m WorkoutModel) (domain.Workout, error) {
 	// TODO: валидировать VO (Status, Intensity), вернуть RestoreWorkout
-	//       (в т.ч. передать m.DeletedAt в новый параметр)
+	//       с isDeleted := (m.DeletedAt != nil)
 	return domain.Workout{}, nil
 }
 
 func WorkoutDomainToModel(w domain.Workout) WorkoutModel {
-	// TODO: маппинг domain → model (в т.ч. w.DeletedAt())
+	// TODO: маппинг domain → model. DeletedAt всегда nil —
+	//       deleted_at управляется только через repo.MarkDeleted (SQL UPDATE),
+	//       как в Exercises/Habits (см. HabitDomainToModel).
 	return WorkoutModel{}
 }
