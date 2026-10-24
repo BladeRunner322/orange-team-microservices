@@ -459,8 +459,8 @@ Workouts разрабатывается **без** публикации собы
 
 - ✅ Skeleton сервиса (proto, config, bootstrap, миграции, domain stubs) — PR `feat/workouts-skeleton-fixes`.
 - ✅ Domain: value objects, сущности (`Workout`, `WorkoutExercise`), state machine (`ApplyPatch`), ошибки, `exercise_load` — ветка `feat/workouts-domain`.
-- ⬜ Domain: `CalculateScore`, `CalculatePersonalScoreCoefficient`, `SaturatedScore`, `AddLoadWithLimit`, `DivideRoundUp` — отдельная ветка после мерджа `feat/workouts-domain`.
-- ⬜ Domain: unit-тесты (VO, сущности, `ApplyPatch`, state machine) — отдельная ветка после мерджа `feat/workouts-domain`.
+- ✅ Domain: `CalculateScore`, `CalculatePersonalScoreCoefficient`, `saturatedScore` (приватная), `AddLoadWithLimit`, `DivideRoundUp` — ветка `feat/workouts-score-coefficient`.
+- ⬜ Domain: unit-тесты (VO, сущности, `ApplyPatch`, state machine) — ветка `feat/workouts-domain-tests`.
 - ⬜ Infrastructure (postgres_repo, mappers, integration tests).
 - ⬜ Usecases (10 usecase + common + recalculateScore + моки + unit-тесты).
 - ⬜ gRPC-сервер + bootstrap + config + main (реализация хендлеров).
