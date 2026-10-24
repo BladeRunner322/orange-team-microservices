@@ -37,14 +37,14 @@
 | 1 | ADR-025 (схема БД, контракты, зависимости, score) | `docs/adr-025-workouts` | ✅ | ~2 ч |
 | 2a | Domain: VO, сущности, state machine, `exercise_load`, ошибки | `feat/workouts-domain` | ✅ | ~2 ч |
 | 2b | Domain: расчёт score и coefficient | `feat/workouts-score-coefficient` | ✅ | ~1 ч |
-| 2c | Domain: unit-тесты (VO, сущности, `ApplyPatch`) | `feat/workouts-domain-tests` | 🚧 | ~2 ч |
+| 2c | Domain: unit-тесты (VO, сущности, `ApplyPatch`) | `feat/workouts-domain-tests` | ✅ | ~2 ч |
 | 3 | Infrastructure (postgres_repo, mapper, интеграционные тесты) | `feat/workouts-infrastructure` | ⬜ | ~4 ч |
 | 4 | Usecases (Create, Get, Patch, Delete, Score) + моки + unit-тесты | `feat/workouts-usecases` | ⬜ | ~5 ч |
 | 5 | gRPC-сервер + bootstrap + config + main | `feat/workouts-grpc-and-bootstrap` | ⬜ | ~3 ч |
 | 6 | Compose + Taskfile + .env.enc + CI matrix | `feat/workouts-compose-and-taskfile` | ⬜ | ~2 ч |
 | 7 | Gateway-хендлеры + маршруты + агрегация `/users/me` | `feat/workouts-gateway` | ⬜ | ~3 ч |
 
-Сделано: шаги 1, 2a, 2b (~5 ч). Осталось: шаги 2c–7 (~19 ч).
+Сделано: шаги 1, 2a, 2b, 2c (~7 ч). Осталось: шаги 3–7 (~17 ч).
 
 ## ⏭️ Следующее (после Workouts)
 
