@@ -89,7 +89,7 @@ score = min(10_000, round(10_000 × K × effective_load / (1 + K × effective_lo
 
 `exercise_load_i` и `difficulty_i` берутся из `workout_exercises` (обе колонки — снапшоты). `recalculateScore` не зовёт Exercises.
 
-Реализация — целочисленная (`saturatedScore`, `addLoadWithLimit`), чтобы избежать floating-point погрешностей и переполнения. Константы:
+Реализация — целочисленная (`CalculateScore`, `AddLoadWithLimit`, `DivideRoundUp` — публичные; `saturatedScore` — приватная, вызывается только из `CalculateScore`), чтобы избежать floating-point погрешностей и переполнения. Константы:
 - `maximumWorkoutScore = 10_000`
 - `scoreSaturationScale = 100_000`
 - `minimumExerciseDifficulty = 1`, `maximumExerciseDifficulty = 10`
