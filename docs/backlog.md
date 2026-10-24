@@ -6,8 +6,22 @@
 ## Правила
 
 - Каждая строка ссылается на ADR, где задача зафиксирована.
-- При закрытии задачи — обновить статус в ADR, потом удалить строку отсюда.
+- При закрытии задачи — обновить статус в ADR. Выполненное **не висит в «В работе»**: сервис переезжает в таблицу «Состояние сервисов» со статусом ✅, секция детализации удаляется.
+- Статусы: ✅ — сделано, 🚧 — в работе, ⬜ — не начато.
 - Задачи «по триггеру» не начинаем до наступления триггера — они здесь как напоминание.
+
+## 📊 Состояние сервисов
+
+| Сервис | Статус | ADR |
+|---|---|---|
+| Auth | ✅ | [ADR-001](adr/001-profile.md), [ADR-007](adr/007-known-issues.md) |
+| Gateway | ✅ | [ADR-009](adr/009-service-dependencies.md) |
+| Profiles | ✅ | [ADR-001](adr/001-profile.md) |
+| Exercises | ✅ | [ADR-008](adr/008-exercise-lifecycle.md) |
+| Habits | ✅ | [ADR-023](adr/023-habits.md) |
+| Workouts | 🚧 | [ADR-025](adr/025-workouts.md) |
+| Leaderboard | ⬜ | — |
+| Notification | ⬜ | [ADR-024](adr/024-kafka-notification.md) |
 
 ## 🚧 В работе
 
@@ -16,23 +30,31 @@
 Сервис тренировок. Полный контекст — [ADR-025](adr/025-workouts.md).
 Зовёт Profiles (коэффициент) и Exercises (справочник). Публикует `workout.completed` (ADR-024, в будущем).
 
-| Шаг | Что | Ветка | Оценка |
-|---|---|---|---|
-| 1 | ADR-025 (схема БД, контракты, зависимости, score) | `docs/adr-025-workouts` | ~2 ч |
-| 2a | Domain: VO, сущности, state machine, `exercise_load`, ошибки | `feat/workouts-domain` | ~2 ч |
-| 2b | Domain: расчёт score и coefficient | `feat/workouts-score-coefficient` | ~1 ч |
-| 2c | Domain: unit-тесты (VO, сущности, `ApplyPatch`) | `feat/workouts-domain-tests` | ~2 ч |
-| 3 | Infrastructure (postgres_repo, mapper, интеграционные тесты) | `feat/workouts-infrastructure` | ~4 ч |
-| 4 | Usecases (Create, Get, Patch, Delete, Score) + моки + unit-тесты | `feat/workouts-usecases` | ~5 ч |
-| 5 | gRPC-сервер + bootstrap + config + main | `feat/workouts-grpc-and-bootstrap` | ~3 ч |
-| 6 | Compose + Taskfile + .env.enc + CI matrix | `feat/workouts-compose-and-taskfile` | ~2 ч |
-| 7 | Gateway-хендлеры + маршруты + агрегация `/users/me` | `feat/workouts-gateway` | ~3 ч |
+**Когда все шаги ✅ — секция удаляется, Workouts переезжает в «Состояние сервисов» со статусом ✅.**
 
-Осталось: ~22 часа. После шага 7 Workouts готов к деплою в прод.
+| Шаг | Что | Ветка | Статус | Оценка |
+|---|---|---|---|---|
+| 1 | ADR-025 (схема БД, контракты, зависимости, score) | `docs/adr-025-workouts` | ✅ | ~2 ч |
+| 2a | Domain: VO, сущности, state machine, `exercise_load`, ошибки | `feat/workouts-domain` | ✅ | ~2 ч |
+| 2b | Domain: расчёт score и coefficient | `feat/workouts-score-coefficient` | ✅ | ~1 ч |
+| 2c | Domain: unit-тесты (VO, сущности, `ApplyPatch`) | `feat/workouts-domain-tests` | 🚧 | ~2 ч |
+| 3 | Infrastructure (postgres_repo, mapper, интеграционные тесты) | `feat/workouts-infrastructure` | ⬜ | ~4 ч |
+| 4 | Usecases (Create, Get, Patch, Delete, Score) + моки + unit-тесты | `feat/workouts-usecases` | ⬜ | ~5 ч |
+| 5 | gRPC-сервер + bootstrap + config + main | `feat/workouts-grpc-and-bootstrap` | ⬜ | ~3 ч |
+| 6 | Compose + Taskfile + .env.enc + CI matrix | `feat/workouts-compose-and-taskfile` | ⬜ | ~2 ч |
+| 7 | Gateway-хендлеры + маршруты + агрегация `/users/me` | `feat/workouts-gateway` | ⬜ | ~3 ч |
 
-### После Workouts — Kafka + Notification (ADR-024)
+Сделано: шаги 1, 2a, 2b (~5 ч). Осталось: шаги 2c–7 (~19 ч).
 
-Фиксируется в [ADR-024](adr/024-kafka-notification.md). Ждёт завершения Workouts.
+## ⏭️ Следующее (после Workouts)
+
+### Kafka + Notification (ADR-024)
+
+Фиксируется в [ADR-024](adr/024-kafka-notification.md). Начнётся после мерджа шага 7 Workouts — тогда переедет в «В работе».
+
+### Leaderboard
+
+ADR ещё нет. Появится, когда начнётся (после Kafka + Notification, либо параллельно — по триггеру).
 
 ## 🟡 Стоит сделать в ближайшее время
 

@@ -1,33 +1,71 @@
 package domain
 
 const (
-	MaximumWorkoutScore  = 10_000
+	// MaximumWorkoutScore — верхняя граница score, к которой формула
+	// стремится асимптотически (никогда не достигает).
+	MaximumWorkoutScore = 10_000
+
+	// ScoreSaturationScale — масштаб в формуле. Чем больше, тем медленнее
+	// кривая насыщается.
 	ScoreSaturationScale = 100_000
-	MaximumScaledLoad    = 100_000_000
+
+	// MaximumScaledLoad — предел scaledLoad = coefficient × effectiveLoad.
+	// При его достижении score выходит на насыщение, дальнейший набор
+	// очков невозможен.
+	MaximumScaledLoad = 100_000_000
 )
 
-// CalculateScore вычисляет итоговый score тренировки по формуле из ADR-025 п.2.
-// Целочисленная реализация, чтобы избежать floating-point погрешностей.
+// CalculateScore считает score тренировки по формуле ADR-025 п.2.
+//
+// effectiveLoad — Σ(exercise_load × difficulty) по completed упражнениям.
+// coefficient — personal_score_coefficient (снапшот, ADR-001).
+//
+// Целочисленная арифметика без float — детерминированный результат.
 func CalculateScore(effectiveLoad, coefficient int) int {
-	// TODO: реализовать saturatedScore
-	// score = min(10000, round(10000 * K * load / (1 + K * load))), где K = coef/100_000
-	return 0
+	return saturatedScore(effectiveLoad, coefficient)
 }
 
-// AddLoadWithLimit добавляет load×difficulty к текущему effectiveLoad с защитой от overflow.
+// saturatedScore — реализация формулы:
+//
+//	K = coefficient / ScoreSaturationScale
+//	score = round(MaximumWorkoutScore × K × effectiveLoad / (1 + K × effectiveLoad))
+//
+// После умножения числителя и знаменателя на ScoreSaturationScale:
+//
+//	score = round(MaximumWorkoutScore × scaledLoad / (ScoreSaturationScale + scaledLoad))
+//	где scaledLoad = coefficient × effectiveLoad
+//
+// При scaledLoad → ∞ score → MaximumWorkoutScore (асимптота).
+// При scaledLoad = MaximumScaledLoad score ≈ MaximumWorkoutScore, но строго меньше.
+//
+// Внутри — int64: MaximumWorkoutScore × MaximumScaledLoad = 10^12,
+// не помещается в int32 (защита для 32-битных платформ).
+func saturatedScore(effectiveLoad, coefficient int) int {
+	scaledLoad := int64(effectiveLoad) * int64(coefficient)
+	denominator := int64(ScoreSaturationScale) + scaledLoad
+	score := (int64(MaximumWorkoutScore)*scaledLoad + denominator/2) / denominator
+
+	return int(score)
+}
+
+// AddLoadWithLimit прибавляет load × difficulty к current, не превышая limit.
+// Защищает от переполнения при накоплении effectiveLoad в цикле по упражнениям.
+//
+// Возвращает min(current + load × difficulty, limit).
+// Если current уже равен limit — возвращает limit без умножения.
 func AddLoadWithLimit(current, load, difficulty, limit int) int {
-	// TODO: current + load×difficulty, cap по limit
-	return 0
+	if current >= limit || load > (limit-current)/difficulty {
+		return limit
+	}
+
+	return current + load*difficulty
 }
 
-// SaturatedScore — внутренняя часть формулы.
-func SaturatedScore(effectiveLoad, coefficient int) int {
-	// TODO
-	return 0
-}
-
-// DivideRoundUp — округление вверх.
+// DivideRoundUp — целочисленное деление с округлением вверх.
+// divisor должен быть > 0.
+//
+//	DivideRoundUp(10, 3) = 4
+//	DivideRoundUp(9, 3)  = 3
 func DivideRoundUp(value, divisor int) int {
-	// TODO
-	return 0
+	return (value + divisor - 1) / divisor
 }
