@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
 	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/application/ports"
@@ -26,12 +27,36 @@ func NewCreateWorkout(
 	}
 }
 
+// Execute создаёт новую тренировку.
+// Коэффициент считается из профиля пользователя (ADR-025 п.2)
+// и фиксируется как снапшот на момент создания (ADR-001).
 func (uc *CreateWorkout) Execute(ctx context.Context) (domain.Workout, error) {
-	// TODO:
-	//  1. userID := userIDFromContext(ctx)
-	//  2. profile := profilesClient.GetProfile(ctx, userID)
-	//  3. coeff := domain.CalculatePersonalScoreCoefficient(...)
-	//  4. workout := domain.NewWorkout(userID, coeff)
-	//  5. return workoutRepo.Create(ctx, workout)
-	return domain.Workout{}, nil
+	log := uc.logger.With("operation", "CreateWorkout")
+
+	userID, err := userIDFromContext(ctx, log)
+	if err != nil {
+		return domain.Workout{}, err
+	}
+
+	profile, err := uc.profilesClient.GetProfile(ctx, userID)
+	if err != nil {
+		log.Error("failed to get user profile", "error", err)
+		return domain.Workout{}, fmt.Errorf("get user profile: %w", err)
+	}
+
+	coeff := domain.CalculatePersonalScoreCoefficient(domain.UserProfileData{
+		Sex:         profile.Sex,
+		WeightGrams: profile.WeightGrams,
+		HeightCM:    profile.HeightCM,
+	})
+
+	workout := domain.NewWorkout(userID, coeff)
+
+	created, err := uc.workoutRepo.Create(ctx, workout)
+	if err != nil {
+		log.Error("failed to create workout", "error", err)
+		return domain.Workout{}, fmt.Errorf("create workout: %w", err)
+	}
+
+	return created, nil
 }
