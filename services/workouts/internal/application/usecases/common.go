@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/BladeRunner322/orange-team-microservices/pkg/ctxkeys"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
@@ -34,12 +35,43 @@ func recalculateScore(
 	userID uuid.UUID,
 	workoutID uuid.UUID,
 ) error {
-	// TODO:
-	//  1. workout := workoutRepo.GetByID(ctx, userID, workoutID)
-	//  2. exercises := exerciseRepo.ListByWorkout(ctx, workoutID)
-	//  3. effectiveLoad = Σ AddLoadWithLimit(...) по completed
-	//  4. score := CalculateScore(effectiveLoad, workout.PersonalScoreCoefficient())
-	//  5. workout.SetWorkoutScore(score)
-	//  6. workoutRepo.Update(ctx, workout)
+	workout, err := workoutRepo.GetByID(ctx, userID, workoutID)
+	if err != nil {
+		return fmt.Errorf("get workout for score: %w", err)
+	}
+
+	exercises, err := exerciseRepo.ListByWorkout(ctx, workoutID)
+	if err != nil {
+		return fmt.Errorf("list workout exercises for score: %w", err)
+	}
+
+	maximumEffectiveLoad := domain.DivideRoundUp(
+		domain.MaximumScaledLoad,
+		workout.PersonalScoreCoefficient(),
+	)
+	effectiveLoad := 0
+
+	for _, ex := range exercises {
+		if !ex.Completed() {
+			continue
+		}
+		effectiveLoad = domain.AddLoadWithLimit(
+			effectiveLoad,
+			ex.ExerciseLoad(),
+			ex.Difficulty().Int(),
+			maximumEffectiveLoad,
+		)
+		if effectiveLoad == maximumEffectiveLoad {
+			break
+		}
+	}
+
+	score := domain.CalculateScore(effectiveLoad, workout.PersonalScoreCoefficient())
+	workout.SetWorkoutScore(score)
+
+	if _, err := workoutRepo.Update(ctx, workout); err != nil {
+		return fmt.Errorf("update workout score: %w", err)
+	}
+
 	return nil
 }

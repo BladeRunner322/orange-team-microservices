@@ -13,6 +13,7 @@ var (
 	ErrInvalidStatusTransition     = errors.New("invalid status transition")
 	ErrCannotCompleteEmptyWorkout  = errors.New("cannot complete workout with no completed exercises")
 	ErrCannotModifyWorkoutExercise = errors.New("cannot modify workout exercise in terminal status")
+	ErrCannotMarkExerciseCompleted = errors.New("can only mark exercise as completed when workout is in progress")
 )
 
 // WorkoutExercise — бизнес-правила компонента агрегата.
