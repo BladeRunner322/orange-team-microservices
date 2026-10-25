@@ -37,7 +37,7 @@ func (uc *GetWorkout) Execute(ctx context.Context, id uuid.UUID) (domain.Workout
 			log.Warn("workout not found")
 			return domain.Workout{}, domain.ErrWorkoutNotFound
 		}
-		
+
 		log.Error("failed to get workout", "error", err)
 		return domain.Workout{}, fmt.Errorf("get workout: %w", err)
 	}
