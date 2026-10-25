@@ -21,7 +21,7 @@ func TestCreateWorkout_Execute(t *testing.T) {
 	}
 
 	strPtr := func(v string) *string { return &v }
-	intPtr := func(v int) *int       { return &v }
+	intPtr := func(v int) *int { return &v }
 
 	t.Run("успешно создаёт тренировку с полным профилем", func(t *testing.T) {
 		userID := uuid.New()
