@@ -26,7 +26,7 @@ func TestGetUserScore_Execute(t *testing.T) {
 		return domain.RestoreWorkout(
 			uuid.New(), 0, userID, domain.StatusCompleted,
 			nil, nil, score, nil, 5,
-			false, now, now,
+			false, now, &now,
 		)
 	}
 

@@ -20,7 +20,7 @@ type WorkoutExercise struct {
 	completed    bool
 	exerciseLoad int
 	createdAt    time.Time
-	updatedAt    time.Time
+	updatedAt    *time.Time
 }
 
 // NewWorkoutExercise создаёт новое упражнение в тренировке.
@@ -53,7 +53,7 @@ func NewWorkoutExercise(
 		duration:   duration,
 		completed:  completed,
 		createdAt:  now,
-		updatedAt:  now,
+		updatedAt:  nil,
 	}
 
 	if err := e.validateForWorkoutExerciseType(exerciseType); err != nil {
@@ -79,7 +79,7 @@ func RestoreWorkoutExercise(
 	completed bool,
 	exerciseLoad int,
 	createdAt time.Time,
-	updatedAt time.Time,
+	updatedAt *time.Time,
 ) WorkoutExercise {
 	return WorkoutExercise{
 		id:           id,
@@ -111,7 +111,7 @@ func (e WorkoutExercise) Duration() *Duration    { return e.duration }
 func (e WorkoutExercise) Completed() bool        { return e.completed }
 func (e WorkoutExercise) ExerciseLoad() int      { return e.exerciseLoad }
 func (e WorkoutExercise) CreatedAt() time.Time   { return e.createdAt }
-func (e WorkoutExercise) UpdatedAt() time.Time   { return e.updatedAt }
+func (e WorkoutExercise) UpdatedAt() *time.Time  { return e.updatedAt }
 
 // ApplyPatch применяет патч и пересчитывает exercise_load:
 // каждое поле с не-nil значением устанавливается,
@@ -155,7 +155,8 @@ func (e *WorkoutExercise) ApplyPatch(patch WorkoutExercisePatch, t ExerciseType)
 
 	if changed {
 		e.recalculateExerciseLoad(t)
-		e.updatedAt = time.Now().UTC()
+		now := time.Now().UTC()
+		e.updatedAt = &now
 	}
 
 	return nil

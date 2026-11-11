@@ -21,7 +21,7 @@ type WorkoutExerciseModel struct {
 	Completed    bool
 	ExerciseLoad int
 	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	UpdatedAt    *time.Time
 }
 
 // Scan читает строку из БД в модель.

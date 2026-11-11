@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS workouts.workouts (
     personal_score_coefficient INTEGER NOT NULL,
     deleted_at                 TIMESTAMPTZ,
     created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at                 TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_workouts_user_id_active

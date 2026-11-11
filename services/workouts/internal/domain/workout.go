@@ -20,7 +20,7 @@ type Workout struct {
 	personalScoreCoefficient int
 	isDeleted                bool
 	createdAt                time.Time
-	updatedAt                time.Time
+	updatedAt                *time.Time
 }
 
 // NewWorkout создаёт новую тренировку (status = planned).
@@ -35,7 +35,7 @@ func NewWorkout(userID uuid.UUID, personalScoreCoefficient int) Workout {
 		personalScoreCoefficient: personalScoreCoefficient,
 		isDeleted:                false,
 		createdAt:                now,
-		updatedAt:                now,
+		updatedAt:                nil,
 	}
 }
 
@@ -52,7 +52,7 @@ func RestoreWorkout(
 	personalScoreCoefficient int,
 	isDeleted bool,
 	createdAt time.Time,
-	updatedAt time.Time,
+	updatedAt *time.Time,
 ) Workout {
 	return Workout{
 		id:                       id,
@@ -82,7 +82,7 @@ func (w Workout) Intensity() *Intensity         { return w.intensity }
 func (w Workout) PersonalScoreCoefficient() int { return w.personalScoreCoefficient }
 func (w Workout) IsDeleted() bool               { return w.isDeleted }
 func (w Workout) CreatedAt() time.Time          { return w.createdAt }
-func (w Workout) UpdatedAt() time.Time          { return w.updatedAt }
+func (w Workout) UpdatedAt() *time.Time         { return w.updatedAt }
 
 // CanModifyWorkoutExercise сообщает, можно ли менять упражнения в тренировке.
 // Правило «нельзя в терминальном статусе» — ADR-025 п.9. Терминальность
@@ -116,7 +116,8 @@ func (w *Workout) ApplyPatch(patch WorkoutPatch) error {
 
 	// 3. updated_at — только если реально что-то поменяли.
 	if changed {
-		w.updatedAt = time.Now().UTC()
+		now := time.Now().UTC()
+		w.updatedAt = &now
 	}
 
 	return nil
@@ -176,5 +177,6 @@ func (w Workout) canTransitionTo(next Status) bool {
 // SetWorkoutScore обновляет score (вызывается из recalculateScore в usecases).
 func (w *Workout) SetWorkoutScore(score int) {
 	w.workoutScore = score
-	w.updatedAt = time.Now().UTC()
+	now := time.Now().UTC()
+	w.updatedAt = &now
 }

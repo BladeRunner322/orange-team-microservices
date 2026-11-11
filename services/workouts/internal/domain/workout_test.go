@@ -27,6 +27,7 @@ func newWorkoutInStatus(
 	startedAt, completedAt *time.Time,
 ) Workout {
 	t.Helper()
+	now := time.Now().UTC()
 	return RestoreWorkout(
 		uuid.New(),
 		0,
@@ -38,8 +39,8 @@ func newWorkoutInStatus(
 		nil,
 		5,
 		false,
-		time.Now().UTC(),
-		time.Now().UTC(),
+		now,
+		&now,
 	)
 }
 
@@ -67,10 +68,9 @@ func TestNewWorkout(t *testing.T) {
 		assert.False(t, w.IsDeleted())
 	})
 
-	t.Run("createdAt и updatedAt заполнены", func(t *testing.T) {
+	t.Run("createdAt заполнен, updatedAt nil", func(t *testing.T) {
 		assert.False(t, w.CreatedAt().IsZero())
-		assert.False(t, w.UpdatedAt().IsZero())
-		assert.Equal(t, w.CreatedAt(), w.UpdatedAt())
+		assert.Nil(t, w.UpdatedAt())
 	})
 
 	t.Run("id уникален между вызовами", func(t *testing.T) {
@@ -93,7 +93,7 @@ func TestRestoreWorkout(t *testing.T) {
 			id, 3, userID, StatusCompleted,
 			&startedAt, &completedAt,
 			100, &intensity, 8,
-			false, createdAt, updatedAt,
+			false, createdAt, &updatedAt,
 		)
 
 		assert.Equal(t, id, w.ID())
@@ -108,7 +108,8 @@ func TestRestoreWorkout(t *testing.T) {
 		assert.Equal(t, 8, w.PersonalScoreCoefficient())
 		assert.False(t, w.IsDeleted())
 		assert.Equal(t, createdAt, w.CreatedAt())
-		assert.Equal(t, updatedAt, w.UpdatedAt())
+		require.NotNil(t, w.UpdatedAt())
+		assert.Equal(t, updatedAt, *w.UpdatedAt())
 	})
 
 	t.Run("удалённая тренировка", func(t *testing.T) {
@@ -116,7 +117,7 @@ func TestRestoreWorkout(t *testing.T) {
 			id, 0, userID, StatusPlanned,
 			nil, nil,
 			0, nil, 5,
-			true, createdAt, updatedAt,
+			true, createdAt, &updatedAt,
 		)
 
 		assert.True(t, w.IsDeleted())
@@ -153,18 +154,18 @@ func TestWorkout_CanModifyWorkoutExercise(t *testing.T) {
 func TestWorkout_ApplyPatch_Intensity(t *testing.T) {
 	t.Run("пустой патч — nothing changed", func(t *testing.T) {
 		w := newTestWorkout(t)
-		beforeUpdatedAt := w.UpdatedAt()
+		require.Nil(t, w.UpdatedAt()) // новая тренировка — updatedAt nil
 
 		err := w.ApplyPatch(NewWorkoutPatch(nil, nullableIntensityNone()))
 		require.NoError(t, err)
 
 		assert.Nil(t, w.Intensity())
-		assert.Equal(t, beforeUpdatedAt, w.UpdatedAt(), "updatedAt не должен обновляться")
+		assert.Nil(t, w.UpdatedAt(), "updatedAt не должен обновляться")
 	})
 
 	t.Run("установить intensity", func(t *testing.T) {
 		w := newTestWorkout(t)
-		beforeUpdatedAt := w.UpdatedAt()
+		require.Nil(t, w.UpdatedAt()) // до патча — nil
 		i, _ := NewIntensity(7)
 
 		err := w.ApplyPatch(NewWorkoutPatch(nil, nullableIntensitySet(&i)))
@@ -172,7 +173,7 @@ func TestWorkout_ApplyPatch_Intensity(t *testing.T) {
 
 		require.NotNil(t, w.Intensity())
 		assert.Equal(t, 7, w.Intensity().Int())
-		assert.True(t, w.UpdatedAt().After(beforeUpdatedAt))
+		require.NotNil(t, w.UpdatedAt()) // после патча — non-nil
 	})
 
 	t.Run("сбросить intensity в nil", func(t *testing.T) {
@@ -236,7 +237,10 @@ func TestWorkout_ApplyPatch_StatusTransitions(t *testing.T) {
 			assert.Equal(t, tt.wantStatus, w.Status())
 
 			if tt.from != tt.to {
-				assert.True(t, w.UpdatedAt().After(beforeUpdatedAt))
+				require.NotNil(t, w.UpdatedAt())
+				if beforeUpdatedAt != nil {
+					assert.True(t, w.UpdatedAt().After(*beforeUpdatedAt))
+				}
 			} else {
 				assert.Equal(t, beforeUpdatedAt, w.UpdatedAt(), "self-transition — no-op, updatedAt не трогается")
 			}
@@ -284,11 +288,12 @@ func TestWorkout_ApplyPatch_CompletedAtInvariant(t *testing.T) {
 		existing := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 		started := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
+		now := time.Now().UTC()
 		w := RestoreWorkout(
 			uuid.New(), 0, uuid.New(), StatusCompleted,
 			&started, &existing,
 			0, nil, 5, false,
-			time.Now().UTC(), time.Now().UTC(),
+			now, &now,
 		)
 
 		next := StatusCompleted
@@ -336,13 +341,12 @@ func TestWorkout_ApplyPatch_Atomicity(t *testing.T) {
 func TestWorkout_SetWorkoutScore(t *testing.T) {
 	t.Run("устанавливает score", func(t *testing.T) {
 		w := newTestWorkout(t)
-		beforeUpdatedAt := w.UpdatedAt()
-		time.Sleep(1 * time.Millisecond) // чтобы updatedAt гарантированно отличался
+		require.Nil(t, w.UpdatedAt())
 
 		w.SetWorkoutScore(1500)
 
 		assert.Equal(t, 1500, w.WorkoutScore())
-		assert.True(t, w.UpdatedAt().After(beforeUpdatedAt))
+		require.NotNil(t, w.UpdatedAt())
 	})
 
 	t.Run("перезаписывает предыдущее значение", func(t *testing.T) {

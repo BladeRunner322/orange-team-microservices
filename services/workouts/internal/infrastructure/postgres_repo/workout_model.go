@@ -20,7 +20,7 @@ type WorkoutModel struct {
 	PersonalScoreCoefficient int
 	DeletedAt                *time.Time
 	CreatedAt                time.Time
-	UpdatedAt                time.Time
+	UpdatedAt                *time.Time
 }
 
 // Scan читает строку из БД в модель.
