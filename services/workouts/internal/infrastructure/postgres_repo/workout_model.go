@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// WorkoutModel — модель для таблицы workouts.workouts.
 type WorkoutModel struct {
 	ID                       uuid.UUID
 	Version                  int
@@ -22,6 +23,7 @@ type WorkoutModel struct {
 	UpdatedAt                time.Time
 }
 
+// Scan читает строку из БД в модель.
 func (m *WorkoutModel) Scan(row postgres.Row) error {
 	return row.Scan(
 		&m.ID,
