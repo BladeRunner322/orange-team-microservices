@@ -398,7 +398,7 @@ Leaderboard (когда появится) будет читать batch-мето
 - **`UpdateUserWorkoutScore`** — не переносим, `user_workout_score` не хранится (ADR-002).
 - **Purge удалённых тренировок** — soft delete оставляет строки навсегда. Триггер для purge-скрипта: рост БД > 10 ГБ или GDPR-требование.
 - **`RestoreWorkout`** — восстанавливать удалённые тренировки через API не планируем. `deleted_at` ставится, но обратной операции в proto нет. Если понадобится — отдельный usecase и RPC.
-- **CB/Retry на клиентах к Profiles/Exercises — на шаге 4e (после реализации gRPC-клиентов).** В skeleton настроены только `GRPC_CLIENT_TLS_MODE` и `WORKOUTS_TIMEOUT` из env (по образцу Gateway). CB/Retry добавятся, когда появятся реальные вызовы — тогда можно осмысленно подобрать пороги (`CBMinRequests`, `CBErrorRate`) и per-target retry-политику (ADR-020 «Когда пересмотреть»).
+- **CB/Retry на клиентах к Profiles/Exercises — ✅ реализовано (шаг 4e).** Параметры в `services/workouts/.env`: `WORKOUTS_CB_*` и `WORKOUTS_RETRY_*`. Whitelist read-only методов — общий для обоих клиентов (`WORKOUTS_RETRY_IDEMPOTENT_METHODS`), содержит `/profiles.ProfilesService/GetProfile` и `/exercises.ExercisesService/GetExercise`. Пороги — дефолты Gateway (ADR-020); пересмотр — после недели наблюдений.
 
 ### 12. Совместимость с ADR-024 (будущая Kafka)
 
