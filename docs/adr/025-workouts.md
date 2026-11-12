@@ -240,6 +240,8 @@ Habits не зовёт другие сервисы (ADR-023). Workouts — зо�
 
 Циклических зависимостей нет (ADR-009). Gateway остаётся единственной точкой входа.
 
+**Где реализуются клиенты.** `infrastructure/clients/` — отдельный коммит внутри шага «Infrastructure» (ветка `feat/workouts-infrastructure`), а не в шаге 5. Обоснование: клиенты — это infrastructure-слой (адаптеры к внешним системам), как и `postgres_repo`. Шаг 5 (`gRPC-сервер + bootstrap + config + main`) остаётся только для transport-слоя (proto ↔ domain) и wiring.
+
 **Профиль может быть не заполнен** (lazy-create, ADR-001). Тогда коэффициент = 1 — тренировка создаётся, но score будет минимальным. Gateway в этом случае вернёт `profile_completed=false` на `/users/me` — клиент сам решает, блокировать создание тренировки или нет.
 
 ### 7. gRPC-методы
@@ -465,11 +467,12 @@ Workouts разрабатывается **без** публикации собы
 - ✅ Domain: unit-тесты (VO, сущности, `ApplyPatch`, state machine, score, coefficient) — ветка `feat/workouts-domain-tests`.
 - ✅ Usecases: реализация 10 сценариев (Create, Get, Patch, Delete, Score) — ветка `feat/workouts-usecases`.
 - ✅ Usecases: unit-тесты с моками — ветка `feat/workouts-usecases-tests`.
-- 🚧 Infrastructure (postgres_repo, mappers, integration tests) — ветка `feat/workouts-infrastructure`.
+- 🚧 Infrastructure — ветка `feat/workouts-infrastructure`.
   - ✅ Модели и мапперы.
   - ✅ Рефакторинг `updated_at` под единый стиль.
-  - ⬜ Репозитории (Workout, WorkoutExercise).
-  - ⬜ Интеграционные тесты (Testcontainers).
+  - ✅ Репозитории (Workout, WorkoutExercise).
+  - ⬜ Интеграционные тесты Postgres (Testcontainers).
+  - ⬜ gRPC-клиенты к Profiles и Exercises (`infrastructure/clients/`).
 - ⬜ gRPC-сервер + bootstrap + config + main (реализация хендлеров).
 - ⬜ Compose + Taskfile + `.env.enc` + CI matrix.
 - ⬜ Gateway-хендлеры + маршруты + агрегация `/users/me`.

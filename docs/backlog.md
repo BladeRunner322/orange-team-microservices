@@ -41,13 +41,14 @@
 | 3a | Usecases: реализация 10 сценариев | `feat/workouts-usecases` | ✅ | ~3 ч |
 | 3b | Usecases: моки + unit-тесты | `feat/workouts-usecases-tests` | ✅ | ~2 ч |
 | 4a | Infrastructure: модели, мапперы, рефакторинг `updated_at` | `feat/workouts-infrastructure` | ✅ | ~1.5 ч |
-| 4b | Infrastructure: репозитории (Workout, WorkoutExercise) | `feat/workouts-infrastructure` | 🚧 | ~1.5 ч |
-| 4c | Infrastructure: интеграционные тесты (Testcontainers) | `feat/workouts-infrastructure` | ⬜ | ~1 ч |
+| 4b | Infrastructure: репозитории (Workout, WorkoutExercise) | `feat/workouts-infrastructure` | ✅ | ~1.5 ч |
+| 4c | Infrastructure: интеграционные тесты Postgres (Testcontainers) | `feat/workouts-infrastructure` | ⬜ | ~1 ч |
+| 4d | Infrastructure: gRPC-клиенты (Profiles, Exercises) | `feat/workouts-infrastructure` | ⬜ | ~1 ч |
 | 5 | gRPC-сервер + bootstrap + config + main | `feat/workouts-grpc-and-bootstrap` | ⬜ | ~3 ч |
 | 6 | Compose + Taskfile + .env.enc + CI matrix | `feat/workouts-compose-and-taskfile` | ⬜ | ~2 ч |
 | 7 | Gateway-хендлеры + маршруты + агрегация `/users/me` | `feat/workouts-gateway` | ⬜ | ~3 ч |
 
-Сделано: шаги 1, 2a, 2b, 2c, 3a, 3b, 4a (~14.5 ч). Осталось: шаги 4b, 4c, 5–7 (~9.5 ч).
+Сделано: шаги 1, 2a, 2b, 2c, 3a, 3b, 4a, 4b (~16 ч). Осталось: шаги 4c, 4d, 5–7 (~10 ч).
 
 ## ⏭️ Следующее (после Workouts)
 
