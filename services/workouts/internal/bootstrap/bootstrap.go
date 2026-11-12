@@ -212,13 +212,29 @@ func (a *App) Close() {
 
 // buildGRPCConfig собирает grpcclient.Config для одного downstream.
 //
-// Сейчас — минимум (Target, TLSMode, Timeout). CB/Retry добавим
-// на шаге 4, когда появятся реальные вызовы Profiles/Exercises
-// и можно будет осмысленно подобрать пороги (ADR-020 «Когда пересмотреть»).
+// CB/Retry-параметры общие для обоих клиентов (Profiles и Exercises),
+// Target — разный. Retry-whitelist (cfg.RetryIdempotentMethods) содержит
+// методы обоих сервисов; клиент ретраит только те, что в списке
+// и совпадают с его вызовом (см. pkg/grpc/interceptors/retry.go).
 func buildGRPCConfig(target string, cfg config.Config) grpcclient.Config {
 	return grpcclient.Config{
 		Target:  target,
 		TLSMode: grpcclient.TLSMode(cfg.GRPCClientTLSMode),
 		Timeout: cfg.Timeout,
+
+		// Circuit Breaker (ADR-020).
+		CBEnabled:     cfg.CBEnabled,
+		CBMaxRequests: cfg.CBMaxRequests,
+		CBInterval:    cfg.CBInterval,
+		CBTimeout:     cfg.CBTimeout,
+		CBMinRequests: cfg.CBMinRequests,
+		CBErrorRate:   cfg.CBErrorRate,
+
+		// Retry (ADR-020).
+		RetryEnabled:     cfg.RetryEnabled,
+		RetryMaxAttempts: cfg.RetryMaxAttempts,
+		RetryBaseDelay:   cfg.RetryBaseDelay,
+		RetryMaxDelay:    cfg.RetryMaxDelay,
+		RetryMethods:     cfg.RetryIdempotentMethods,
 	}
 }

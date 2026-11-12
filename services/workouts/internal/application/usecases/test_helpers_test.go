@@ -60,7 +60,7 @@ func newWorkoutInStatus(t *testing.T, userID uuid.UUID, status domain.Status) do
 	return domain.RestoreWorkout(
 		uuid.New(), 0, userID, status,
 		nil, nil, 0, nil, 5,
-		false, now, now,
+		false, now, &now,
 	)
 }
 
@@ -71,6 +71,6 @@ func newDeletedWorkout(t *testing.T, userID uuid.UUID) domain.Workout {
 	return domain.RestoreWorkout(
 		uuid.New(), 0, userID, domain.StatusPlanned,
 		nil, nil, 0, nil, 5,
-		true, now, now,
+		true, now, &now,
 	)
 }

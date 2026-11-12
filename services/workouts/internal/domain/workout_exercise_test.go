@@ -111,9 +111,9 @@ func TestNewWorkoutExercise_Weight(t *testing.T) {
 		assert.Equal(t, 4000, e.ExerciseLoad())
 	})
 
-	t.Run("created_at == updated_at", func(t *testing.T) {
-		assert.Equal(t, e.CreatedAt(), e.UpdatedAt())
+	t.Run("created_at заполнен, updated_at nil", func(t *testing.T) {
 		assert.False(t, e.CreatedAt().IsZero())
+		assert.Nil(t, e.UpdatedAt())
 	})
 }
 
@@ -228,7 +228,7 @@ func TestRestoreWorkoutExercise(t *testing.T) {
 		id, 2, workoutID, exerciseID, difficulty,
 		weight, sets, reps, nil,
 		true, 4000,
-		createdAt, updatedAt,
+		createdAt, &updatedAt,
 	)
 
 	assert.Equal(t, id, e.ID())
@@ -243,7 +243,8 @@ func TestRestoreWorkoutExercise(t *testing.T) {
 	assert.True(t, e.Completed())
 	assert.Equal(t, 4000, e.ExerciseLoad())
 	assert.Equal(t, createdAt, e.CreatedAt())
-	assert.Equal(t, updatedAt, e.UpdatedAt())
+	require.NotNil(t, e.UpdatedAt())
+	assert.Equal(t, updatedAt, *e.UpdatedAt())
 }
 
 // ============================================================
@@ -266,8 +267,7 @@ func TestWorkoutExercise_ApplyPatch_NoChanges(t *testing.T) {
 
 func TestWorkoutExercise_ApplyPatch_Completed(t *testing.T) {
 	e := newTestWorkoutExerciseWeight(t)
-	beforeUpdatedAt := e.UpdatedAt()
-	time.Sleep(1 * time.Millisecond)
+	require.Nil(t, e.UpdatedAt())
 
 	err := e.ApplyPatch(
 		NewWorkoutExercisePatch(nil, nil, nil, nil, ptrBool(true)),
@@ -276,7 +276,7 @@ func TestWorkoutExercise_ApplyPatch_Completed(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.True(t, e.Completed())
-	assert.True(t, e.UpdatedAt().After(beforeUpdatedAt))
+	require.NotNil(t, e.UpdatedAt())
 }
 
 func TestWorkoutExercise_ApplyPatch_WeightRecalculatesLoad(t *testing.T) {
@@ -363,19 +363,21 @@ func TestValidateForWorkoutExerciseType(t *testing.T) {
 	weight, sets, reps, duration := ptrWeight(t, 100), ptrSets(t, 4), ptrReps(t, 10), ptrDuration(t, 600)
 
 	t.Run("weight-тип: валидные поля", func(t *testing.T) {
+		now := time.Now().UTC()
 		e := RestoreWorkoutExercise(
 			uuid.New(), 0, uuid.New(), uuid.New(), *ptrDifficulty(t, 5),
 			weight, sets, reps, nil,
-			false, 4000, time.Now(), time.Now(),
+			false, 4000, now, &now,
 		)
 		assert.NoError(t, e.validateForWorkoutExerciseType(ExerciseTypeWeight))
 	})
 
 	t.Run("duration-тип: валидные поля", func(t *testing.T) {
+		now := time.Now().UTC()
 		e := RestoreWorkoutExercise(
 			uuid.New(), 0, uuid.New(), uuid.New(), *ptrDifficulty(t, 5),
 			nil, nil, nil, duration,
-			false, 600, time.Now(), time.Now(),
+			false, 600, now, &now,
 		)
 		assert.NoError(t, e.validateForWorkoutExerciseType(ExerciseTypeDuration))
 	})

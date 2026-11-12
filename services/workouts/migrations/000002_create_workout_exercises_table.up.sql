@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS workouts.workout_exercises (
     completed     BOOLEAN NOT NULL DEFAULT false,
     exercise_load INTEGER NOT NULL DEFAULT 0,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ,
 
     CONSTRAINT fk_workout_exercises_workout
         FOREIGN KEY (workout_id)

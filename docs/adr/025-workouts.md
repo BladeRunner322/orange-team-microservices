@@ -44,7 +44,7 @@
 | `personal_score_coefficient` | INTEGER NOT NULL | Снапшот на момент создания (ADR-001) |
 | `deleted_at` | TIMESTAMPTZ | NULL пока не удалено (soft delete) |
 | `created_at` | TIMESTAMPTZ NOT NULL DEFAULT NOW() | |
-| `updated_at` | TIMESTAMPTZ NOT NULL DEFAULT NOW() | |
+| `updated_at` | TIMESTAMPTZ | NULL пока не менялось (единый стиль с Auth/Profiles/Exercises/Habits) |
 
 **`workout_exercises`:**
 
@@ -62,7 +62,7 @@
 | `completed` | BOOLEAN NOT NULL DEFAULT false | |
 | `exercise_load` | INTEGER NOT NULL DEFAULT 0 | Вычисляется доменом, снапшот |
 | `created_at` | TIMESTAMPTZ NOT NULL DEFAULT NOW() | |
-| `updated_at` | TIMESTAMPTZ NOT NULL DEFAULT NOW() | |
+| `updated_at` | TIMESTAMPTZ | NULL пока не менялось (единый стиль с Auth/Profiles/Exercises/Habits) |
 
 **Индексы:**
 - `idx_workouts_user_id_active` — partial, на `workouts(user_id) WHERE deleted_at IS NULL` — для `GetWorkouts`.
@@ -76,6 +76,8 @@
 **Почему `difficulty` снапшотится в `workout_exercises`, а не читается live из Exercises.** ADR-008 фиксирует: `difficulty` — снапшот. Если admin завтра поменяет сложность упражнения с 5 на 9, старые тренировки не должны пересчитываться — пользователь уже получил score по старой сложности. Снапшот в `workout_exercises.difficulty` гарантирует, что `recalculateScore` использует значение на момент создания упражнения в тренировке.
 
 **Побочный плюс:** `recalculateScore` не зовёт `Exercises.GetExercise` для `difficulty`. Единственные вызовы Exercises — при `CreateWorkoutExercise` (валидация `type` и чтение `difficulty` для снапшота) и `PatchWorkoutExercise` (валидация `type`). N+1 из `recalculateScore` исчезает.
+
+**Про `updated_at`.** В обеих таблицах `updated_at TIMESTAMPTZ` (nullable, без `DEFAULT NOW()`) — консистентно с Auth, Profiles, Exercises и Habits. Заполняется в момент первого `UPDATE` (через `NOW()` в SQL). До первого изменения — `NULL`. На уровне Go-модели это `*time.Time`.
 
 ### 2. Score и коэффициент
 
@@ -238,6 +240,8 @@ Habits не зовёт другие сервисы (ADR-023). Workouts — зо�
 
 Циклических зависимостей нет (ADR-009). Gateway остаётся единственной точкой входа.
 
+**Где реализуются клиенты.** `infrastructure/clients/` — отдельный коммит внутри шага «Infrastructure» (ветка `feat/workouts-infrastructure`), а не в шаге 5. Обоснование: клиенты — это infrastructure-слой (адаптеры к внешним системам), как и `postgres_repo`. Шаг 5 (`gRPC-сервер + bootstrap + config + main`) остаётся только для transport-слоя (proto ↔ domain) и wiring.
+
 **Профиль может быть не заполнен** (lazy-create, ADR-001). Тогда коэффициент = 1 — тренировка создаётся, но score будет минимальным. Gateway в этом случае вернёт `profile_completed=false` на `/users/me` — клиент сам решает, блокировать создание тренировки или нет.
 
 ### 7. gRPC-методы
@@ -394,7 +398,7 @@ Leaderboard (когда появится) будет читать batch-мето
 - **`UpdateUserWorkoutScore`** — не переносим, `user_workout_score` не хранится (ADR-002).
 - **Purge удалённых тренировок** — soft delete оставляет строки навсегда. Триггер для purge-скрипта: рост БД > 10 ГБ или GDPR-требование.
 - **`RestoreWorkout`** — восстанавливать удалённые тренировки через API не планируем. `deleted_at` ставится, но обратной операции в proto нет. Если понадобится — отдельный usecase и RPC.
-- **CB/Retry на клиентах к Profiles/Exercises — на шаге 4 (usecases).** В skeleton настроены только `GRPC_CLIENT_TLS_MODE` и `WORKOUTS_TIMEOUT` из env (по образцу Gateway). CB/Retry добавятся, когда появятся реальные вызовы — тогда можно осмысленно подобрать пороги (`CBMinRequests`, `CBErrorRate`) и per-target retry-политику (ADR-020 «Когда пересмотреть»).
+- **CB/Retry на клиентах к Profiles/Exercises — ✅ реализовано (шаг 4e).** Параметры в `services/workouts/.env`: `WORKOUTS_CB_*` и `WORKOUTS_RETRY_*`. Whitelist read-only методов — общий для обоих клиентов (`WORKOUTS_RETRY_IDEMPOTENT_METHODS`), содержит `/profiles.ProfilesService/GetProfile` и `/exercises.ExercisesService/GetExercise`. Пороги — дефолты Gateway (ADR-020); пересмотр — после недели наблюдений.
 
 ### 12. Совместимость с ADR-024 (будущая Kafka)
 
@@ -457,12 +461,18 @@ Workouts разрабатывается **без** публикации собы
 
 **В работе.**
 
-- ✅ Skeleton сервиса (proto, config, bootstrap, миграции, domain stubs) — PR `feat/workouts-skeleton-fixes`.
+- ✅ Skeleton сервиса (proto, config, bootstrap, миграции, domain stubs) — ветка `feat/workouts-skeleton-fixes`.
 - ✅ Domain: value objects, сущности (`Workout`, `WorkoutExercise`), state machine (`ApplyPatch`), ошибки, `exercise_load` — ветка `feat/workouts-domain`.
 - ✅ Domain: `CalculateScore`, `CalculatePersonalScoreCoefficient`, `saturatedScore` (приватная), `AddLoadWithLimit`, `DivideRoundUp` — ветка `feat/workouts-score-coefficient`.
-- ⬜ Domain: unit-тесты (VO, сущности, `ApplyPatch`, state machine) — ветка `feat/workouts-domain-tests`.
-- ⬜ Infrastructure (postgres_repo, mappers, integration tests).
-- ⬜ Usecases (10 usecase + common + recalculateScore + моки + unit-тесты).
+- ✅ Domain: unit-тесты (VO, сущности, `ApplyPatch`, state machine, score, coefficient) — ветка `feat/workouts-domain-tests`.
+- ✅ Usecases: реализация 10 сценариев (Create, Get, Patch, Delete, Score) — ветка `feat/workouts-usecases`.
+- ✅ Usecases: unit-тесты с моками — ветка `feat/workouts-usecases-tests`.
+- 🚧 Infrastructure — ветка `feat/workouts-infrastructure`.
+  - ✅ Модели и мапперы.
+  - ✅ Рефакторинг `updated_at` под единый стиль.
+  - ✅ Репозитории (Workout, WorkoutExercise).
+  - ⬜ Интеграционные тесты Postgres (Testcontainers).
+  - ⬜ gRPC-клиенты к Profiles и Exercises (`infrastructure/clients/`).
 - ⬜ gRPC-сервер + bootstrap + config + main (реализация хендлеров).
 - ⬜ Compose + Taskfile + `.env.enc` + CI matrix.
 - ⬜ Gateway-хендлеры + маршруты + агрегация `/users/me`.
