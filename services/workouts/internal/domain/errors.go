@@ -16,6 +16,11 @@ var (
 	ErrCannotMarkExerciseCompleted = errors.New("can only mark exercise as completed when workout is in progress")
 )
 
+// ErrConflict — optimistic locking conflict (несовпадение version).
+var (
+	ErrConflict = errors.New("conflict: concurrent update")
+)
+
 // WorkoutExercise — бизнес-правила компонента агрегата.
 var (
 	ErrInvalidWorkoutExerciseForType = errors.New("workout exercise fields do not match exercise type")
