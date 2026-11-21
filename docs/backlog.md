@@ -46,10 +46,10 @@
 | 4d | Infrastructure: gRPC-клиенты (Profiles, Exercises) | `feat/workouts-infrastructure` | ✅ | ~1 ч |
 | 4e | Infrastructure: CB/Retry на gRPC-клиентах | `feat/workouts-infrastructure` | ✅ | ~1 ч |
 | 5 | gRPC-сервер + bootstrap + config + main | `feat/workouts-grpc-and-bootstrap` | ✅ | ~3 ч |
-| 6 | Compose + Taskfile + .env.enc + CI matrix | `feat/workouts-compose-and-taskfile` | ⬜ | ~2 ч |
+| 6 | Compose + Taskfile + .env.enc + CI matrix | `feat/workouts-compose-and-taskfile` | ✅ | ~2 ч |
 | 7 | Gateway-хендлеры + маршруты + агрегация `/users/me` | `feat/workouts-gateway` | ⬜ | ~3 ч |
 
-Сделано: шаги 1–5 (~21 ч). Осталось: шаги 6–7 (~5 ч).
+Сделано: шаги 1–6 (~23 ч). Осталось: шаг 7 (~3 ч).
 
 ## ⏭️ Следующее (после Workouts)
 
