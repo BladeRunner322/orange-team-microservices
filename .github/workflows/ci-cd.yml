@@ -470,6 +470,25 @@ jobs:
                 caddy prometheus alertmanager node-exporter grafana loki promtail warp
             fi
 
+            # Convergence: проверяем, что все сервисы действительно запущены.
+            # Ловит случай, когда предыдущий деплой упал до `up -d <svc>`
+            # (например, на миграции) — образ в GHCR есть, а контейнера нет
+            # или он в crash loop. Сначала миграция (идемпотентна), потом pull + up.
+            echo "→ Converging services"
+            for svc in auth gateway profiles exercises habits workouts; do
+              running=$(docker ps --filter "name=^${svc}-service$" --filter "status=running" --format '{{.Names}}')
+              if [ -z "$running" ]; then
+                echo "  → ${svc}: not running, recovering"
+                if [ "$svc" != "gateway" ]; then
+                  echo "    Running migrate-${svc}"
+                  docker compose run --rm "migrate-${svc}"
+                fi
+                echo "    Pulling and starting ${svc}"
+                docker compose pull "$svc"
+                docker compose up -d --no-build --no-deps "$svc"
+              fi
+            done
+
             docker image prune -f
 
 # ------------------------------------------------------------
