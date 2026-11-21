@@ -391,7 +391,7 @@ jobs:
             # Validate .env files against .env.example before starting
             # containers. Catches missing variables early with a clear
             # error instead of a cryptic envconfig panic on startup.
-            for svc in auth gateway profiles exercises workouts; do
+            for svc in auth gateway profiles exercises habits workouts; do
               if [ -f "$PROJECT_DIR/services/$svc/.env.example" ] && [ -f "$PROJECT_DIR/services/$svc/.env" ]; then
                 echo "→ Validating services/$svc/.env"
                 missing=$(comm -23 \
