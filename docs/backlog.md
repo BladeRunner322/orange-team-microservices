@@ -42,14 +42,14 @@
 | 3b | Usecases: моки + unit-тесты | `feat/workouts-usecases-tests` | ✅ | ~2 ч |
 | 4a | Infrastructure: модели, мапперы, рефакторинг `updated_at` | `feat/workouts-infrastructure` | ✅ | ~1.5 ч |
 | 4b | Infrastructure: репозитории (Workout, WorkoutExercise) | `feat/workouts-infrastructure` | ✅ | ~1.5 ч |
-| 4c | Infrastructure: интеграционные тесты Postgres (Testcontainers) | `feat/workouts-infrastructure` | ⬜ | ~1 ч |
+| 4c | Infrastructure: интеграционные тесты Postgres (Testcontainers) | `feat/workouts-infrastructure` | ✅ | ~1 ч |
 | 4d | Infrastructure: gRPC-клиенты (Profiles, Exercises) | `feat/workouts-infrastructure` | ✅ | ~1 ч |
 | 4e | Infrastructure: CB/Retry на gRPC-клиентах | `feat/workouts-infrastructure` | ✅ | ~1 ч |
-| 5 | gRPC-сервер + bootstrap + config + main | `feat/workouts-grpc-and-bootstrap` | ⬜ | ~3 ч |
+| 5 | gRPC-сервер + bootstrap + config + main | `feat/workouts-grpc-and-bootstrap` | ✅ | ~3 ч |
 | 6 | Compose + Taskfile + .env.enc + CI matrix | `feat/workouts-compose-and-taskfile` | ⬜ | ~2 ч |
 | 7 | Gateway-хендлеры + маршруты + агрегация `/users/me` | `feat/workouts-gateway` | ⬜ | ~3 ч |
 
-Сделано: шаги 1, 2a, 2b, 2c, 3a, 3b, 4a, 4b, 4c, 4d, 4e (~19 ч). Осталось: шаги 5–7 (~8 ч).
+Сделано: шаги 1–5 (~21 ч). Осталось: шаги 6–7 (~5 ч).
 
 ## ⏭️ Следующее (после Workouts)
 
@@ -77,6 +77,7 @@ ADR ещё нет. Появится, когда начнётся (после Kaf
 | Dependabot / Renovate | [ADR-012](adr/012-ci-cd-optimization.md) | ~30 мин | Авто-PR на зависимости |
 | Docker logging options | [ADR-018](adr/018-storage-retention.md) | ~15 мин | `daemon.json` + перезапуск Docker |
 | Rotation SSH на Ed25519 | [ADR-006](adr/006-secrets-management.md), [ADR-021](adr/021-independent-deployment.md) | ~30 мин | `appleboy/ssh-action` уже обновлён |
+| Привести нейминг мапперов к ADR-011 | [ADR-011](adr/011-naming-and-code-style.md) | ~1.5 ч | Auth, Profiles, Exercises, Habits используют старый стандарт (`<field>FromProto`, `ToDomain<Type>`, `ToProto<Type>`). Workouts — первый на новом (`domainXFromProto` / `protoXFromDomain`). Переименовывать при следующем касании мапперов каждого сервиса — отдельными PR по сервису, не пачкой |
 
 ## 🟡 После недели наблюдений за CB/Retry
 
