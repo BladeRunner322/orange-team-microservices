@@ -64,7 +64,7 @@
 - **Lazy-create профиля** (ADR-001)
 - **Exercises:** `type` immutable, `difficulty` snapshot, soft delete (ADR-008)
 - **Gateway** — только прокси + auth + агрегация (ADR-009)
-- **Naming (ADR-011):** суффикс `Raw`, `ToDomainX`, `Scan(row)`, `ModelToDomain` с id, package-комментарий один раз
+- **Naming (ADR-011):** суффикс `Raw`, мапперы `domainXFromProto` / `protoXFromDomain`, `Scan(row)`, `ModelToDomain` с id, package-комментарий один раз
 - **Circuit Breaker:** бизнес-ошибки не считаются failure
 - **Retry:** только read-only методы (whitelist). Мутации не ретраим, даже если идемпотентны.
 - **Порядок интерсепторов (клиент):** `CB → Retry → ClientMetrics → Timeout → UserID → RequestID → invoker`

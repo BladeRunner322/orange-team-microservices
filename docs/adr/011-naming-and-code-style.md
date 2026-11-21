@@ -21,22 +21,33 @@
 
 **N-1. Мапперы proto ↔ domain.**
 
-- **Хелперы для одного поля:** `<field>FromProto`. Пример: `nameFromProto`, `difficultyFromProto`.
-- **Маппер целого объекта domain ← proto:** `ToDomain<Type>`. Пример: `ToDomainPatch`, `ToDomainID`.
-- **Маппер целого объекта proto ← domain:** `ToProto<Type>`. Пример: `ToProtoExercise`, `ToProtoProfile`.
+Симметричный нейминг: **`<куда><что>From<откуда>`**. Направление и роль видны из имени.
 
-**Почему разделяем:** хелпер поля («взять поле из proto») и маппер объекта («преобразовать объект в domain») — разные роли. Разные роли → разные имена.
+- **Поле из proto → domain:** `domain<Field>FromProto`. Пример: `domainStatusFromProto`, `domainWeightFromProto`, `domainDifficultyFromProto`.
+- **Объект domain ← proto:** `domain<Type>FromProto`. Пример: `domainWorkoutPatchFromProto`, `domainWorkoutExercisePatchFromProto`.
+- **Объект proto ← domain:** `proto<Type>FromDomain`. Пример: `protoWorkoutFromDomain`, `protoWorkoutExerciseFromDomain`, `protoExerciseFromDomain`.
+- **Универсальный парсер скаляра:** `domain<Type>From<SourceType>`. Пример: `domainUUIDFromString`.
 
-**Уточнение для универсальных парсеров скаляров.**
+**Почему так:**
 
-Есть функции, которые парсят **одно скалярное значение** из proto (например, `id string` → `uuid.UUID`). Такие функции называют **`ToDomain<Type>`**, а не `<field>FromProto`, если они:
+1. **Симметрия.** `domainXFromProto` и `protoXFromDomain` — зеркальны. Не надо помнить, что там было `<field>FromProto`, а обратно `ToProto<Type>`.
+2. **Направление в имени.** `domainWeightFromProto` читается как «domain Weight from proto». Без `To`/`From`-смеси.
+3. **Роль видна из сигнатуры.** `domainStatusFromProto(*string)` — поле (принимает скаляр). `domainWorkoutPatchFromProto(*PatchWorkoutRequest)` — объект (принимает целое сообщение). Разные роли — разный второй сегмент имени (`Field` vs `Type`).
+4. **Нет коллизий с `To`-функциями.** `ToProtoX` мог быть «домен → proto» или «proto → домен» — двусмысленно. `protoXFromDomain` — однозначно.
 
-- используются в **нескольких** request-типах (например, `id` в `GetExerciseRequest`, `PatchExerciseRequest`, `DeleteExerciseRequest`);
-- принимают **само значение** (не request целиком), чтобы не дублировать функцию под каждый request.
+**Поле vs объект — различие видно по префиксу:**
+
+| Сигнатура | Имя | Что это |
+|---|---|---|
+| `domainStatusFromProto(*string)` | поле | одно скалярное поле из proto |
+| `domainWorkoutPatchFromProto(*PatchWorkoutRequest)` | объект | целое proto-сообщение → domain-патч |
+| `domainUUIDFromString(string)` | универсальный парсер | `string` → `uuid.UUID`, не привязан к полю |
+
+**Универсальные парсеры скаляров.** Если функция принимает **само значение** (а не request целиком) и используется в нескольких request-типах — это `domain<Type>From<SourceType>`, а не `<field>FromProto`.
 
 Пример:
 ```go
-func ToDomainID(raw string) (uuid.UUID, error) {
+func domainUUIDFromString(raw string) (uuid.UUID, error) {
     id, err := uuid.Parse(raw)
     if err != nil {
         return uuid.Nil, fmt.Errorf("parse id: %w", err)
@@ -45,15 +56,15 @@ func ToDomainID(raw string) (uuid.UUID, error) {
 }
 ```
 
-**Стандарт — `raw`-значение, не request целиком.**
+Используется как `domainUUIDFromString(req.Id)` в `GetWorkout`, `PatchWorkout`, `DeleteWorkout`, `GetWorkoutExercises` и т.д. — в разных сообщениях, у разных полей.
 
-Принимать сам `request` (как `ToDomainUserID(req *profiles.GetProfileRequest)` в Profiles) — **не используем**. Даже если request один. Причины:
+**Стандарт — `raw`-значение, не request целиком.** Принимать `request` — не используем. Даже если request один. Причины: единый стиль, переиспользование, типобезопасность вызова.
 
-1. **Единый стиль.** Все парсеры скаляров принимают значение. Не надо помнить «а тут один request или нет».
-2. **Переиспользование.** Если завтра появится второй request с тем же полем — не надо писать вторую функцию.
-3. **Типобезопасность вызова.** В хендлере видно, что передаём: `ToDomainID(req.Id)` — источник явный.
+**Применение к существующим сервисам.**
 
-**Что делать:** переделать `ToDomainUserID` в Profiles на `ToDomainUserID(raw string)`. Обновить вызовы в `server.go` (`ToDomainUserID(req.UserId)`).
+Auth, Profiles, Exercises, Habits используют **старый** нейминг (`<field>FromProto`, `ToDomain<Type>`, `ToProto<Type>`). Это технический долг. Переделывать сейчас не будем — слишком много файлов и тестов. Правило: **при следующем касании мапперов этих сервисов** (рефакторинг, новая фича) — приводить к новому стандарту.
+
+Workouts — **первый сервис на новом стандарте**. Дальше (Leaderboard, Notification) — сразу новый.
 
 **N-2. Методы репозитория — CRUD-alphabetical.**
 
