@@ -37,7 +37,7 @@ S3_RETENTION_DAYS="${S3_RETENTION_DAYS:-30}"
 # Контейнер называется <service>-postgres, БД — <service>_db.
 # При добавлении нового сервиса (Workouts, Leaderboard) —
 # просто дописать имя в массив.
-SERVICES=(auth profiles exercises habits)
+SERVICES=(auth profiles exercises habits workouts)
 
 mkdir -p "${TARGET_DIR}"
 

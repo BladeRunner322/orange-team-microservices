@@ -22,6 +22,7 @@ includes:
   profiles:  ./taskfiles/profiles.yml
   exercises: ./taskfiles/exercises.yml
   habits:    ./taskfiles/habits.yml
+  workouts:  ./taskfiles/workouts.yml
 
 tasks:
   # ============================================================
