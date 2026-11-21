@@ -315,6 +315,7 @@ jobs:
           sops --decrypt --input-type dotenv --filename-override services/profiles/.env services/profiles/.env.enc > services/profiles/.env
           sops --decrypt --input-type dotenv --filename-override services/exercises/.env services/exercises/.env.enc > services/exercises/.env
           sops --decrypt --input-type dotenv --filename-override services/habits/.env services/habits/.env.enc > services/habits/.env
+          sops --decrypt --input-type dotenv --filename-override services/workouts/.env services/workouts/.env.enc > services/workouts/.env
           sops --decrypt --input-type binary --filename-override scripts/rclone.conf scripts/rclone.conf.enc > scripts/rclone.conf
 
       - name: Upload .env and rclone.conf files to server
@@ -323,7 +324,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          source: ".env,services/auth/.env,services/gateway/.env,services/profiles/.env,services/exercises/.env,services/habits/.env,scripts/rclone.conf"
+          source: ".env,services/auth/.env,services/gateway/.env,services/profiles/.env,services/exercises/.env,services/habits/.env,services/workouts/.env,scripts/rclone.conf"
           target: "/root/projects/orange-team-microservices"
           overwrite: true
 
@@ -390,7 +391,7 @@ jobs:
             # Validate .env files against .env.example before starting
             # containers. Catches missing variables early with a clear
             # error instead of a cryptic envconfig panic on startup.
-            for svc in auth gateway profiles exercises; do
+            for svc in auth gateway profiles exercises habits workouts; do
               if [ -f "$PROJECT_DIR/services/$svc/.env.example" ] && [ -f "$PROJECT_DIR/services/$svc/.env" ]; then
                 echo "→ Validating services/$svc/.env"
                 missing=$(comm -23 \
