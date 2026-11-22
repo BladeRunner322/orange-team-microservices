@@ -40,7 +40,18 @@ func recalculateScore(
 		return fmt.Errorf("get workout for score: %w", err)
 	}
 
-	exercises, err := exerciseRepo.ListByWorkout(ctx, workoutID)
+	return recalculateWorkoutScore(ctx, workoutRepo, exerciseRepo, workout)
+}
+
+// recalculateWorkoutScore пересчитывает балл по упражнениям, выполненным в тренировке.
+// Использует версию тренировки, которую вызывающий код уже прочитал.
+func recalculateWorkoutScore(
+	ctx context.Context,
+	workoutRepo ports.WorkoutRepository,
+	exerciseRepo ports.WorkoutExerciseRepository,
+	workout domain.Workout,
+) error {
+	exercises, err := exerciseRepo.ListByWorkout(ctx, workout.ID())
 	if err != nil {
 		return fmt.Errorf("list workout exercises for score: %w", err)
 	}

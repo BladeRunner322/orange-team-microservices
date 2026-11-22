@@ -1,0 +1,578 @@
+{
+  "info": {
+    "name": "5. Workouts",
+    "description": "Тренировки, упражнения и баллы профиля. Требует предварительного запуска Setup.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. POST /workouts — создать тренировку",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/workouts",
+          "host": ["{{base_url}}"],
+          "path": ["workouts"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 201', function () { pm.response.to.have.status(201); });",
+              "if (pm.response.code === 201) {",
+              "    const jsonData = pm.response.json();",
+              "    pm.test('New workout is planned and has zero score', function () {",
+              "        pm.expect(jsonData.id).to.be.a('string').and.not.be.empty;",
+              "        pm.expect(jsonData).to.have.property('status', 'planned');",
+              "        pm.expect(jsonData).to.have.property('workout_score', 0);",
+              "        pm.expect(jsonData).to.have.property('intensity', null);",
+              "        pm.expect(jsonData).to.have.property('is_deleted', false);",
+              "    });",
+              "    pm.environment.set('workoutId', jsonData.id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. GET /workouts — список содержит созданную тренировку",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": { "raw": "{{base_url}}/workouts", "host": ["{{base_url}}"], "path": ["workouts"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('List contains the new workout', function () {",
+            "    const workouts = pm.response.json();",
+            "    pm.expect(workouts).to.be.an('array');",
+            "    pm.expect(workouts.some(w => w.id === pm.environment.get('workoutId'))).to.be.true;",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "3. GET /workouts/{id} — получить тренировку по ID",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": { "raw": "{{base_url}}/workouts/{{workoutId}}", "host": ["{{base_url}}"], "path": ["workouts", "{{workoutId}}"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Response contains the requested workout', function () {",
+            "    const workout = pm.response.json();",
+            "    pm.expect(workout).to.have.property('id', pm.environment.get('workoutId'));",
+            "    pm.expect(workout).to.have.property('status', 'planned');",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "4. PATCH /workouts/{id} — установить интенсивность",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"intensity\":7}" },
+        "url": { "raw": "{{base_url}}/workouts/{{workoutId}}", "host": ["{{base_url}}"], "path": ["workouts", "{{workoutId}}"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Intensity is 7', function () {",
+            "    pm.expect(pm.response.json()).to.have.property('intensity', 7);",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "5. PATCH /workouts/{id} — сбросить интенсивность",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"intensity\":null}" },
+        "url": { "raw": "{{base_url}}/workouts/{{workoutId}}", "host": ["{{base_url}}"], "path": ["workouts", "{{workoutId}}"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('Intensity is cleared', function () {",
+            "    pm.expect(pm.response.json()).to.have.property('intensity', null);",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "6. PATCH /workouts/{id} — переход planned → completed запрещён",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"status\":\"completed\"}" },
+        "url": { "raw": "{{base_url}}/workouts/{{workoutId}}", "host": ["{{base_url}}"], "path": ["workouts", "{{workoutId}}"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status code is 400', function () { pm.response.to.have.status(400); });",
+            "pm.test('Error describes the invalid transition', function () {",
+            "    pm.expect(pm.response.json()).to.have.property('error', 'invalid status transition');",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "7. DELETE /workouts/{id} — удалить тренировку",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": { "raw": "{{base_url}}/workouts/{{workoutId}}", "host": ["{{base_url}}"], "path": ["workouts", "{{workoutId}}"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status code is 204', function () { pm.response.to.have.status(204); });",
+            "pm.test('Response body is empty', function () { pm.expect(pm.response.text()).to.equal(''); });"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "8. GET /workouts — удалённая тренировка отсутствует в списке",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": { "raw": "{{base_url}}/workouts", "host": ["{{base_url}}"], "path": ["workouts"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Status code is 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('List excludes the deleted workout', function () {",
+            "    const workouts = pm.response.json();",
+            "    pm.expect(workouts).to.be.an('array');",
+            "    pm.expect(workouts.some(w => w.id === pm.environment.get('workoutId'))).to.be.false;",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "9. POST /exercises — создать упражнение для теста Workouts",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"name\":\"Жим лёжа (Workouts {{$guid}})\",\"description\":\"Тестовое упражнение\",\"difficulty\":5,\"type\":\"weight\"}"
+        },
+        "url": { "raw": "{{base_url}}/exercises", "host": ["{{base_url}}"], "path": ["exercises"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.environment.unset('workoutCatalogExerciseId');",
+            "pm.test('Catalog exercise is created', function () {",
+            "    pm.response.to.have.status(201);",
+            "    const exercise = pm.response.json();",
+            "    pm.expect(exercise.id).to.be.a('string').and.not.be.empty;",
+            "    pm.expect(exercise).to.have.property('type', 'weight');",
+            "    pm.environment.set('workoutCatalogExerciseId', exercise.id);",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "10. POST /workouts — создать тренировку для упражнений",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": { "raw": "{{base_url}}/workouts", "host": ["{{base_url}}"], "path": ["workouts"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.environment.unset('exerciseWorkoutId');",
+            "pm.test('Workout is created in planned status', function () {",
+            "    pm.response.to.have.status(201);",
+            "    const workout = pm.response.json();",
+            "    pm.expect(workout.id).to.be.a('string').and.not.be.empty;",
+            "    pm.expect(workout).to.have.property('status', 'planned');",
+            "    pm.environment.set('exerciseWorkoutId', workout.id);",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "11. POST /workouts/{id}/exercises — добавить упражнение",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"exercise_id\":\"{{workoutCatalogExerciseId}}\",\"weight\":25,\"sets\":3,\"reps\":10}"
+        },
+        "url": {
+          "raw": "{{base_url}}/workouts/{{exerciseWorkoutId}}/exercises",
+          "host": ["{{base_url}}"],
+          "path": ["workouts", "{{exerciseWorkoutId}}", "exercises"]
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.environment.unset('workoutExerciseId');",
+            "pm.test('Exercise is added to the workout', function () {",
+            "    pm.response.to.have.status(201);",
+            "    const exercise = pm.response.json();",
+            "    pm.expect(exercise.id).to.be.a('string').and.not.be.empty;",
+            "    pm.expect(exercise).to.have.property('workout_id', pm.environment.get('exerciseWorkoutId'));",
+            "    pm.expect(exercise).to.have.property('exercise_id', pm.environment.get('workoutCatalogExerciseId'));",
+            "    pm.expect(exercise).to.have.property('weight', 25);",
+            "    pm.expect(exercise).to.have.property('sets', 3);",
+            "    pm.expect(exercise).to.have.property('reps', 10);",
+            "    pm.expect(exercise).to.have.property('completed', false);",
+            "    pm.environment.set('workoutExerciseId', exercise.id);",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "12. GET /workouts/{id}/exercises — список содержит добавленное упражнение",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{base_url}}/workouts/{{exerciseWorkoutId}}/exercises",
+          "host": ["{{base_url}}"],
+          "path": ["workouts", "{{exerciseWorkoutId}}", "exercises"]
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('List contains the added exercise', function () {",
+            "    pm.response.to.have.status(200);",
+            "    const exercises = pm.response.json();",
+            "    pm.expect(exercises).to.be.an('array');",
+            "    const exercise = exercises.find(e => e.id === pm.environment.get('workoutExerciseId'));",
+            "    pm.expect(exercise).to.have.property('exercise_id', pm.environment.get('workoutCatalogExerciseId'));",
+            "    pm.expect(exercise).to.have.property('weight', 25);",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "13. PATCH /workouts/{id}/exercises/{exerciseId} — изменить вес",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"weight\":30}" },
+        "url": {
+          "raw": "{{base_url}}/workouts/{{exerciseWorkoutId}}/exercises/{{workoutExerciseId}}",
+          "host": ["{{base_url}}"],
+          "path": ["workouts", "{{exerciseWorkoutId}}", "exercises", "{{workoutExerciseId}}"]
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Weight and exercise load are updated', function () {",
+            "    pm.response.to.have.status(200);",
+            "    const exercise = pm.response.json();",
+            "    pm.expect(exercise).to.have.property('id', pm.environment.get('workoutExerciseId'));",
+            "    pm.expect(exercise).to.have.property('weight', 30);",
+            "    pm.expect(exercise).to.have.property('sets', 3);",
+            "    pm.expect(exercise).to.have.property('reps', 10);",
+            "    pm.expect(exercise).to.have.property('exercise_load', 900);",
+            "    pm.expect(exercise.updated_at).to.be.a('string').and.not.be.empty;",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "14. DELETE /workouts/{id}/exercises/{exerciseId} — удалить упражнение",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{base_url}}/workouts/{{exerciseWorkoutId}}/exercises/{{workoutExerciseId}}",
+          "host": ["{{base_url}}"],
+          "path": ["workouts", "{{exerciseWorkoutId}}", "exercises", "{{workoutExerciseId}}"]
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Exercise is deleted with no response body', function () {",
+            "    pm.response.to.have.status(204);",
+            "    pm.expect(pm.response.text()).to.equal('');",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "15. GET /workouts/{id}/exercises — после удаления список пуст",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{base_url}}/workouts/{{exerciseWorkoutId}}/exercises",
+          "host": ["{{base_url}}"],
+          "path": ["workouts", "{{exerciseWorkoutId}}", "exercises"]
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Exercise list is empty after deletion', function () {",
+            "    pm.response.to.have.status(200);",
+            "    const exercises = pm.response.json();",
+            "    pm.expect(exercises).to.be.an('array');",
+            "    pm.expect(exercises).to.be.empty;",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "16. GET /users/me — запомнить балл до завершения тренировки",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": { "raw": "{{base_url}}/users/me", "host": ["{{base_url}}"], "path": ["users", "me"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.environment.unset('workoutScoreBefore');",
+            "pm.test('Profile score is available', function () {",
+            "    pm.response.to.have.status(200);",
+            "    const profile = pm.response.json();",
+            "    pm.expect(profile).to.have.property('workout_score_available', true);",
+            "    pm.expect(profile.workout_score).to.be.a('number');",
+            "    pm.environment.set('workoutScoreBefore', profile.workout_score);",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "17. PATCH /workouts/{id} — начать тренировку",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"status\":\"in_progress\"}" },
+        "url": {
+          "raw": "{{base_url}}/workouts/{{exerciseWorkoutId}}",
+          "host": ["{{base_url}}"],
+          "path": ["workouts", "{{exerciseWorkoutId}}"]
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Workout is in progress and has a start time', function () {",
+            "    pm.response.to.have.status(200);",
+            "    const workout = pm.response.json();",
+            "    pm.expect(workout).to.have.property('id', pm.environment.get('exerciseWorkoutId'));",
+            "    pm.expect(workout).to.have.property('status', 'in_progress');",
+            "    pm.expect(workout.started_at).to.be.a('string').and.not.be.empty;",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "18. POST /workouts/{id}/exercises — добавить выполненное упражнение",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"exercise_id\":\"{{workoutCatalogExerciseId}}\",\"weight\":25,\"sets\":3,\"reps\":10,\"completed\":true}"
+        },
+        "url": {
+          "raw": "{{base_url}}/workouts/{{exerciseWorkoutId}}/exercises",
+          "host": ["{{base_url}}"],
+          "path": ["workouts", "{{exerciseWorkoutId}}", "exercises"]
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Completed exercise is added', function () {",
+            "    pm.response.to.have.status(201);",
+            "    const exercise = pm.response.json();",
+            "    pm.expect(exercise).to.have.property('workout_id', pm.environment.get('exerciseWorkoutId'));",
+            "    pm.expect(exercise).to.have.property('exercise_id', pm.environment.get('workoutCatalogExerciseId'));",
+            "    pm.expect(exercise).to.have.property('completed', true);",
+            "    pm.expect(exercise).to.have.property('exercise_load', 750);",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "19. PATCH /workouts/{id} — завершить тренировку",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": { "mode": "raw", "raw": "{\"status\":\"completed\"}" },
+        "url": {
+          "raw": "{{base_url}}/workouts/{{exerciseWorkoutId}}",
+          "host": ["{{base_url}}"],
+          "path": ["workouts", "{{exerciseWorkoutId}}"]
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.environment.unset('completedWorkoutScore');",
+            "pm.test('Completed workout has a positive score', function () {",
+            "    pm.response.to.have.status(200);",
+            "    const workout = pm.response.json();",
+            "    pm.expect(workout).to.have.property('id', pm.environment.get('exerciseWorkoutId'));",
+            "    pm.expect(workout).to.have.property('status', 'completed');",
+            "    pm.expect(workout.completed_at).to.be.a('string').and.not.be.empty;",
+            "    pm.expect(workout.workout_score).to.be.a('number').and.be.above(0);",
+            "    pm.environment.set('completedWorkoutScore', workout.workout_score);",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "20. GET /users/me — балл профиля вырос на балл тренировки",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": { "raw": "{{base_url}}/users/me", "host": ["{{base_url}}"], "path": ["users", "me"] }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Profile score includes the completed workout', function () {",
+            "    pm.response.to.have.status(200);",
+            "    const profile = pm.response.json();",
+            "    pm.expect(pm.environment.has('workoutScoreBefore')).to.be.true;",
+            "    pm.expect(pm.environment.has('completedWorkoutScore')).to.be.true;",
+            "    const before = Number(pm.environment.get('workoutScoreBefore'));",
+            "    const earned = Number(pm.environment.get('completedWorkoutScore'));",
+            "    pm.expect(profile).to.have.property('workout_score_available', true);",
+            "    pm.expect(profile).to.have.property('workout_score', before + earned);",
+            "});"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "21. DELETE /workouts/{id} — удалить тестовую тренировку",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{base_url}}/workouts/{{exerciseWorkoutId}}",
+          "host": ["{{base_url}}"],
+          "path": ["workouts", "{{exerciseWorkoutId}}"]
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Workout is deleted', function () { pm.response.to.have.status(204); });"
+          ]
+        }
+      }]
+    },
+    {
+      "name": "22. DELETE /exercises/{id} — удалить тестовое упражнение из каталога",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}", "type": "text" }],
+        "url": {
+          "raw": "{{base_url}}/exercises/{{workoutCatalogExerciseId}}",
+          "host": ["{{base_url}}"],
+          "path": ["exercises", "{{workoutCatalogExerciseId}}"]
+        }
+      },
+      "event": [{
+        "listen": "test",
+        "script": {
+          "exec": [
+            "pm.test('Catalog exercise is deleted', function () { pm.response.to.have.status(204); });"
+          ]
+        }
+      }]
+    }
+  ]
+}
