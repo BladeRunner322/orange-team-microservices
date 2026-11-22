@@ -492,23 +492,48 @@ jobs:
                 || echo "  WARN: Alertmanager reload failed (check logs)"
 
               echo "→ Verifying Prometheus targets"
-              if ! TARGETS=$(curl -fsS --max-time 5 "${PROMETHEUS_URL}/api/v1/targets?state=active"); then
-                echo "  ❌ failed to query Prometheus targets API"
-                exit 1
-              fi
+              attempt=1
 
-              EXPECTED="auth gateway profiles exercises habits workouts"
-              ACTUAL=$(printf '%s\n' "$TARGETS" \
-                | grep -o '"job":"[^"]*"' \
-                | sed 's/"job":"//;s/"//g' | sort -u)
-              for job in $EXPECTED; do
-                if ! printf '%s\n' "$ACTUAL" | grep -Fxq "$job"; then
-                  echo "  ❌ expected job '$job' not in Prometheus targets"
-                  printf '  Jobs returned by Prometheus:\n%s\n' "$ACTUAL"
+              while true; do
+                if ! TARGETS=$(curl -fsS --max-time 5 "${PROMETHEUS_URL}/api/v1/targets?state=active"); then
+                  echo "  ❌ failed to query Prometheus targets API"
                   exit 1
                 fi
+
+                if ! REPORT=$(printf '%s\n' "$TARGETS" | python3 -c '
+            import json
+            import sys
+
+            response = json.load(sys.stdin)
+            if response["status"] != "success":
+                sys.exit("Prometheus targets API did not return success")
+
+            targets = response["data"]["activeTargets"]
+            expected = {"auth", "gateway", "profiles", "exercises", "habits", "workouts"}
+            actual = {target["labels"].get("job") for target in targets}
+            missing = expected - actual
+            if missing:
+                missing_jobs = ", ".join(sorted(missing))
+                print(f"active targets: {len(targets)}, missing jobs: {missing_jobs}")
+            '); then
+                  echo "  ❌ failed to parse Prometheus targets response"
+                  exit 1
+                fi
+
+                if [ -z "$REPORT" ]; then
+                  echo "  ✅ all 6 services visible in Prometheus"
+                  break
+                fi
+
+                printf '  Attempt %s/15: %s\n' "$attempt" "$REPORT"
+                if [ "$attempt" -ge 15 ]; then
+                  echo "  ❌ Prometheus targets did not appear in time"
+                  exit 1
+                fi
+
+                attempt=$((attempt + 1))
+                sleep 2
               done
-              echo "  ✅ all 6 services visible in Prometheus"
             fi
 
             # Convergence: проверяем, что все сервисы действительно запущены.
