@@ -79,7 +79,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	createWorkoutExerciseUC := usecases.NewCreateWorkoutExercise(workoutRepo, exerciseRepo, exercisesClient, log)
 	getWorkoutExercisesUC := usecases.NewGetWorkoutExercises(workoutRepo, exerciseRepo, log)
 	patchWorkoutExerciseUC := usecases.NewPatchWorkoutExercise(workoutRepo, exerciseRepo, exercisesClient, log)
-	deleteWorkoutExerciseUC := usecases.NewDeleteWorkoutExercise(workoutRepo, exerciseRepo, log)
+	deleteWorkoutExerciseUC := usecases.NewDeleteWorkoutExercise(workoutRepo, log)
 	getUserScoreUC := usecases.NewGetUserScore(workoutRepo, log)
 	log.Info("use cases initialized")
 
