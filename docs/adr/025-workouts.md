@@ -321,7 +321,7 @@ Leaderboard (когда появится) будет читать batch-мето
 | PATCH | `/workouts/{workoutId}/exercises/{exerciseId}` | Патч упражнения |
 | DELETE | `/workouts/{workoutId}/exercises/{exerciseId}` | Удалить упражнение |
 
-Плюс **агрегация `/users/me`** в Gateway: параллельно `Profiles.GetMyProfile` + `Workouts.GetUserScore`. Это не отдельный маршрут, а изменение существующего (сейчас `/users/me` возвращает только профиль).
+В существующем маршруте **`GET /users/me`** Gateway параллельно вызывает `Profiles.GetMyProfile` и `Workouts.GetUserScore` и объединяет профиль и балл за тренировки в одном ответе.
 
 #### Агрегация `/users/me` и fallback
 
@@ -402,7 +402,7 @@ Leaderboard (когда появится) будет читать batch-мето
 
 ### 12. Совместимость с ADR-024 (будущая Kafka)
 
-Workouts разрабатывается **без** публикации событий — так закрывается базовая бизнес-логика до момента, когда Kafka и Notification будут готовы.
+Публикация события `workout.completed` запланирована на этап Kafka + Notification ([ADR-024](024-kafka-notification.md)).
 
 **Когда придёт ADR-024**, изменения будут только аддитивными:
 
@@ -459,7 +459,7 @@ Workouts разрабатывается **без** публикации собы
 
 ## Статус
 
-**В работе.**
+**Реализовано и задеплоено.**
 
 - ✅ Skeleton сервиса (proto, config, bootstrap, миграции, domain stubs) — ветка `feat/workouts-skeleton-fixes`.
 - ✅ Domain: value objects, сущности (`Workout`, `WorkoutExercise`), state machine (`ApplyPatch`), ошибки, `exercise_load` — ветка `feat/workouts-domain`.
@@ -467,12 +467,12 @@ Workouts разрабатывается **без** публикации собы
 - ✅ Domain: unit-тесты (VO, сущности, `ApplyPatch`, state machine, score, coefficient) — ветка `feat/workouts-domain-tests`.
 - ✅ Usecases: реализация 10 сценариев (Create, Get, Patch, Delete, Score) — ветка `feat/workouts-usecases`.
 - ✅ Usecases: unit-тесты с моками — ветка `feat/workouts-usecases-tests`.
-- 🚧 Infrastructure — ветка `feat/workouts-infrastructure`.
+- ✅ Infrastructure — ветка `feat/workouts-infrastructure` (PR #145).
   - ✅ Модели и мапперы.
   - ✅ Рефакторинг `updated_at` под единый стиль.
   - ✅ Репозитории (Workout, WorkoutExercise).
-  - ⬜ Интеграционные тесты Postgres (Testcontainers).
-  - ⬜ gRPC-клиенты к Profiles и Exercises (`infrastructure/clients/`).
-- ⬜ gRPC-сервер + bootstrap + config + main (реализация хендлеров).
-- ⬜ Compose + Taskfile + `.env.enc` + CI matrix.
-- ⬜ Gateway-хендлеры + маршруты + агрегация `/users/me`.
+  - ✅ Интеграционные тесты Postgres (Testcontainers).
+  - ✅ gRPC-клиенты к Profiles и Exercises с Circuit Breaker и Retry.
+- ✅ gRPC-сервер, bootstrap, config и main (PR #147).
+- ✅ Compose, Taskfile, `.env.enc` и CI matrix (PR #148).
+- ✅ Gateway-хендлеры, девять HTTP-маршрутов и агрегация `GET /users/me` (PR #156).
