@@ -4,6 +4,7 @@ import (
 	"context"
 
 	profilespb "github.com/BladeRunner322/orange-team-microservices/internal/gen/api/profiles"
+	workoutspb "github.com/BladeRunner322/orange-team-microservices/internal/gen/api/workouts"
 )
 
 // mockProfilesClient — реализация ports.ProfilesClientInterface для тестов.
@@ -41,3 +42,12 @@ func (m *mockProfilesClient) DeleteMyProfile(ctx context.Context) error {
 }
 
 func (m *mockProfilesClient) Close() {}
+
+// mockWorkoutScoreClient подставляет результат запроса очков для GET /users/me.
+type mockWorkoutScoreClient struct {
+	getUserScoreFunc func(ctx context.Context) (*workoutspb.GetUserScoreResponse, error)
+}
+
+func (m *mockWorkoutScoreClient) GetUserScore(ctx context.Context) (*workoutspb.GetUserScoreResponse, error) {
+	return m.getUserScoreFunc(ctx)
+}

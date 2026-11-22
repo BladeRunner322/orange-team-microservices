@@ -21,6 +21,7 @@ import (
 	habitshandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/habits"
 	profileshandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/profiles"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/proxy"
+	workoutshandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/workouts"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/middleware"
 )
 
@@ -32,18 +33,28 @@ type App struct {
 	profilesClient  *clients.ProfilesClient
 	exercisesClient *clients.ExercisesClient
 	habitsClient    *clients.HabitsClient
+	workoutsClient  *clients.WorkoutsClient
 	redisClient     *redis.Client
 }
 
 // New создаёт экземпляр App, собирает все зависимости.
-func New(cfg config.Config, log *logger.Logger) (*App, error) {
+func New(cfg config.Config, log *logger.Logger) (_ *App, err error) {
 	ctx := context.Background()
+	app := &App{logger: log}
+
+	// При ошибке запуска закрываем уже созданные ресурсы.
+	defer func() {
+		if err != nil {
+			app.Close()
+		}
+	}()
 
 	// 1. gRPC-клиент к Auth Service
 	authClient, err := clients.NewAuthClient(ctx, buildGRPCConfig(cfg.AuthGRPCAddr, cfg))
 	if err != nil {
 		return nil, fmt.Errorf("create auth client: %w", err)
 	}
+	app.authClient = authClient
 	log.Info("auth gRPC client created",
 		"addr", cfg.AuthGRPCAddr,
 		"timeout", cfg.Timeout,
@@ -56,6 +67,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create profiles client: %w", err)
 	}
+	app.profilesClient = profilesClient
 	log.Info("profiles gRPC client created",
 		"addr", cfg.ProfilesGRPCAddr,
 		"timeout", cfg.Timeout,
@@ -68,6 +80,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create exercises client: %w", err)
 	}
+	app.exercisesClient = exercisesClient
 	log.Info("exercises gRPC client created",
 		"addr", cfg.ExercisesGRPCAddr,
 		"timeout", cfg.Timeout,
@@ -80,8 +93,22 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create habits client: %w", err)
 	}
+	app.habitsClient = habitsClient
 	log.Info("habits gRPC client created",
 		"addr", cfg.HabitsGRPCAddr,
+		"timeout", cfg.Timeout,
+		"cb_enabled", cfg.CBEnabled,
+		"retry_enabled", cfg.RetryEnabled,
+	)
+
+	// 4a. gRPC-клиент к сервису Workouts
+	workoutsClient, err := clients.NewWorkoutsClient(ctx, buildGRPCConfig(cfg.WorkoutsGRPCAddr, cfg))
+	if err != nil {
+		return nil, fmt.Errorf("create workouts client: %w", err)
+	}
+	app.workoutsClient = workoutsClient
+	log.Info("workouts gRPC client created",
+		"addr", cfg.WorkoutsGRPCAddr,
 		"timeout", cfg.Timeout,
 		"cb_enabled", cfg.CBEnabled,
 		"retry_enabled", cfg.RetryEnabled,
@@ -96,6 +123,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create redis client: %w", err)
 	}
+	app.redisClient = redisClient
 	log.Info("redis client created", "addr", cfg.RedisAddr)
 
 	// 6. Rate limiter
@@ -158,7 +186,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Use(middleware.RateLimitMiddleware(limiter, trustedProxies, cfg.RateLimit, log))
 
 		// Users
-		r.Get("/users/me", profileshandlers.GetUserHandler(profilesClient))
+		r.Get("/users/me", profileshandlers.GetUserHandler(profilesClient, workoutsClient))
 		r.Patch("/users/me", profileshandlers.PatchUserHandler(profilesClient))
 		r.Delete("/users/me", profileshandlers.DeleteUserHandler(profilesClient))
 
@@ -177,15 +205,15 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 		r.Get("/habits/{habitId}/completions", habitshandlers.GetCompletionsHandler(habitsClient))
 
 		// Workouts
-		r.Get("/workouts", proxy.Handler)
-		r.Post("/workouts", proxy.Handler)
-		r.Get("/workouts/{workoutId}", proxy.Handler)
-		r.Patch("/workouts/{workoutId}", proxy.Handler)
-		r.Delete("/workouts/{workoutId}", proxy.Handler)
-		r.Post("/workouts/{workoutId}/exercises", proxy.Handler)
-		r.Get("/workouts/{workoutId}/exercises", proxy.Handler)
-		r.Patch("/workouts/{workoutId}/exercises/{exerciseId}", proxy.Handler)
-		r.Delete("/workouts/{workoutId}/exercises/{exerciseId}", proxy.Handler)
+		r.Get("/workouts", workoutshandlers.GetWorkoutsHandler(workoutsClient))
+		r.Post("/workouts", workoutshandlers.CreateWorkoutHandler(workoutsClient))
+		r.Get("/workouts/{workoutId}", workoutshandlers.GetWorkoutHandler(workoutsClient))
+		r.Patch("/workouts/{workoutId}", workoutshandlers.PatchWorkoutHandler(workoutsClient))
+		r.Delete("/workouts/{workoutId}", workoutshandlers.DeleteWorkoutHandler(workoutsClient))
+		r.Post("/workouts/{workoutId}/exercises", workoutshandlers.CreateWorkoutExerciseHandler(workoutsClient))
+		r.Get("/workouts/{workoutId}/exercises", workoutshandlers.GetWorkoutExercisesHandler(workoutsClient))
+		r.Patch("/workouts/{workoutId}/exercises/{exerciseId}", workoutshandlers.PatchWorkoutExerciseHandler(workoutsClient))
+		r.Delete("/workouts/{workoutId}/exercises/{exerciseId}", workoutshandlers.DeleteWorkoutExerciseHandler(workoutsClient))
 
 		// Leaderboard
 		r.Get("/leaderboard/daily", proxy.Handler)
@@ -206,7 +234,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	})
 
 	// 14. HTTP-сервер
-	httpSrv := &http.Server{
+	app.httpServer = &http.Server{
 		Addr:         cfg.HTTPPort,
 		Handler:      r,
 		ReadTimeout:  5 * time.Second,
@@ -215,15 +243,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	}
 	log.Info("HTTP server configured", "port", cfg.HTTPPort)
 
-	return &App{
-		httpServer:      httpSrv,
-		logger:          log,
-		authClient:      authClient,
-		profilesClient:  profilesClient,
-		exercisesClient: exercisesClient,
-		habitsClient:    habitsClient,
-		redisClient:     redisClient,
-	}, nil
+	return app, nil
 }
 
 // Run запускает HTTP-сервер (блокирует выполнение).
@@ -255,6 +275,10 @@ func (a *App) Close() {
 
 	if a.habitsClient != nil {
 		a.habitsClient.Close()
+	}
+
+	if a.workoutsClient != nil {
+		a.workoutsClient.Close()
 	}
 
 	if a.redisClient != nil {
