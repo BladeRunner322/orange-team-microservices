@@ -49,7 +49,6 @@ ADR ещё нет. Появится, когда начнётся (после Kaf
 |-----|-----|--------|-------------|
 | Алерт на `/ready` Gateway | [ADR-017](adr/017-alerting.md) | ~1 ч | Нужен отдельный механизм — healthcheck смотрит на `/health` |
 | Алерт на возраст S3-дампов | [ADR-014](adr/014-backups-and-dr.md) | ~1 ч | Fail-open для S3 не покрыт |
-| Отдельный smoke-тест сборки Workouts в CI | [ADR-012](adr/012-ci-cd-optimization.md) | — | Обсудить отдельный `go build ./services/workouts/cmd/...` по образцу Habits. |
 | govulncheck по расписанию | [ADR-012](adr/012-ci-cd-optimization.md) | ~30 мин | Отдельный workflow |
 | Dependabot / Renovate | [ADR-012](adr/012-ci-cd-optimization.md) | ~30 мин | Авто-PR на зависимости |
 | Docker logging options | [ADR-018](adr/018-storage-retention.md) | ~15 мин | `daemon.json` + перезапуск Docker |

@@ -1726,7 +1726,7 @@ Docker Compose v2.24+, SSH-доступ для деплоя.
 - Установка Go.
 - Кеширование модулей.
 - `go test -v ./... -short` — юнит-тесты.
-- `go build` для `auth`, `gateway`, `profiles`, `exercises` и `habits` — отдельные smoke-тесты сборки. Workouts собирается в Docker matrix при деплое.
+- `go build` для `auth`, `gateway`, `profiles`, `exercises`, `habits` и `workouts` — отдельные smoke-тесты сборки.
 - `go test -tags=integration -v -timeout=15m ./...` — интеграционные тесты (Testcontainers).
 
 Интеграционные тесты добавляют к CI ~3-5 минут. Если CI зелёный — PR готов к слиянию.
