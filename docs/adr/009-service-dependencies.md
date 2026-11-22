@@ -18,7 +18,7 @@
 **Поток клиента:**
 
 ```
-Клиент → Gateway → {Auth, Profiles, Exercises, Habits, Workouts, Leaderboard}
+Клиент → Gateway → {Auth, Profiles, Exercises, Habits, Workouts}
 ```
 
 Gateway — единая точка входа для клиента. Клиент **не ходит** к бизнес-сервисам напрямую.
@@ -27,7 +27,7 @@ Gateway — единая точка входа для клиента. Клиен
 
 ```
 Workouts → Profiles   (GetProfile — коэффициент при создании тренировки)
-Workouts → Exercises  (GetExercise — name, description, type при работе с тренировкой)
+Workouts → Exercises  (GetExercise — тип для валидации и сложность для снапшота)
 ```
 
 **Планируется (уточнится отдельным ADR):**
@@ -79,18 +79,18 @@ Gateway **не делает**:
 
 См. ADR-004. Event-driven (Kafka/NATS) **не используется**. Если понадобится — отдельный ADR с обоснованием: какая боль, какая шина, какая схема событий, как обеспечивается идемпотентность.
 
-### Целевое состояние
+### Состояние сервисов
 
 Статусы: ✅ — реализован, 📋 — в плане.
 
 | Сервис | Статус | Зовёт | Его зовут |
 |---|---|---|---|
 | **Auth** | ✅ | — | Gateway |
-| **Gateway** | ✅ | Auth, Profiles, Exercises | клиенты |
-| **Profiles** | ✅ | — | Gateway |
-| **Exercises** | ✅ | — | Gateway, Workouts (план) |
-| **Habits** | 📋 | — | Gateway (план) |
-| **Workouts** | 📋 | Profiles (план), Exercises (план) | Gateway (план), Leaderboard (план) |
+| **Gateway** | ✅ | Auth, Profiles, Exercises, Habits, Workouts | клиенты |
+| **Profiles** | ✅ | — | Gateway, Workouts |
+| **Exercises** | ✅ | — | Gateway, Workouts |
+| **Habits** | ✅ | — | Gateway |
+| **Workouts** | ✅ | Profiles, Exercises | Gateway, Leaderboard (план) |
 | **Leaderboard** | 📋 | Workouts (план) | Gateway (план) |
 
 Целевая карта зависимостей (после реализации всех сервисов):
@@ -133,4 +133,4 @@ Leaderboard → Workouts   (агрегация score)
 - [ADR-001: Профиль пользователя](001-profile.md) — снапшот и lazy-create.
 - [ADR-002: `user_workout_score`](002-user-workout-score.md) — агрегация через Gateway.
 - [ADR-004: Паттерны микросервисов](004-microservices-patterns.md) — Database per Service, sync gRPC.
-- [ADR-008: Жизненный цикл упражнения](008-exercise-lifecycle.md) — Workouts → Exercises при чтении.
+- [ADR-008: Жизненный цикл упражнения](008-exercise-lifecycle.md) — Workouts → Exercises при создании и изменении записи упражнения.

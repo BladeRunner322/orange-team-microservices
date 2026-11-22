@@ -19,43 +19,19 @@
 | Profiles | ✅ | [ADR-001](adr/001-profile.md) |
 | Exercises | ✅ | [ADR-008](adr/008-exercise-lifecycle.md) |
 | Habits | ✅ | [ADR-023](adr/023-habits.md) |
-| Workouts | 🚧 | [ADR-025](adr/025-workouts.md) |
+| Workouts | ✅ | [ADR-025](adr/025-workouts.md) |
 | Leaderboard | ⬜ | — |
 | Notification | ⬜ | [ADR-024](adr/024-kafka-notification.md) |
 
 ## 🚧 В работе
 
-### Workouts (ADR-025)
+Активных задач нет.
 
-Сервис тренировок. Полный контекст — [ADR-025](adr/025-workouts.md).
-Зовёт Profiles (коэффициент) и Exercises (справочник). Публикует `workout.completed` (ADR-024, в будущем).
-
-**Когда все шаги ✅ — секция удаляется, Workouts переезжает в «Состояние сервисов» со статусом ✅.**
-
-| Шаг | Что | Ветка | Статус | Оценка |
-|---|---|---|---|---|
-| 1 | ADR-025 (схема БД, контракты, зависимости, score) | `docs/adr-025-workouts` | ✅ | ~2 ч |
-| 2a | Domain: VO, сущности, state machine, `exercise_load`, ошибки | `feat/workouts-domain` | ✅ | ~2 ч |
-| 2b | Domain: расчёт score и coefficient | `feat/workouts-score-coefficient` | ✅ | ~1 ч |
-| 2c | Domain: unit-тесты (VO, сущности, `ApplyPatch`) | `feat/workouts-domain-tests` | ✅ | ~2 ч |
-| 3a | Usecases: реализация 10 сценариев | `feat/workouts-usecases` | ✅ | ~3 ч |
-| 3b | Usecases: моки + unit-тесты | `feat/workouts-usecases-tests` | ✅ | ~2 ч |
-| 4a | Infrastructure: модели, мапперы, рефакторинг `updated_at` | `feat/workouts-infrastructure` | ✅ | ~1.5 ч |
-| 4b | Infrastructure: репозитории (Workout, WorkoutExercise) | `feat/workouts-infrastructure` | ✅ | ~1.5 ч |
-| 4c | Infrastructure: интеграционные тесты Postgres (Testcontainers) | `feat/workouts-infrastructure` | ✅ | ~1 ч |
-| 4d | Infrastructure: gRPC-клиенты (Profiles, Exercises) | `feat/workouts-infrastructure` | ✅ | ~1 ч |
-| 4e | Infrastructure: CB/Retry на gRPC-клиентах | `feat/workouts-infrastructure` | ✅ | ~1 ч |
-| 5 | gRPC-сервер + bootstrap + config + main | `feat/workouts-grpc-and-bootstrap` | ✅ | ~3 ч |
-| 6 | Compose + Taskfile + .env.enc + CI matrix | `feat/workouts-compose-and-taskfile` | ✅ | ~2 ч |
-| 7 | Gateway-хендлеры + маршруты + агрегация `/users/me` | `feat/workouts-gateway` | ⬜ | ~3 ч |
-
-Сделано: шаги 1–6 (~23 ч). Осталось: шаг 7 (~3 ч).
-
-## ⏭️ Следующее (после Workouts)
+## ⏭️ Следующее
 
 ### Kafka + Notification (ADR-024)
 
-Фиксируется в [ADR-024](adr/024-kafka-notification.md). Начнётся после мерджа шага 7 Workouts — тогда переедет в «В работе».
+Следующий этап после завершения Workouts. План реализации описан в [ADR-024](adr/024-kafka-notification.md).
 
 ### Leaderboard
 
@@ -73,6 +49,7 @@ ADR ещё нет. Появится, когда начнётся (после Kaf
 |-----|-----|--------|-------------|
 | Алерт на `/ready` Gateway | [ADR-017](adr/017-alerting.md) | ~1 ч | Нужен отдельный механизм — healthcheck смотрит на `/health` |
 | Алерт на возраст S3-дампов | [ADR-014](adr/014-backups-and-dr.md) | ~1 ч | Fail-open для S3 не покрыт |
+| Отдельный smoke-тест сборки Workouts в CI | [ADR-012](adr/012-ci-cd-optimization.md) | — | Обсудить отдельный `go build ./services/workouts/cmd/...` по образцу Habits. |
 | govulncheck по расписанию | [ADR-012](adr/012-ci-cd-optimization.md) | ~30 мин | Отдельный workflow |
 | Dependabot / Renovate | [ADR-012](adr/012-ci-cd-optimization.md) | ~30 мин | Авто-PR на зависимости |
 | Docker logging options | [ADR-018](adr/018-storage-retention.md) | ~15 мин | `daemon.json` + перезапуск Docker |

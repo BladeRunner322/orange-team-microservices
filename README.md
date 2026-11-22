@@ -23,6 +23,7 @@
   - [Profiles (профили пользователей)](#profiles-профили-пользователей)
   - [Exercises (упражнения)](#exercises-упражнения)
   - [Habits (трекер привычек)](#habits-трекер-привычек)
+  - [Workouts (тренировки)](#workouts-тренировки)
   - [Gateway (API Gateway)](#gateway-api-gateway)
   - [Refresh tokens flow](#refresh-tokens-flow)
   - [Rate Limiting flow](#rate-limiting-flow)
@@ -30,6 +31,7 @@
 - [HTTPS](#https)
 - [Сетевая безопасность](#сетевая-безопасность)
 - [CI/CD и деплой](#cicd-и-деплой)
+  - [Выпуск релиза](#выпуск-релиза)
 - [Мониторинг и логирование](#мониторинг-и-логирование)
 - [Бэкапы](#бэкапы)
 - [Тестирование](#тестирование)
@@ -82,7 +84,7 @@ cd orange-team-microservices
 ```
 2. Настройте переменные окружения
 
-В проекте **шесть файлов `.env`** — по одному на каждый контекст:
+В проекте **семь файлов `.env`** — по одному на каждый контекст:
 
 - **Корневой `.env`** — порты для `docker-compose` и Grafana.
 - **`services/auth/.env`** — переменные Auth Service.
@@ -90,8 +92,9 @@ cd orange-team-microservices
 - **`services/profiles/.env`** — переменные Profiles Service.
 - **`services/exercises/.env`** — переменные Exercises Service.
 - **`services/habits/.env`** — переменные Habits Service.
+- **`services/workouts/.env`** — переменные Workouts Service.
 
-У каждого есть шаблон `.env.example`. Скопируйте все шесть:
+У каждого есть шаблон `.env.example`. Скопируйте все семь:
 
 ```bash
 cp .env.example .env
@@ -100,6 +103,7 @@ cp services/gateway/.env.example services/gateway/.env
 cp services/profiles/.env.example services/profiles/.env
 cp services/exercises/.env.example services/exercises/.env
 cp services/habits/.env.example services/habits/.env
+cp services/workouts/.env.example services/workouts/.env
 ```
 
 Затем заполните секреты в каждом из них.
@@ -121,6 +125,7 @@ cp services/habits/.env.example services/habits/.env
 - `PROFILES_GRPC_ADDR` — адрес Profiles Service (по умолчанию `profiles-service:50052`)
 - `EXERCISES_GRPC_ADDR` — адрес Exercises Service (по умолчанию `exercises-service:50053`)
 - `HABITS_GRPC_ADDR` — адрес Habits Service (по умолчанию `habits-service:50054`)
+- `WORKOUTS_GRPC_ADDR` — адрес Workouts Service в Docker (`workouts-service:50055`)
 - `GRPC_CLIENT_TLS_MODE` — режим TLS для исходящих gRPC-соединений (`disabled` / `insecure` / `verify`). По умолчанию `insecure` — для self-signed сертификатов в dev/staging.
 - `REDIS_PASSWORD` — пароль для Redis (rate limiting, можно тот же или отдельный)
 - `TRUSTED_PROXIES` — CIDR-список доверенных прокси через запятую. **В проде обязательно.** Если пусто, `X-Forwarded-For` игнорируется, и IP клиента берётся из `RemoteAddr` — а там в проде всегда IP Caddy, а не клиента. Следствие: rate limit по IP (`/refresh` — 20/мин) становится общим для всех клиентов сразу. В docker-стеке проекта значение — subnet docker-сети: `docker network inspect orange-team-microservices_default | grep Subnet`, обычно `172.18.0.0/16`. См. [ADR-016](docs/adr/016-network-security.md).
@@ -137,7 +142,11 @@ cp services/habits/.env.example services/habits/.env
 
 - `POSTGRES_PASSWORD` — пароль для PostgreSQL
 
-> ⚠️ Все шесть `.env` добавлены в `.gitignore` и **не коммитятся** в репозиторий. Секреты хранятся только локально.
+**В `services/workouts/.env`:**
+
+- `POSTGRES_PASSWORD` — пароль для PostgreSQL
+
+> ⚠️ Все семь `.env` добавлены в `.gitignore` и **не коммитятся** в репозиторий. Секреты хранятся только локально.
 
 3. Сгенерируйте TLS-сертификаты для разработки
 
@@ -166,13 +175,15 @@ task docker-up
 - PostgreSQL Profiles (порт 5433) — для Profiles Service
 - PostgreSQL Exercises (порт 5434) — для Exercises Service
 - PostgreSQL Habits (порт 5435) — для Habits Service
+- PostgreSQL Workouts (порт 5436) — для Workouts Service
 - Redis Auth (порт 6379) — для refresh-токенов
 - Redis Gateway (порт 6380) — для rate limiting
-- Миграции Auth, Profiles, Exercises и Habits (создание таблиц)
+- Миграции Auth, Profiles, Exercises, Habits и Workouts (создание таблиц)
 - Auth-сервис (gRPC, порт 50051)
 - Profiles-сервис (gRPC, порт 50052)
 - Exercises-сервис (gRPC, порт 50053)
 - Habits-сервис (gRPC, порт 50054)
+- Workouts-сервис (gRPC, порт 50055)
 - Gateway-сервис (HTTP, порт 8081)
 - Мониторинг (Prometheus, Grafana, Loki, Promtail)
 
@@ -421,13 +432,31 @@ orange-team-microservices/
 │   │   ├── .env.enc                  # зашифрованный .env (SOPS + age)
 │   │   └── Dockerfile
 │   │
-│   ├── workouts/                     # 📋 В ПЛАНЕ (не реализован)
-│   │   └── ... (аналогично)
+│   ├── workouts/                     # ✅ ГОТОВ — Workouts Service (тренировки)
+│   │   ├── cmd/                      # точка входа (main.go)
+│   │   ├── config/                   # конфигурация (envconfig)
+│   │   ├── internal/
+│   │   │   ├── bootstrap/            # сборка зависимостей приложения
+│   │   │   ├── domain/               # Workout, WorkoutExercise, статусы и расчёт баллов
+│   │   │   ├── application/
+│   │   │   │   ├── ports/            # интерфейсы репозиториев и gRPC-клиентов
+│   │   │   │   └── usecases/         # 10 сценариев (тренировки, упражнения, баллы)
+│   │   │   ├── infrastructure/
+│   │   │   │   ├── clients/          # gRPC-клиенты Profiles и Exercises
+│   │   │   │   └── postgres_repo/    # реализация репозиториев для PostgreSQL
+│   │   │   └── interfaces/
+│   │   │       └── workoutsgrpc/     # gRPC-сервер (обработчики WorkoutsService)
+│   │   ├── migrations/               # SQL-миграции для workouts_db
+│   │   ├── .env.example              # шаблон переменных Workouts Service
+│   │   ├── .env.enc                  # зашифрованный .env (SOPS + age)
+│   │   └── Dockerfile
 │   │
-│   └── leaderboard/                  # 📋 В ПЛАНЕ (не реализован)
-│       └── ... (аналогично)
+│   ├── leaderboard/                  # 📋 В ПЛАНЕ (не реализован)
+│   │   └── ... (аналогично)
+│   └── notification/                 # 📋 В ПЛАНЕ (не реализован)
 │
 ├── docs/                             # Документация
+│   ├── backlog.md                    # состояние сервисов и открытые задачи
 │   └── adr/                          # Architecture Decision Records
 │       ├── README.md
 │       ├── 001-profile.md
@@ -453,7 +482,8 @@ orange-team-microservices/
 │       ├── 021-independent-deployment.md
 │       ├── 022-testing-strategy.md
 │       ├── 023-habits.md
-│       └── 024-kafka-notification.md
+│       ├── 024-kafka-notification.md
+│       └── 025-workouts.md
 │
 ├── scripts/                          # скрипты (бэкапы, вспомогательное)
 │   ├── backup-db.sh                  # дамп БД + выгрузка в S3
@@ -482,7 +512,7 @@ orange-team-microservices/
 ├── logs/                             # файлы логов (в .gitignore)
 │
 ├── infra/                            # инфраструктура (docker, monitoring, networking)
-│   ├── compose.app.yml               # сервисы приложения (5 + БД + Redis + migrate)
+│   ├── compose.app.yml               # сервисы приложения (6 + БД + Redis + migrate)
 │   ├── compose.infra.yml             # инфраструктура (Caddy, мониторинг, логи)
 │   ├── Caddyfile                     # конфиг Caddy (HTTPS-терминация)
 │   ├── prometheus.yml                # конфигурация Prometheus
@@ -497,16 +527,18 @@ orange-team-microservices/
 │   ├── gateway.yml
 │   ├── profiles.yml
 │   ├── exercises.yml
-│   └── habits.yml
+│   ├── habits.yml
+│   └── workouts.yml
 ├── go.mod
 ├── go.sum
+├── AGENTS.md                         # правила работы Codex в репозитории
 └── README.md
 ```
 ## Полная архитектура микросервисного приложения
 
 ### Что реализовано сейчас
 
-Актуально на текущий момент работают пять сервисов: **Auth**, **Gateway**, **Profiles**, **Exercises** и **Habits**. Остальные (Workouts, Leaderboard) — в плане.
+Работают шесть сервисов: **Auth**, **Gateway**, **Profiles**, **Exercises**, **Habits** и **Workouts**. Leaderboard и Notification запланированы.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
@@ -534,10 +566,11 @@ orange-team-microservices/
 │  • RBAC: читает role из токена, RequireRole("admin") на POST /exercises    │
 │  • Rate limiting (Token Bucket на Redis)                                   │
 │  • Проксирует публичные запросы в Auth (register/login/refresh/logout)     │
-│  • Проксирует /users/me (GET/PATCH/DELETE) в Profiles                      │
+│  • GET /users/me объединяет профиль и балл за тренировки                   │
 │  • Проксирует /exercises в Exercises (чтение — user, мутации — admin)      │
 │  • Проксирует /habits в Habits (чтение и мутации — user)                   │
-│  • Workouts, Leaderboard — пока заглушки 501                               │
+│  • Проксирует /workouts в Workouts                                         │
+│  • Leaderboard — заглушки 501                                              │
 │  • Логирует запросы, собирает метрики                                      │
 └──────────────┬─────────────────────────────────────────────────────────────┘
                │ gRPC
@@ -602,6 +635,21 @@ orange-team-microservices/
 │  • Порт: :50054                                                            │
 │  • HTTP: /health, /ready, /metrics (:8080)                                 │
 └────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│                       WORKOUTS SERVICE  (✅ ГОТОВ)                          │
+│                                                                            │
+│  gRPC-методы:                                                              │
+│  • CreateWorkout, GetWorkout, GetWorkouts, PatchWorkout, DeleteWorkout     │
+│  • CreateWorkoutExercise, GetWorkoutExercises, PatchWorkoutExercise        │
+│  • DeleteWorkoutExercise, GetUserScore                                     │
+│                                                                            │
+│  • Тренировки и упражнения внутри тренировок (ADR-025)                     │
+│  • Получает данные профиля и справочника упражнений по gRPC                │
+│  • БД: workouts_db (PostgreSQL)                                            │
+│  • Порт: :50055                                                            │
+│  • HTTP: /health, /ready, /metrics (:8080)                                 │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Целевая архитектура
@@ -648,6 +696,7 @@ orange-team-microservices/
 │  POST   /refresh                → Auth.RefreshToken                        │
 │  POST   /logout                 → Auth.Logout                              │
 │  GET    /users/me               → Profiles.GetMyProfile                    │
+│                                 + Workouts.GetUserScore                    │
 │  PATCH  /users/me               → Profiles.PatchMyProfile                  │
 │  DELETE /users/me               → Profiles.DeleteMyProfile                 │
 │  GET    /exercises              → Exercises.GetExercises                   │
@@ -699,7 +748,7 @@ orange-team-microservices/
 ┌──────────────────────┐ ┌───────────────────┐ ┌─────────────────────┐
 │   HABITS SERVICE     │ │  WORKOUTS         │ │  LEADERBOARD        │
 │   (✅ ГОТОВ)         │ │  SERVICE          │ │  SERVICE            │
-│                      │ │  (📋 В ПЛАНЕ)     │ │  (📋 В ПЛАНЕ)       │
+│                      │ │  (✅ ГОТОВ)        │ │  (📋 В ПЛАНЕ)       │
 │  gRPC-методы:        │ │                   │ │                     │
 │  • GetHabits         │ │  gRPC-методы:     │ │  gRPC-методы:       │
 │  • GetHabit          │ │  • GetWorkouts    │ │  • GetDaily         │
@@ -715,7 +764,7 @@ orange-team-microservices/
 │      ├── habits      │ │    Exercise       │ │  Порт: :50056       │
 │      └── habit_      │ │  • DeleteWorkout  │ │                     │
 │          completions │ │    Exercise       │ │                     │
-│                      │ │                   │ │                     │
+│                      │ │  • GetUserScore   │ │                     │
 │  Порт: :50054        │ │  БД: PostgreSQL   │ │                     │
 │                      │ │  └── workouts_db  │ │                     │
 │                      │ │      └── workouts │ │                     │
@@ -724,15 +773,20 @@ orange-team-microservices/
 │                      │ │                   │ │                     │
 │                      │ │  Порт: :50055     │ │                     │
 └──────────────────────┘ └───────────────────┘ └─────────────────────┘
+
+┌───────────────────┐    события    ┌────────────────────────┐
+│ KAFKA (📋 В ПЛАНЕ) │ ────────────► │ NOTIFICATION SERVICE   │
+└───────────────────┘               │ (📋 В ПЛАНЕ)           │
+                                    └────────────────────────┘
 ```
 
 ## Инфраструктурные компоненты
 
 ### Что реализовано сейчас
 
-- **PostgreSQL:** `postgres-auth` (порт 5432) → `auth_db`; `postgres-profiles` (порт 5433) → `profiles_db`; `postgres-exercises` (порт 5434) → `exercises_db`; `postgres-habits` (порт 5435) → `habits_db`
+- **PostgreSQL:** `postgres-auth` (порт 5432) → `auth_db`; `postgres-profiles` (порт 5433) → `profiles_db`; `postgres-exercises` (порт 5434) → `exercises_db`; `postgres-habits` (порт 5435) → `habits_db`; `postgres-workouts` (порт 5436) → `workouts_db`
 - **Redis:** `redis-auth` (порт 6379) — refresh-токены; `redis-gateway` (порт 6380) — rate limiting
-- **Миграции:** `migrate-auth` → для `auth_db`; `migrate-profiles` → для `profiles_db`; `migrate-exercises` → для `exercises_db`; `migrate-habits` → для `habits_db`
+- **Миграции:** `migrate-auth` → для `auth_db`; `migrate-profiles` → для `profiles_db`; `migrate-exercises` → для `exercises_db`; `migrate-habits` → для `habits_db`; `migrate-workouts` → для `workouts_db`
 - **Мониторинг:** Prometheus (9090), Grafana (3000), Alertmanager (9093) — см. [ADR-017](docs/adr/017-alerting.md)
 - **Метрики хоста:** node-exporter (9100) — CPU, RAM, диск
 - **Логи:** Loki (3100), Promtail (9080), retention 30 дней — см. [ADR-018](docs/adr/018-storage-retention.md)
@@ -801,10 +855,13 @@ orange-team-microservices/
 | **Exercises** | Health / Ready / Metrics | HTTP | `8080` | `8083` | `8093` | Смещение +10, переопределяется в `infra/compose.app.yml` |
 | **Habits** | gRPC | gRPC | `50054` | `50054` | `50064` | Смещение +10 |
 | **Habits** | Health / Ready / Metrics | HTTP | `8080` | `8084` | `8094` | Смещение +10, переопределяется в `infra/compose.app.yml` |
+| **Workouts** | gRPC | gRPC | `50055` | `50055` | `50065` | Смещение +10 |
+| **Workouts** | Health / Ready / Metrics | HTTP | `8080` | `8085` | `8095` | Смещение +10, переопределяется в `infra/compose.app.yml` |
 | **PostgreSQL (Auth)** | База данных | TCP | `5432` | `5432` | — | Используется через Docker, проброс на хост |
 | **PostgreSQL (Profiles)** | База данных | TCP | `5432` | `5433` | — | Используется через Docker, проброс на хост |
 | **PostgreSQL (Exercises)** | База данных | TCP | `5432` | `5434` | — | Используется через Docker, проброс на хост | |
 | **PostgreSQL (Habits)** | База данных | TCP | `5432` | `5435` | — | Используется через Docker, проброс на хост | |
+| **PostgreSQL (Workouts)** | База данных | TCP | `5432` | `5436` | — | Используется через Docker, проброс на хост |
 | **Redis Auth** | Refresh-токены | TCP | `6379` | `6379` | — | Только для Auth Service |
 | **Redis Gateway** | Rate limiting | TCP | `6379` | `6380` | — | Только для Gateway Service |
 | **Prometheus** | Метрики | HTTP | `9090` | `9090` | — | Только в Docker |
@@ -816,13 +873,13 @@ orange-team-microservices/
 ### Логика смещения портов
 
 - **Docker** — используются стандартные порты:  
-  `50051` (Auth gRPC), `8080` (Auth HTTP), `8081` (Gateway HTTP), `50052` (Profiles gRPC), `8082` (Profiles HTTP), `50053` (Exercises gRPC), `8083` (Exercises HTTP).  
-  PostgreSQL: `postgres-auth` → `5432`, `postgres-profiles` → `5433`, `postgres-exercises` → `5434` (разные порты на хосте, чтобы не конфликтовать).  
+  `50051` (Auth gRPC), `8080` (Auth HTTP), `8081` (Gateway HTTP), `50052` (Profiles gRPC), `8082` (Profiles HTTP), `50053` (Exercises gRPC), `8083` (Exercises HTTP), `50054` (Habits gRPC), `8084` (Habits HTTP), `50055` (Workouts gRPC), `8085` (Workouts HTTP).\
+  PostgreSQL: `postgres-auth` → `5432`, `postgres-profiles` → `5433`, `postgres-exercises` → `5434`, `postgres-habits` → `5435`, `postgres-workouts` → `5436` (разные порты на хосте, чтобы не конфликтовать).\
   Redis: `redis-auth` → `6379`, `redis-gateway` → `6380` (разные порты на хосте, чтобы не конфликтовать).
 
 - **Локальная разработка** — порты приложений сдвинуты на **+10**:  
-  `50061`, `8090`, `8091`, `50062`, `8092`, `50063`, `8093`, `50064`, `8094` — чтобы не конфликтовать с запущенными Docker-контейнерами.  
-  PostgreSQL и оба Redis для локальной разработки используются из Docker через проброс на `localhost` (`5432`, `5433`, `5434`, `5435`, `6379`, `6380`).
+  `50061`, `8090`, `8091`, `50062`, `8092`, `50063`, `8093`, `50064`, `8094`, `50065`, `8095` — чтобы не конфликтовать с запущенными Docker-контейнерами.\
+  PostgreSQL и оба Redis для локальной разработки используются из Docker через проброс на `localhost` (`5432`, `5433`, `5434`, `5435`, `5436`, `6379`, `6380`).
 
 - **Gateway** внутри Docker слушает на `8081` и пробрасывается на хост на `8081` — это сделано намеренно, чтобы не конфликтовать с Auth на `8080`.
 
@@ -867,6 +924,12 @@ gRPC `localhost:50063`, HTTP `localhost:8093`.
 task habits:run
 ```
 gRPC `localhost:50064`, HTTP `localhost:8094`.
+
+**Workouts Service:**
+```bash
+task workouts:run
+```
+gRPC `localhost:50065`, HTTP `localhost:8095`. Для локального запуска Workouts использует Profiles на `localhost:50062` и Exercises на `localhost:50063`.
 
 ### Важно: команда `task docker-down-v`
 
@@ -1019,7 +1082,7 @@ curl http://localhost:8082/metrics
 - **Lifecycle** (см. [ADR-008](docs/adr/008-exercise-lifecycle.md)):
   - `type` — immutable, после создания не меняется.
   - `difficulty` — снапшот на момент создания workout_exercise (в Workouts).
-  - `name`, `description` — читаются live (в Workouts).
+  - Workouts возвращает `exercise_id` в списке упражнений тренировки. Получение актуальных `name` и `description` при чтении запланировано в ADR-008.
   - DELETE — soft через `deleted_at`, идемпотентен (см. [ADR-007](docs/adr/007-known-issues.md) F-3).
 
 - **RBAC:**
@@ -1110,6 +1173,54 @@ curl http://localhost:8084/metrics
 
 > 💡 `/health` и `/ready` используются Docker healthcheck'ом (в compose проверяется `/ready`). `/metrics` скрейпится Prometheus.
 
+### Workouts (тренировки)
+
+- Назначение: тренировки пользователя, упражнения в тренировке и расчёт баллов.
+
+- Протокол: gRPC
+
+- gRPC-методы: `CreateWorkout`, `GetWorkout`, `GetWorkouts`, `PatchWorkout`, `DeleteWorkout`, `CreateWorkoutExercise`, `GetWorkoutExercises`, `PatchWorkoutExercise`, `DeleteWorkoutExercise`, `GetUserScore`
+
+- Порт: 50055
+
+- БД: PostgreSQL (`workouts_db`, таблицы `workouts` и `workout_exercises`)
+
+- **Lifecycle** (см. [ADR-025](docs/adr/025-workouts.md)):
+  - Тренировка создаётся в статусе `planned`, переходы статусов проверяет Workouts.
+  - Profiles предоставляет данные для персонального коэффициента, Exercises — тип и сложность упражнения.
+  - Gateway передаёт `user_id` в gRPC metadata. `GetUserScore` возвращает суммарный балл для `GET /users/me`.
+
+- Команды:
+
+  | Команда | Назначение |
+  |---------|------------|
+  | `task workouts:run` | Запуск локально с PostgreSQL и миграциями (gRPC `50065`, HTTP `8095`) |
+  | `task workouts:logs` | Просмотр логов Workouts |
+  | `task workouts:psql` | Консоль psql для `workouts_db` |
+  | `task workouts:migrate-create -- <name>` | Создать новую миграцию |
+
+#### Healthcheck и readiness
+
+Workouts предоставляет HTTP-эндпоинты для проверки состояния:
+
+| Эндпоинт | Назначение | Ответ |
+|----------|------------|-------|
+| `/health` | Liveness — процесс жив | `{"status":"ok","service":"workouts"}` |
+| `/ready` | Readiness — проверка PostgreSQL и состояния gRPC-соединений к Profiles и Exercises | HTTP 200 или 503 с результатами проверок |
+| `/metrics` | Prometheus-метрики | text/plain |
+
+**Порт:** `8080` (в контейнере) / `8085` (на хосте в Docker) / `8095` (локально)
+
+Проверка:
+
+```bash
+curl http://localhost:8085/health
+curl http://localhost:8085/ready
+curl http://localhost:8085/metrics
+```
+
+> 💡 Compose проверяет `/ready`. Prometheus собирает метрики через `/metrics`.
+
 ### Gateway (API Gateway)
 
 - Назначение: HTTP → gRPC прокси. Единая точка входа для клиентов, централизованная проверка JWT через Auth Service и rate limiting.
@@ -1172,7 +1283,7 @@ curl http://localhost:8081/metrics
 | POST | `/login` | Логин (access + refresh) | ❌ | — |
 | POST | `/refresh` | Обновление пары токенов (rotation) | ❌ | — |
 | POST | `/logout` | Отзыв refresh-токена | ❌ | — |
-| GET | `/users/me` | Профиль пользователя → Profiles.GetMyProfile | ✅ | — |
+| GET | `/users/me` | Профиль и балл за тренировки → Profiles.GetMyProfile + Workouts.GetUserScore | ✅ | — |
 | PATCH | `/users/me` | Обновление профиля → Profiles.PatchMyProfile | ✅ | — |
 | DELETE | `/users/me` | Удаление профиля → Profiles.DeleteMyProfile | ✅ | — |
 | GET | `/exercises` | Список упражнений → Exercises.GetExercises | ✅ | — |
@@ -1188,22 +1299,24 @@ curl http://localhost:8081/metrics
 | POST | `/habits/{habitId}/complete` | Отметить выполнение → Habits.CompleteHabit | ✅ | — |
 | DELETE | `/habits/{habitId}/complete` | Снять отметку → Habits.UncompleteHabit | ✅ | — |
 | GET | `/habits/{habitId}/completions` | История за период → Habits.GetCompletions | ✅ | — |
-| GET | `/workouts` | Список тренировок (заглушка) | ✅ | — |
-| POST | `/workouts` | Создать тренировку (заглушка) | ✅ | — |
-| GET | `/workouts/{workoutId}` | Тренировка по ID (заглушка) | ✅ | — |
-| PATCH | `/workouts/{workoutId}` | Обновить тренировку (заглушка) | ✅ | — |
-| DELETE | `/workouts/{workoutId}` | Удалить тренировку (заглушка) | ✅ | — |
-| POST | `/workouts/{workoutId}/exercises` | Добавить упражнение в тренировку (заглушка) | ✅ | — |
-| GET | `/workouts/{workoutId}/exercises` | Упражнения тренировки (заглушка) | ✅ | — |
-| PATCH | `/workouts/{workoutId}/exercises/{exerciseId}` | Обновить упражнение (заглушка) | ✅ | — |
-| DELETE | `/workouts/{workoutId}/exercises/{exerciseId}` | Удалить упражнение (заглушка) | ✅ | — |
+| GET | `/workouts` | Список тренировок → Workouts.GetWorkouts | ✅ | — |
+| POST | `/workouts` | Создать тренировку → Workouts.CreateWorkout | ✅ | — |
+| GET | `/workouts/{workoutId}` | Тренировка по ID → Workouts.GetWorkout | ✅ | — |
+| PATCH | `/workouts/{workoutId}` | Обновить тренировку → Workouts.PatchWorkout | ✅ | — |
+| DELETE | `/workouts/{workoutId}` | Удалить тренировку → Workouts.DeleteWorkout | ✅ | — |
+| POST | `/workouts/{workoutId}/exercises` | Добавить упражнение в тренировку → Workouts.CreateWorkoutExercise | ✅ | — |
+| GET | `/workouts/{workoutId}/exercises` | Упражнения тренировки → Workouts.GetWorkoutExercises | ✅ | — |
+| PATCH | `/workouts/{workoutId}/exercises/{exerciseId}` | Обновить упражнение → Workouts.PatchWorkoutExercise | ✅ | — |
+| DELETE | `/workouts/{workoutId}/exercises/{exerciseId}` | Удалить упражнение → Workouts.DeleteWorkoutExercise | ✅ | — |
 | GET | `/leaderboard/daily` | Дневной лидерборд (заглушка) | ✅ | — |
 | GET | `/leaderboard/weekly` | Недельный лидерборд (заглушка) | ✅ | — |
 | GET | `/leaderboard/monthly` | Месячный лидерборд (заглушка) | ✅ | — |
 
 > **Защищённые маршруты** требуют заголовок `Authorization: Bearer <access_token>`, который валидируется через Auth Service.  
 > **`/refresh` и `/logout`** принимают `refresh_token` в теле запроса (не требуют access-токен, потому что access мог истечь).  
-> **`/users/me`** проксируется в Profiles Service. `user_id` берётся из JWT и передаётся через gRPC metadata (`x-user-id`).
+> **`GET /users/me`** параллельно запрашивает профиль в Profiles и балл за тренировки в Workouts. При успешном ответе Workouts возвращаются `workout_score` и `workout_score_available: true`, в том числе при нулевом балле. При ошибке Workouts Gateway возвращает профиль с HTTP 200, `workout_score: 0` и `workout_score_available: false`. При серверной ошибке Profiles запрос возвращает HTTP 503.
+>
+> `user_id` берётся из JWT и передаётся через gRPC metadata (`x-user-id`). В маршрутах `PATCH` и `DELETE /workouts/{workoutId}/exercises/{exerciseId}` параметр `exerciseId` — ID записи упражнения внутри тренировки. При добавлении упражнения `exercise_id` в теле запроса — ID упражнения из каталога.
 
 **Пример `/refresh`:**
 
@@ -1574,9 +1687,9 @@ nmap -Pn -p 22,80,443,3000,3100,50051,50052,50053,5432,5433,5434,6379,6380,8080,
 
 ### Требования к серверу
 
-Стек состоит из 23 контейнеров (5 сервисов, 4×PostgreSQL, 2×Redis,
-Prometheus, Alertmanager, node-exporter, Grafana, Loki, Promtail, Caddy,
-Cloudflare WARP). Для комфортной работы нужен сервер со следующими
+Стек включает 21 постоянно работающий контейнер (6 сервисов приложения, 5×PostgreSQL, 2×Redis,
+Prometheus, Alertmanager, node-exporter, Grafana, Loki, Promtail, Caddy и Cloudflare WARP)
+и 5 одноразовых контейнеров миграций. Для комфортной работы нужен сервер со следующими
 характеристиками:
 
 | Параметр | Минимум | Комфортно |
@@ -1604,7 +1717,7 @@ Docker Compose v2.24+, SSH-доступ для деплоя.
 
 - **Pull Request в `main`** → запускается только **CI** (тесты, сборка, smoke-тест).
 - **Push в `main`** (после вливания PR) → запускается **CD** (сборка образов, публикация в GHCR, деплой на сервер). Собираются и деплоятся только изменённые сервисы (см. [ADR-021](docs/adr/021-independent-deployment.md)).
-- **Push git-тега `v*`** (например, `v0.1.0`) → релиз: собираются все 5 сервисов, публикуются с дополнительным тегом `:v0.1.0`. Semver.
+- **Push git-тега `v*`** (например, `v0.1.0`) → релиз: собираются все шесть сервисов, образы публикуются с дополнительным тегом `:v0.1.0`. Semver.
 
 ### CI (Continuous Integration)
 
@@ -1613,7 +1726,7 @@ Docker Compose v2.24+, SSH-доступ для деплоя.
 - Установка Go.
 - Кеширование модулей.
 - `go test -v ./... -short` — юнит-тесты.
-- `go build` для `auth`, `gateway`, `profiles`, `exercises` и `habits` — smoke-тест сборки.
+- `go build` для `auth`, `gateway`, `profiles`, `exercises` и `habits` — отдельные smoke-тесты сборки. Workouts собирается в Docker matrix при деплое.
 - `go test -tags=integration -v -timeout=15m ./...` — интеграционные тесты (Testcontainers).
 
 Интеграционные тесты добавляют к CI ~3-5 минут. Если CI зелёный — PR готов к слиянию.
@@ -1622,8 +1735,8 @@ Docker Compose v2.24+, SSH-доступ для деплоя.
 
 При пуше в `main`:
 
-1. `changed-services` определяет по файлам, какие сервисы и/или инфраструктура изменились. Outputs: `auth_changed`, `gateway_changed`, `profiles_changed`, `exercises_changed`, `habits_changed`, `infra_changed`, `matrix` (JSON-массив сервисов на сборку).
-2. Собираются Docker-образы **только для изменённых сервисов** через **matrix** (параллельно). Если менялся `pkg/**` — все 5 сервисов. Если только `infra/**` — matrix пустая, сборка пропускается.
+1. `changed-services` определяет по файлам, какие сервисы и/или инфраструктура изменились. Outputs: `auth_changed`, `gateway_changed`, `profiles_changed`, `exercises_changed`, `habits_changed`, `workouts_changed`, `infra_changed`, `matrix` (JSON-массив сервисов на сборку).
+2. Собираются Docker-образы **только для изменённых сервисов** через **matrix** (параллельно). Если менялся `pkg/**` — все шесть сервисов. Если только `infra/**` — matrix пустая, сборка пропускается.
 3. Образы публикуются в **GitHub Container Registry** с тегами:
    - `:latest` — текущий прод.
    - `:<git-sha>` — точная привязка к коммиту.
@@ -1636,7 +1749,8 @@ Docker Compose v2.24+, SSH-доступ для деплоя.
    - Прогон миграций для изменённых сервисов (`docker compose run --rm migrate-<svc>`).
    - `docker compose pull <changed_services>` — только нужные образы.
    - `docker compose up -d --no-build --no-deps <changed_services>` — пересоздание только изменённых сервисов.
-   - Если менялась инфра (`infra/**`) — `docker compose up -d --no-build --force-recreate <infra_services>` для 8 инфра-контейнеров.
+   - Если менялась инфра (`infra/**`) — `docker compose up -d --no-build --force-recreate <infra_services>` для инфраструктурных контейнеров. Затем workflow ждёт готовности Prometheus, вызывает reload и проверяет появление шести целей приложений.
+   - Проверка запущенных сервисов, включая Workouts. Если контейнер отсутствует или остановлен, workflow выполняет нужную миграцию, скачивает образ и запускает сервис.
 5. Запускается `smoke-test` — три проверки против прода.
 6. Запускается `notify` — уведомление в Telegram (успех / провал / «нечего деплоить»).
 
@@ -1682,7 +1796,7 @@ curl https://sololevelingms.duckdns.org/health   # Gateway
 **Health остальных сервисов и Prometheus UI** — внутренние порты привязаны к `127.0.0.1`, снаружи закрыты. Доступ через SSH-туннель:
 
 ```bash
-ssh -L 9090:localhost:9090 -L 8080:localhost:8080 -L 8082:localhost:8082 -L 8083:localhost:8083 -L 8084:localhost:8084 root@<SERVER_HOST>
+ssh -L 9090:localhost:9090 -L 8080:localhost:8080 -L 8082:localhost:8082 -L 8083:localhost:8083 -L 8084:localhost:8084 -L 8085:localhost:8085 root@<SERVER_HOST>
 ```
 
 Потом в отдельных терминалах или браузере:
@@ -1691,11 +1805,12 @@ ssh -L 9090:localhost:9090 -L 8080:localhost:8080 -L 8082:localhost:8082 -L 8083
 - `http://localhost:8082/health` — Profiles
 - `http://localhost:8083/health` — Exercises
 - `http://localhost:8084/health` — Habits
-- `http://localhost:9090` — Prometheus UI (Status → Targets: `auth`, `gateway`, `profiles`, `exercises`, `habits`, `node` — все `UP`)
+- `http://localhost:8085/health` — Workouts
+- `http://localhost:9090` — Prometheus UI (Status → Targets: `auth`, `gateway`, `profiles`, `exercises`, `habits`, `workouts`, `node` — все `UP`)
 
 ### Обновление `.env` на сервере (SOPS + age)
 
-Шесть файлов `.env` (корневой + по одному на сервис) **не хранятся в git** (в `.gitignore`), но их **зашифрованные версии** (`.env.enc`) коммитятся. CD расшифровывает их при деплое. Никаких `nano` на сервере — все изменения проходят через git, ревью и CI/CD.
+Семь файлов `.env` (корневой + по одному на сервис) **не хранятся в git** (в `.gitignore`), но их **зашифрованные версии** (`.env.enc`) коммитятся. CD расшифровывает их при деплое. Никаких `nano` на сервере — все изменения проходят через git, ревью и CI/CD.
 
 **Структура в репозитории:**
 
@@ -1707,7 +1822,8 @@ orange-team-microservices/
     ├── gateway/.env.enc
     ├── profiles/.env.enc
     ├── exercises/.env.enc
-    └── habits/.env.enc
+    ├── habits/.env.enc
+    └── workouts/.env.enc
 ```
 
 **Как отредактировать переменную:**
@@ -1736,6 +1852,34 @@ task sops:decrypt   # .env.enc → .env (например, на новой ма�
 
 > ⚠️ **Приватный age-ключ** хранится в GitHub Secrets (`SOPS_AGE_KEY`) и локально. Если он утечёт — все `.env.enc` скомпрометированы. См. [ADR-006](docs/adr/006-secrets-management.md).
 
+### Выпуск релиза
+
+Теги релизов имеют формат `vX.Y.Z`. Текущую версию проверь по тегам Git, а состав релиза — по изменениям с предыдущего тега.
+
+| Версия | Когда повышать |
+|---|---|
+| Major | Несовместимое изменение клиентского HTTP- или gRPC-контракта. |
+| Minor | Обратно совместимая функциональность, новый сервис или инфраструктурный компонент в проде, завершённый уровень [ADR-019](docs/adr/019-microservices-evolution.md). |
+| Patch | Значимый hotfix без изменения контракта, например исправление проблемы безопасности или целостности данных. |
+
+Документация, обычный рефакторинг, мелкие исправления и промежуточные этапы разработки выпускаются в составе следующего релиза.
+
+#### Порядок выпуска
+
+1. Убедись, что изменения в `main`, деплой успешно завершился и smoke-тесты прошли.
+2. Сверь версию с существующими тегами и поставь один аннотированный тег на коммит релиза.
+
+   ```bash
+   git tag --list 'v*' --sort=-version:refname
+   git tag -a vX.Y.Z -m "<короткое описание>"
+   git push origin vX.Y.Z
+   ```
+
+3. Проверь запуск GitHub Actions по тегу. Workflow публикует образы с тегами `:latest`, `:<sha>` и `:vX.Y.Z`. Уведомление о результате приходит в Telegram.
+4. Зафиксируй версию в соответствующем ADR и [backlog](docs/backlog.md), если релиз закрывает зафиксированную там веху.
+
+Для исправления уже опубликованного релиза выпусти следующую версию и сохрани опубликованный тег в истории. Подробнее о деплое по тегам — в [ADR-021](docs/adr/021-independent-deployment.md).
+
 ## Мониторинг и логирование
 
 В проекте настроен полный стек для мониторинга и логирования:
@@ -1748,7 +1892,7 @@ task sops:decrypt   # .env.enc → .env (например, на новой ма�
 
 ### Метрики (Prometheus)
 
-Все пять сервисов отдают метрики в формате Prometheus.
+Все шесть работающих сервисов отдают метрики в формате Prometheus.
 
 **Auth-сервис:**
 
@@ -1809,6 +1953,16 @@ task sops:decrypt   # .env.enc → .env (например, на новой ма�
 - `grpc_request_duration_ms` — длительность gRPC-запросов в мс
 - `grpc_requests_in_flight` — gRPC-запросы в обработке
 
+**Workouts:**
+
+- **Порт:** `8080` (в контейнере) / `8085` (на хосте в Docker) / `8095` (локально)
+- **Эндпоинт:** `/metrics`
+
+Метрики:
+- `grpc_requests_total` — количество gRPC-запросов (method, status)
+- `grpc_request_duration_ms` — длительность gRPC-запросов в мс
+- `grpc_requests_in_flight` — gRPC-запросы в обработке
+
 **Путь нормализуется** через chi RoutePattern, чтобы `/workouts/123` и `/workouts/456` не создавали отдельные серии (защита от взрыва кардинальности).
 
 **Проверка:**
@@ -1819,6 +1973,7 @@ curl http://localhost:8081/metrics   # Gateway
 curl http://localhost:8082/metrics   # Profiles
 curl http://localhost:8083/metrics   # Exercises
 curl http://localhost:8084/metrics   # Habits
+curl http://localhost:8085/metrics   # Workouts
 ```
 
 ### Логи (Loki + Promtail)
@@ -1906,7 +2061,7 @@ curl http://localhost:3100/ready
 
 ## Бэкапы
 
-PostgreSQL-базы (`auth_db`, `profiles_db`, `exercises_db`, `habits_db`) бэкапятся скриптом
+PostgreSQL-базы (`auth_db`, `profiles_db`, `exercises_db`, `habits_db`, `workouts_db`) бэкапятся скриптом
 [`scripts/backup-db.sh`](scripts/backup-db.sh).
 
 Redis **не бэкапится** — там только refresh-токены (TTL 30 дней) и rate-limit-вёдра
@@ -1914,7 +2069,7 @@ Redis **не бэкапится** — там только refresh-токены (
 
 ### Что делает скрипт
 
-- Дампит четыре базы через `pg_dump` (контейнеры `auth-postgres`, `profiles-postgres`, `exercises-postgres`, `habits-postgres`).
+- Дампит пять баз через `pg_dump` (контейнеры `auth-postgres`, `profiles-postgres`, `exercises-postgres`, `habits-postgres`, `workouts-postgres`).
 - Сжимает каждый дамп через `gzip`.
 - Кладёт в `/root/backups/YYYY-MM-DD_HH-MM-SS/` (папка на каждую дату).
 - Удаляет папки старше `RETENTION_DAYS` (по умолчанию 7 дней).
@@ -1928,7 +2083,7 @@ Redis **не бэкапится** — там только refresh-токены (
 0 3 * * * /root/projects/orange-team-microservices/scripts/backup-db.sh >> /var/log/backup.log 2>&1
 ```
 
-Раз в сутки в 03:00 UTC. Логи — в `/var/log/backup.log`.
+Раз в сутки в 03:00 по часовому поясу cron на сервере. Логи — в `/var/log/backup.log`.
 
 **Где лежат бэкапы**
 
@@ -1941,7 +2096,8 @@ s3://orange-team-backups/
 ├── auth/2026-10-07_03-48-09/auth_db.sql.gz
 ├── profiles/2026-10-07_03-48-09/profiles_db.sql.gz
 ├── exercises/2026-10-07_03-48-09/exercises_db.sql.gz
-└── habits/2026-10-07_03-48-09/habits_db.sql.gz
+├── habits/2026-10-07_03-48-09/habits_db.sql.gz
+└── workouts/2026-10-07_03-48-09/workouts_db.sql.gz
 ```
 
 Ротация — 30 дней. Трафик между VDS и S3 внутри Selectel не тарифицируется.
@@ -2205,6 +2361,7 @@ docker exec -it auth-postgres psql -U test -c "CREATE DATABASE auth_db;"
 docker exec -it profiles-postgres psql -U test -c "CREATE DATABASE profiles_db;"
 docker exec -it exercises-postgres psql -U test -c "CREATE DATABASE exercises_db;"
 docker exec -it habits-postgres psql -U test -c "CREATE DATABASE habits_db;"
+docker exec -it workouts-postgres psql -U test -c "CREATE DATABASE workouts_db;"
 ```
 
 Или просто удали volumes и подними заново — `task docker-up` создаст БД автоматически из переменной `POSTGRES_DB` в `.env`:
@@ -2220,7 +2377,7 @@ task <service-name>:migrate-create -- create_users_table
 
 ## Переменные окружения
 
-В проекте **шесть файлов `.env`** — по одному на каждый контекст:
+В проекте **семь файлов `.env`** — по одному на каждый контекст:
 
 - **Корневой `.env`** — порты для `docker-compose` и Grafana.
 - **`services/auth/.env`** — переменные Auth Service.
@@ -2228,6 +2385,7 @@ task <service-name>:migrate-create -- create_users_table
 - **`services/profiles/.env`** — переменные Profiles Service.
 - **`services/exercises/.env`** — переменные Exercises Service.
 - **`services/habits/.env`** — переменные Habits Service.
+- **`services/workouts/.env`** — переменные Workouts Service.
 
 У каждого есть шаблон `.env.example` (в той же папке). Реальные `.env` в `.gitignore` и **не коммитятся**.
 
@@ -2250,6 +2408,9 @@ task <service-name>:migrate-create -- create_users_table
 | `HABITS_POSTGRES_PORT` | `5435` | Порт PostgreSQL (Habits) на хосте |
 | `HABITS_GRPC_PORT` | `50054` | Порт gRPC Habits на хосте |
 | `HABITS_HTTP_PORT` | `8084` | Порт HTTP Habits (health/metrics/ready) на хосте |
+| `WORKOUTS_POSTGRES_PORT` | `5436` | Порт PostgreSQL (Workouts) на хосте |
+| `WORKOUTS_GRPC_PORT` | `50055` | Порт gRPC Workouts на хосте |
+| `WORKOUTS_HTTP_PORT` | `8085` | Порт HTTP Workouts (health/metrics/ready) на хосте |
 | `PROMETHEUS_PORT` | `9090` | Порт Prometheus на хосте |
 | `GRAFANA_PORT` | `3000` | Порт Grafana на хосте |
 | `GRAFANA_PASSWORD` | `admin` | Пароль администратора Grafana |
@@ -2294,7 +2455,8 @@ task <service-name>:migrate-create -- create_users_table
 | `PROFILES_GRPC_ADDR` | `profiles-service:50052` | Адрес Profiles Service для gRPC-вызовов |
 | `EXERCISES_GRPC_ADDR` | `exercises-service:50053` | Адрес Exercises Service для gRPC-вызовов |
 | `HABITS_GRPC_ADDR` | `habits-service:50054` | Адрес Habits Service для gRPC-вызовов |
-| `GATEWAY_TIMEOUT` | `10s` | Таймаут gRPC-запросов к Auth, Profiles и Exercises |
+| `WORKOUTS_GRPC_ADDR` | `workouts-service:50055` | Адрес Workouts Service для gRPC-вызовов |
+| `GATEWAY_TIMEOUT` | `10s` | Таймаут исходящих gRPC-запросов Gateway |
 | `TRUSTED_PROXIES` | — | CIDR-список доверенных прокси через запятую. Пусто — X-Forwarded-For игнорируется |
 | `REDIS_ADDR` | `redis-gateway:6379` | Адрес Redis (свой инстанс) внутри Docker-сети |
 | `REDIS_PASSWORD` | — | Пароль Redis (для локали можно простой, для прода — `openssl rand -hex 32`) |
@@ -2348,6 +2510,29 @@ task <service-name>:migrate-create -- create_users_table
 | `TLS_CERT_FILE` | `/app/certs/server.crt` | Путь к сертификату (внутри контейнера) |
 | `TLS_KEY_FILE` | `/app/certs/server.key` | Путь к приватному ключу |
 
+### `services/workouts/.env`
+
+| Переменная | Значение в `.env.example` | Назначение |
+|------------|----------------------|------------|
+| `GRPC_PORT` | `:50055` | Порт gRPC-сервера (внутри контейнера) |
+| `HTTP_PORT` | `:8080` | Порт HTTP-сервера для /health, /ready и /metrics (внутри контейнера) |
+| `PROFILES_GRPC_ADDR` | `profiles-service:50052` | Адрес Profiles в Docker-сети (из шаблона) |
+| `EXERCISES_GRPC_ADDR` | `exercises-service:50053` | Адрес Exercises в Docker-сети (из шаблона) |
+| `GRPC_CLIENT_TLS_MODE` | `insecure` | Режим TLS для исходящих gRPC-соединений |
+| `WORKOUTS_TIMEOUT` | `10s` | Таймаут исходящих gRPC-запросов |
+| `ENABLE_REFLECTION` | `true` | gRPC reflection (для grpcurl) |
+| `POSTGRES_HOST` | `postgres-workouts` | Хост PostgreSQL внутри Docker-сети |
+| `POSTGRES_PORT` | `5432` | Порт PostgreSQL |
+| `POSTGRES_USER` | `test` | Пользователь БД |
+| `POSTGRES_PASSWORD` | — | Пароль БД |
+| `POSTGRES_DB` | `workouts_db` | Имя базы данных |
+| `POSTGRES_TIMEOUT` | `30s` | Таймаут операций с БД |
+| `ENABLE_TLS` | `true` | Использовать TLS для gRPC |
+| `TLS_CERT_FILE` | `/app/certs/server.crt` | Путь к сертификату (внутри контейнера) |
+| `TLS_KEY_FILE` | `/app/certs/server.key` | Путь к приватному ключу |
+
+Настройки Circuit Breaker и Retry (`WORKOUTS_CB_*`, `WORKOUTS_RETRY_*`) перечислены в [шаблоне окружения Workouts](services/workouts/.env.example).
+
 ### Общие настройки
 
 Логгер применяется ко всем сервисам, но переменные задаются в каждом `.env` одинаково:
@@ -2358,7 +2543,7 @@ task <service-name>:migrate-create -- create_users_table
 | `LOGGER_FORMAT` | `json` | Формат логов (`text` или `json`) |
 | `LOGGER_FOLDER` | `logs` | Папка для файлов логов |
 
-> ⚠️ Реальные `.env` **не коммитятся** в репозиторий (добавлены в `.gitignore`). Для запуска скопируйте `.env.example` в `.env` в каждой из шести папок и заполните секреты.
+> ⚠️ Реальные `.env` **не коммитятся** в репозиторий (добавлены в `.gitignore`). Для запуска скопируйте `.env.example` в `.env` в каждой из семи папок и заполните секреты.
 
 ## Architecture Decision Records
 
