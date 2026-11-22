@@ -20,7 +20,7 @@ fi
 # Полный порядок прогона. Setup всегда идёт первым — он пишет токены в env.
 # rate_limit в конце: он создаёт нагрузку на /login, остальным тестам это
 # не нужно, а после остальных он уже ничего не сломает.
-ALL=(setup auth profiles exercises habits rate_limit)
+ALL=(setup auth profiles exercises habits workouts rate_limit)
 
 # Если аргументы переданы — берём их, иначе весь набор.
 if [ "$#" -gt 0 ]; then
