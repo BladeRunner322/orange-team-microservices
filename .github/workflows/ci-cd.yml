@@ -469,11 +469,21 @@ jobs:
               docker compose up -d --no-build --force-recreate \
                 caddy prometheus alertmanager node-exporter grafana loki promtail warp
 
-              # Belt-and-suspenders: force-recreate может не подхватить новый конфиг,
-              # если изменился только content bind-mounted файла. Явно перечитываем
-              # конфиги Prometheus и Alertmanager.
+              PROMETHEUS_URL="http://127.0.0.1:${PROMETHEUS_PORT}"
+
+              echo "→ Waiting for Prometheus readiness"
+              attempt=1
+              until curl -fs --max-time 2 "${PROMETHEUS_URL}/-/ready" >/dev/null; do
+                if [ "$attempt" -ge 15 ]; then
+                  echo "  ❌ Prometheus did not become ready after ${attempt} attempts"
+                  exit 1
+                fi
+                attempt=$((attempt + 1))
+                sleep 2
+              done
+
               echo "→ Reloading Prometheus config"
-              curl -sf -X POST "http://127.0.0.1:${PROMETHEUS_PORT}/-/reload" \
+              curl -fsS --max-time 5 -X POST "${PROMETHEUS_URL}/-/reload" \
                 && echo "  Prometheus reloaded" \
                 || echo "  WARN: Prometheus reload failed (check logs)"
               echo "→ Reloading Alertmanager config"
@@ -481,18 +491,22 @@ jobs:
                 && echo "  Alertmanager reloaded" \
                 || echo "  WARN: Alertmanager reload failed (check logs)"
 
-              # Проверяем, что Prometheus видит все 6 сервисов
               echo "→ Verifying Prometheus targets"
-              sleep 5  # дать Prometheus один scrape cycle
+              if ! TARGETS=$(curl -fsS --max-time 5 "${PROMETHEUS_URL}/api/v1/targets?state=active"); then
+                echo "  ❌ failed to query Prometheus targets API"
+                exit 1
+              fi
+
               EXPECTED="auth gateway profiles exercises habits workouts"
-              ACTUAL=$(curl -sf "http://127.0.0.1:${PROMETHEUS_PORT}/api/v1/targets?state=active" \
-                | grep -o '"job":"[^"]*"' | grep -v '"job":"node"' | grep -v '"job":"prometheus"' \
-                | sed 's/"job":"//;s/"//g' | sort -u | tr '\n' ' ')
+              ACTUAL=$(printf '%s\n' "$TARGETS" \
+                | grep -o '"job":"[^"]*"' \
+                | sed 's/"job":"//;s/"//g' | sort -u)
               for job in $EXPECTED; do
-                echo "$ACTUAL" | grep -qw "$job" || {
-                  echo "  ❌ expected job '$job' not in Prometheus targets (got: $ACTUAL)"
+                if ! printf '%s\n' "$ACTUAL" | grep -Fxq "$job"; then
+                  echo "  ❌ expected job '$job' not in Prometheus targets"
+                  printf '  Jobs returned by Prometheus:\n%s\n' "$ACTUAL"
                   exit 1
-                }
+                fi
               done
               echo "  ✅ all 6 services visible in Prometheus"
             fi
