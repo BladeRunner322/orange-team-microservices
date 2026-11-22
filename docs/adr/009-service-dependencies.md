@@ -133,4 +133,4 @@ Leaderboard → Workouts   (агрегация score)
 - [ADR-001: Профиль пользователя](001-profile.md) — снапшот и lazy-create.
 - [ADR-002: `user_workout_score`](002-user-workout-score.md) — агрегация через Gateway.
 - [ADR-004: Паттерны микросервисов](004-microservices-patterns.md) — Database per Service, sync gRPC.
-- [ADR-008: Жизненный цикл упражнения](008-exercise-lifecycle.md) — Workouts → Exercises при чтении.
+- [ADR-008: Жизненный цикл упражнения](008-exercise-lifecycle.md) — Workouts → Exercises при создании и изменении записи упражнения.
