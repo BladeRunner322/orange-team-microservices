@@ -232,6 +232,11 @@ func protoWorkoutExerciseFromDomain(e domain.WorkoutExercise) *workouts.WorkoutE
 		duration = &val
 	}
 
+	var updatedAt *timestamppb.Timestamp
+	if t := e.UpdatedAt(); t != nil {
+		updatedAt = timestamppb.New(*t)
+	}
+
 	return &workouts.WorkoutExercise{
 		Id:           e.ID().String(),
 		Version:      int32(e.Version()),
@@ -245,7 +250,7 @@ func protoWorkoutExerciseFromDomain(e domain.WorkoutExercise) *workouts.WorkoutE
 		Completed:    e.Completed(),
 		ExerciseLoad: int32(e.ExerciseLoad()),
 		CreatedAt:    timestamppb.New(e.CreatedAt()),
-		UpdatedAt:    timestamppb.New(*e.UpdatedAt()), // В БД updated_at nullable, но после Update всегда есть. На случай nil можно добавить проверку, но по контракту здесь он есть.
+		UpdatedAt:    updatedAt,
 	}
 }
 
