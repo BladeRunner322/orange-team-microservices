@@ -21,6 +21,7 @@ import (
 	habitshandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/habits"
 	profileshandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/profiles"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/proxy"
+	workoutshandlers "github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/handlers/workouts"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/middleware"
 )
 
@@ -204,11 +205,11 @@ func New(cfg config.Config, log *logger.Logger) (_ *App, err error) {
 		r.Get("/habits/{habitId}/completions", habitshandlers.GetCompletionsHandler(habitsClient))
 
 		// Workouts
-		r.Get("/workouts", proxy.Handler)
-		r.Post("/workouts", proxy.Handler)
-		r.Get("/workouts/{workoutId}", proxy.Handler)
-		r.Patch("/workouts/{workoutId}", proxy.Handler)
-		r.Delete("/workouts/{workoutId}", proxy.Handler)
+		r.Get("/workouts", workoutshandlers.GetWorkoutsHandler(workoutsClient))
+		r.Post("/workouts", workoutshandlers.CreateWorkoutHandler(workoutsClient))
+		r.Get("/workouts/{workoutId}", workoutshandlers.GetWorkoutHandler(workoutsClient))
+		r.Patch("/workouts/{workoutId}", workoutshandlers.PatchWorkoutHandler(workoutsClient))
+		r.Delete("/workouts/{workoutId}", workoutshandlers.DeleteWorkoutHandler(workoutsClient))
 		r.Post("/workouts/{workoutId}/exercises", proxy.Handler)
 		r.Get("/workouts/{workoutId}/exercises", proxy.Handler)
 		r.Patch("/workouts/{workoutId}/exercises/{exerciseId}", proxy.Handler)
