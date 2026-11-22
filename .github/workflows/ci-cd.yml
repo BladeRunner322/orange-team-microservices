@@ -67,6 +67,9 @@ jobs:
       - name: Build Habits Service (smoke test)
         run: go build -v ./services/habits/cmd/...
 
+      - name: Build Workouts Service (smoke test)
+        run: go build -v ./services/workouts/cmd/...
+
       - name: Run Integration Tests
         run: go test -tags=integration -v -timeout=15m ./...
 
