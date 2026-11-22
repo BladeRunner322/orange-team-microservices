@@ -1,24 +1,63 @@
 package profiles
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
+	"golang.org/x/sync/errgroup"
+
+	profilespb "github.com/BladeRunner322/orange-team-microservices/internal/gen/api/profiles"
+	workoutspb "github.com/BladeRunner322/orange-team-microservices/internal/gen/api/workouts"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/application/ports"
 	"github.com/BladeRunner322/orange-team-microservices/services/gateway/internal/interfaces/http/httputil"
 )
 
-// GetUserHandler возвращает профиль текущего пользователя.
-func GetUserHandler(profilesClient ports.ProfilesClientInterface) http.HandlerFunc {
+// workoutScoreClient получает суммарный балл за тренировки текущего пользователя.
+type workoutScoreClient interface {
+	GetUserScore(ctx context.Context) (*workoutspb.GetUserScoreResponse, error)
+}
+
+// GetUserHandler возвращает профиль текущего пользователя и балл за тренировки.
+func GetUserHandler(profilesClient ports.ProfilesClientInterface, workoutsClient workoutScoreClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		resp, err := profilesClient.GetMyProfile(r.Context())
-		if err != nil {
+		group, ctx := errgroup.WithContext(r.Context())
+
+		var profile *profilespb.UserProfile
+		var score *workoutspb.GetUserScoreResponse
+
+		group.Go(func() error {
+			resp, err := profilesClient.GetMyProfile(ctx)
+			if err != nil {
+				return err
+			}
+			profile = resp
+			return nil
+		})
+
+		group.Go(func() error {
+			resp, err := workoutsClient.GetUserScore(ctx)
+			if err == nil {
+				score = resp
+			}
+			// Профиль можно вернуть и при недоступности Workouts.
+			return nil
+		})
+
+		if err := group.Wait(); err != nil {
 			code, msg := httputil.GrpcErrorToHTTP(err)
+			if code >= http.StatusInternalServerError {
+				code = http.StatusServiceUnavailable
+			}
 			httputil.SendError(w, code, msg)
 			return
 		}
 
-		dto := protoToUserProfileResponse(resp)
+		dto := GetUserResponse{
+			UserProfileResponse:   protoToUserProfileResponse(profile),
+			WorkoutScore:          score.GetScore(),
+			WorkoutScoreAvailable: score != nil,
+		}
 		httputil.SendJSON(w, http.StatusOK, dto)
 	}
 }

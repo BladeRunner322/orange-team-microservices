@@ -26,3 +26,11 @@ type UserProfileResponse struct {
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        *time.Time `json:"updated_at,omitempty"`
 }
+
+// GetUserResponse — профиль пользователя и суммарный балл за тренировки.
+type GetUserResponse struct {
+	UserProfileResponse
+
+	WorkoutScore          int64 `json:"workout_score"`
+	WorkoutScoreAvailable bool  `json:"workout_score_available"`
+}

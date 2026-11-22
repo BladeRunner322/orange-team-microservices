@@ -186,7 +186,7 @@ func New(cfg config.Config, log *logger.Logger) (_ *App, err error) {
 		r.Use(middleware.RateLimitMiddleware(limiter, trustedProxies, cfg.RateLimit, log))
 
 		// Users
-		r.Get("/users/me", profileshandlers.GetUserHandler(profilesClient))
+		r.Get("/users/me", profileshandlers.GetUserHandler(profilesClient, workoutsClient))
 		r.Patch("/users/me", profileshandlers.PatchUserHandler(profilesClient))
 		r.Delete("/users/me", profileshandlers.DeleteUserHandler(profilesClient))
 
