@@ -210,10 +210,10 @@ func New(cfg config.Config, log *logger.Logger) (_ *App, err error) {
 		r.Get("/workouts/{workoutId}", workoutshandlers.GetWorkoutHandler(workoutsClient))
 		r.Patch("/workouts/{workoutId}", workoutshandlers.PatchWorkoutHandler(workoutsClient))
 		r.Delete("/workouts/{workoutId}", workoutshandlers.DeleteWorkoutHandler(workoutsClient))
-		r.Post("/workouts/{workoutId}/exercises", proxy.Handler)
-		r.Get("/workouts/{workoutId}/exercises", proxy.Handler)
-		r.Patch("/workouts/{workoutId}/exercises/{exerciseId}", proxy.Handler)
-		r.Delete("/workouts/{workoutId}/exercises/{exerciseId}", proxy.Handler)
+		r.Post("/workouts/{workoutId}/exercises", workoutshandlers.CreateWorkoutExerciseHandler(workoutsClient))
+		r.Get("/workouts/{workoutId}/exercises", workoutshandlers.GetWorkoutExercisesHandler(workoutsClient))
+		r.Patch("/workouts/{workoutId}/exercises/{exerciseId}", workoutshandlers.PatchWorkoutExerciseHandler(workoutsClient))
+		r.Delete("/workouts/{workoutId}/exercises/{exerciseId}", workoutshandlers.DeleteWorkoutExerciseHandler(workoutsClient))
 
 		// Leaderboard
 		r.Get("/leaderboard/daily", proxy.Handler)

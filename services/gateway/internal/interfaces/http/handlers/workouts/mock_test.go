@@ -16,6 +16,11 @@ type mockWorkoutsClient struct {
 	createWorkoutFunc func(ctx context.Context) (*workoutspb.Workout, error)
 	patchWorkoutFunc  func(ctx context.Context, req *workoutspb.PatchWorkoutRequest) (*workoutspb.Workout, error)
 	deleteWorkoutFunc func(ctx context.Context, id string) error
+
+	createWorkoutExerciseFunc func(context.Context, *workoutspb.CreateWorkoutExerciseRequest) (*workoutspb.WorkoutExercise, error)
+	getWorkoutExercisesFunc   func(context.Context, string) (*workoutspb.GetWorkoutExercisesResponse, error)
+	patchWorkoutExerciseFunc  func(context.Context, *workoutspb.PatchWorkoutExerciseRequest) (*workoutspb.WorkoutExercise, error)
+	deleteWorkoutExerciseFunc func(context.Context, *workoutspb.DeleteWorkoutExerciseRequest) error
 }
 
 func (m *mockWorkoutsClient) GetWorkouts(ctx context.Context) (*workoutspb.GetWorkoutsResponse, error) {
@@ -36,4 +41,20 @@ func (m *mockWorkoutsClient) PatchWorkout(ctx context.Context, req *workoutspb.P
 
 func (m *mockWorkoutsClient) DeleteWorkout(ctx context.Context, id string) error {
 	return m.deleteWorkoutFunc(ctx, id)
+}
+
+func (m *mockWorkoutsClient) CreateWorkoutExercise(ctx context.Context, req *workoutspb.CreateWorkoutExerciseRequest) (*workoutspb.WorkoutExercise, error) {
+	return m.createWorkoutExerciseFunc(ctx, req)
+}
+
+func (m *mockWorkoutsClient) GetWorkoutExercises(ctx context.Context, workoutID string) (*workoutspb.GetWorkoutExercisesResponse, error) {
+	return m.getWorkoutExercisesFunc(ctx, workoutID)
+}
+
+func (m *mockWorkoutsClient) PatchWorkoutExercise(ctx context.Context, req *workoutspb.PatchWorkoutExerciseRequest) (*workoutspb.WorkoutExercise, error) {
+	return m.patchWorkoutExerciseFunc(ctx, req)
+}
+
+func (m *mockWorkoutsClient) DeleteWorkoutExercise(ctx context.Context, req *workoutspb.DeleteWorkoutExerciseRequest) error {
+	return m.deleteWorkoutExerciseFunc(ctx, req)
 }
