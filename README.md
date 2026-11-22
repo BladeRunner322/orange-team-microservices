@@ -31,6 +31,7 @@
 - [HTTPS](#https)
 - [Сетевая безопасность](#сетевая-безопасность)
 - [CI/CD и деплой](#cicd-и-деплой)
+  - [Выпуск релиза](#выпуск-релиза)
 - [Мониторинг и логирование](#мониторинг-и-логирование)
 - [Бэкапы](#бэкапы)
 - [Тестирование](#тестирование)
@@ -450,10 +451,12 @@ orange-team-microservices/
 │   │   ├── .env.enc                  # зашифрованный .env (SOPS + age)
 │   │   └── Dockerfile
 │   │
-│   └── leaderboard/                  # 📋 В ПЛАНЕ (не реализован)
-│       └── ... (аналогично)
+│   ├── leaderboard/                  # 📋 В ПЛАНЕ (не реализован)
+│   │   └── ... (аналогично)
+│   └── notification/                 # 📋 В ПЛАНЕ (не реализован)
 │
 ├── docs/                             # Документация
+│   ├── backlog.md                    # состояние сервисов и открытые задачи
 │   └── adr/                          # Architecture Decision Records
 │       ├── README.md
 │       ├── 001-profile.md
@@ -479,7 +482,8 @@ orange-team-microservices/
 │       ├── 021-independent-deployment.md
 │       ├── 022-testing-strategy.md
 │       ├── 023-habits.md
-│       └── 024-kafka-notification.md
+│       ├── 024-kafka-notification.md
+│       └── 025-workouts.md
 │
 ├── scripts/                          # скрипты (бэкапы, вспомогательное)
 │   ├── backup-db.sh                  # дамп БД + выгрузка в S3
@@ -508,7 +512,7 @@ orange-team-microservices/
 ├── logs/                             # файлы логов (в .gitignore)
 │
 ├── infra/                            # инфраструктура (docker, monitoring, networking)
-│   ├── compose.app.yml               # сервисы приложения (5 + БД + Redis + migrate)
+│   ├── compose.app.yml               # сервисы приложения (6 + БД + Redis + migrate)
 │   ├── compose.infra.yml             # инфраструктура (Caddy, мониторинг, логи)
 │   ├── Caddyfile                     # конфиг Caddy (HTTPS-терминация)
 │   ├── prometheus.yml                # конфигурация Prometheus
@@ -523,9 +527,11 @@ orange-team-microservices/
 │   ├── gateway.yml
 │   ├── profiles.yml
 │   ├── exercises.yml
-│   └── habits.yml
+│   ├── habits.yml
+│   └── workouts.yml
 ├── go.mod
 ├── go.sum
+├── AGENTS.md                         # правила работы Codex в репозитории
 └── README.md
 ```
 ## Полная архитектура микросервисного приложения
@@ -767,6 +773,11 @@ orange-team-microservices/
 │                      │ │                   │ │                     │
 │                      │ │  Порт: :50055     │ │                     │
 └──────────────────────┘ └───────────────────┘ └─────────────────────┘
+
+┌───────────────────┐    события    ┌────────────────────────┐
+│ KAFKA (📋 В ПЛАНЕ) │ ────────────► │ NOTIFICATION SERVICE   │
+└───────────────────┘               │ (📋 В ПЛАНЕ)           │
+                                    └────────────────────────┘
 ```
 
 ## Инфраструктурные компоненты
@@ -1071,7 +1082,7 @@ curl http://localhost:8082/metrics
 - **Lifecycle** (см. [ADR-008](docs/adr/008-exercise-lifecycle.md)):
   - `type` — immutable, после создания не меняется.
   - `difficulty` — снапшот на момент создания workout_exercise (в Workouts).
-  - `name`, `description` — читаются live (в Workouts).
+  - Workouts возвращает `exercise_id` в списке упражнений тренировки. Получение актуальных `name` и `description` при чтении запланировано в ADR-008.
   - DELETE — soft через `deleted_at`, идемпотентен (см. [ADR-007](docs/adr/007-known-issues.md) F-3).
 
 - **RBAC:**
@@ -1841,6 +1852,34 @@ task sops:decrypt   # .env.enc → .env (например, на новой ма�
 
 > ⚠️ **Приватный age-ключ** хранится в GitHub Secrets (`SOPS_AGE_KEY`) и локально. Если он утечёт — все `.env.enc` скомпрометированы. См. [ADR-006](docs/adr/006-secrets-management.md).
 
+### Выпуск релиза
+
+Теги релизов имеют формат `vX.Y.Z`. Текущую версию проверь по тегам Git, а состав релиза — по изменениям с предыдущего тега.
+
+| Версия | Когда повышать |
+|---|---|
+| Major | Несовместимое изменение клиентского HTTP- или gRPC-контракта. |
+| Minor | Обратно совместимая функциональность, новый сервис или инфраструктурный компонент в проде, завершённый уровень [ADR-019](docs/adr/019-microservices-evolution.md). |
+| Patch | Значимый hotfix без изменения контракта, например исправление проблемы безопасности или целостности данных. |
+
+Документация, обычный рефакторинг, мелкие исправления и промежуточные этапы разработки выпускаются в составе следующего релиза.
+
+#### Порядок выпуска
+
+1. Убедись, что изменения в `main`, деплой успешно завершился и smoke-тесты прошли.
+2. Сверь версию с существующими тегами и поставь один аннотированный тег на коммит релиза.
+
+   ```bash
+   git tag --list 'v*' --sort=-version:refname
+   git tag -a vX.Y.Z -m "<короткое описание>"
+   git push origin vX.Y.Z
+   ```
+
+3. Проверь запуск GitHub Actions по тегу. Workflow публикует образы с тегами `:latest`, `:<sha>` и `:vX.Y.Z`. Уведомление о результате приходит в Telegram.
+4. Зафиксируй версию в соответствующем ADR и [backlog](docs/backlog.md), если релиз закрывает зафиксированную там веху.
+
+Для исправления уже опубликованного релиза выпусти следующую версию и сохрани опубликованный тег в истории. Подробнее о деплое по тегам — в [ADR-021](docs/adr/021-independent-deployment.md).
+
 ## Мониторинг и логирование
 
 В проекте настроен полный стек для мониторинга и логирования:
@@ -2322,6 +2361,7 @@ docker exec -it auth-postgres psql -U test -c "CREATE DATABASE auth_db;"
 docker exec -it profiles-postgres psql -U test -c "CREATE DATABASE profiles_db;"
 docker exec -it exercises-postgres psql -U test -c "CREATE DATABASE exercises_db;"
 docker exec -it habits-postgres psql -U test -c "CREATE DATABASE habits_db;"
+docker exec -it workouts-postgres psql -U test -c "CREATE DATABASE workouts_db;"
 ```
 
 Или просто удали volumes и подними заново — `task docker-up` создаст БД автоматически из переменной `POSTGRES_DB` в `.env`:
