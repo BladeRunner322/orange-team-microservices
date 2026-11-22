@@ -311,6 +311,7 @@ orange-team-microservices/
 │       ├── profiles_collection.json  # Profiles: /users/me
 │       ├── exercises_collection.json # Exercises: CRUD + RBAC
 │       ├── habits_collection.json    # Habits: CRUD + отметки + стрики
+│       ├── workouts_collection.json  # Workouts: тренировки, упражнения и баллы
 │       └── rate_limit_collection.json # Rate limiting (самодостаточный)
 │
 ├── internal/
@@ -2255,6 +2256,7 @@ Postman-тесты разбиты по сервисам — каждая кол�
 | `profiles_collection.json` | `/users/me`: lazy-create, patch, null-сброс, delete. | 3 |
 | `exercises_collection.json` | Exercises: CRUD + RBAC. | 4 |
 | `habits_collection.json` | Habits: CRUD + отметки + стрики. | 5 |
+| `workouts_collection.json` | Workouts: тренировки, упражнения и балл в `GET /users/me`. | 6 |
 | `rate_limit_collection.json` | Rate limiting. Самодостаточен, порядок не важен (в `run.sh` идёт последним). | — |
 
 **Автоматический прогон (Newman + Docker):**
@@ -2264,9 +2266,10 @@ Postman-тесты разбиты по сервисам — каждая кол�
 task postman
 ```
 
-Или прогнать только конкретные коллекции:
+При выборочном прогоне перечисли нужные коллекции в порядке запуска. Для свежего пользователя и токенов укажи `setup` явно:
 ```bash
-task postman -- habits
+task postman -- setup habits
+task postman -- setup workouts
 task postman -- setup auth profiles
 ```
 
@@ -2284,17 +2287,19 @@ task postman -- setup auth profiles
 - **Profiles** — GET (lazy-create, `profile_completed=false`), PATCH (все 4 поля, частичный патч, null-сброс, невалидный weight → 400), DELETE → 204, повторный GET после DELETE (снова пустой).
 - **Exercises** — RBAC (`POST` от user → 403), POST (admin, success + duplicate → 409 + validation → 400), GET (список, по id, not found → 404), PATCH (admin: difficulty, name), DELETE (admin: 204, повторный → 204, soft delete через `is_deleted=true`).
 - **Habits** — GET (пустой список), POST (success + validation → 400 + duplicate → 409), GET (список, по id, not found → 404), PATCH (name), POST `/complete` (сегодня → 204, повторно → идемпотентно, будущее → 400), GET `/completions` (история + invalid period → 400), DELETE `/complete` → `completed_today=false`, DELETE (204 + идемпотентный повтор + deleted not in list).
+- **Workouts** — создание, чтение, изменение и удаление тренировок, установка и сброс интенсивности, отклонение недопустимого перехода статуса. Добавление, изменение и удаление упражнений с проверкой списка. Завершение тренировки и проверка прироста балла в `GET /users/me`.
 
 **Как использовать (ручной прогон в Postman):**
 
 1. Открой Postman → **Environments** → **Import** → выбери `env.json` (если его нет, скопируй `env.example.json` в `env.json`). Активируй его.
-2. Импортируй коллекции `setup_collection.json`, `auth_collection.json`, `profiles_collection.json`, `exercises_collection.json`, `habits_collection.json`.
+2. Импортируй коллекции `setup_collection.json`, `auth_collection.json`, `profiles_collection.json`, `exercises_collection.json`, `habits_collection.json`, `workouts_collection.json`.
 3. Прогоняй коллекции **по порядку** через **Run collection**:
    - Setup (генерирует email, регистрирует юзера, получает токены).
    - Auth.
    - Profiles.
    - Exercises.
    - Habits.
+   - Workouts.
 
 > 💡 `base_url` в `env.example.json` — `http://localhost:8081` (Docker, `task docker-up`). Для локального запуска Gateway (`task gateway:run`) поменяй на `http://localhost:8091` в `env.json` перед прогоном.
 
