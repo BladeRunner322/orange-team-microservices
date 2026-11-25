@@ -30,10 +30,10 @@
 
 **Почему так:**
 
-1. **Симметрия.** `domainXFromProto` и `protoXFromDomain` — зеркальны. Не надо помнить, что там было `<field>FromProto`, а обратно `ToProto<Type>`.
+1. **Симметрия.** `domainXFromProto` и `protoXFromDomain` — зеркальны. Оба направления используют один шаблон.
 2. **Направление в имени.** `domainWeightFromProto` читается как «domain Weight from proto». Без `To`/`From`-смеси.
 3. **Роль видна из сигнатуры.** `domainStatusFromProto(*string)` — поле (принимает скаляр). `domainWorkoutPatchFromProto(*PatchWorkoutRequest)` — объект (принимает целое сообщение). Разные роли — разный второй сегмент имени (`Field` vs `Type`).
-4. **Нет коллизий с `To`-функциями.** `ToProtoX` мог быть «домен → proto» или «proto → домен» — двусмысленно. `protoXFromDomain` — однозначно.
+4. **Явный источник.** В `protoExerciseFromDomain` суффикс `FromDomain` указывает, что функция принимает доменный объект.
 
 **Поле vs объект — различие видно по префиксу:**
 
@@ -43,7 +43,7 @@
 | `domainWorkoutPatchFromProto(*PatchWorkoutRequest)` | объект | целое proto-сообщение → domain-патч |
 | `domainUUIDFromString(string)` | универсальный парсер | `string` → `uuid.UUID`, не привязан к полю |
 
-**Универсальные парсеры скаляров.** Если функция принимает **само значение** (а не request целиком) и используется в нескольких request-типах — это `domain<Type>From<SourceType>`, а не `<field>FromProto`.
+**Универсальные парсеры скаляров.** Если функция принимает **само значение** (а не request целиком) и используется в нескольких request-типах — используем `domain<Type>From<SourceType>`.
 
 Пример:
 ```go
@@ -62,9 +62,9 @@ func domainUUIDFromString(raw string) (uuid.UUID, error) {
 
 **Применение к существующим сервисам.**
 
-Auth, Profiles, Exercises, Habits используют **старый** нейминг (`<field>FromProto`, `ToDomain<Type>`, `ToProto<Type>`). Это технический долг. Переделывать сейчас не будем — слишком много файлов и тестов. Правило: **при следующем касании мапперов этих сервисов** (рефакторинг, новая фича) — приводить к новому стандарту.
+Workouts первым применил этот стандарт. Мапперы gRPC в Auth, Profiles, Exercises и Habits также приведены к нему.
 
-Workouts — **первый сервис на новом стандарте**. Дальше (Leaderboard, Notification) — сразу новый.
+Если результат преобразования — параметры сценария, имя описывает их, например `registerParamsFromProto`. Если protobuf-ответ собирается из токенов или структуры порта, указываем этот источник, например `protoLoginResponseFromTokens` и `protoValidateTokenResponseFromUserInfo`.
 
 **N-2. Методы репозитория — CRUD-alphabetical.**
 
@@ -210,7 +210,7 @@ WHERE id = $1 AND deleted_at IS NULL
 
 **Правильно:**
 ```go
-resp := ToProtoExercise(exercise)
+resp := protoExerciseFromDomain(exercise)
 return resp, nil
 ```
 
@@ -224,7 +224,7 @@ return created, nil
 
 **Неправильно (для длинных выражений):**
 ```go
-return ToProtoExercise(exercise), nil
+return protoExerciseFromDomain(exercise), nil
 ```
 и
 ```go
@@ -292,19 +292,19 @@ package domain
 
 **Новые сервисы (Habits, Workouts, Leaderboard):** следуют этим конвенциям с самого начала.
 
-**Exercises — ✅ сделан по конвенциям** (этот ADR писался параллельно с Exercises). Суффикс `Raw`, `Scan(row)` на модели, вложенный стиль ошибок, `ModelToDomain` с id, `ToDomainID(raw)` — всё применено.
+**Exercises — ✅ сделан по конвенциям** (этот ADR писался параллельно с Exercises). Суффикс `Raw`, `Scan(row)` на модели, вложенный стиль ошибок, `ModelToDomain` с id, `domainUUIDFromString(raw)` — всё применено.
 
-**Auth и Profiles — ✅ приведены к конвенциям** (2026-10-13). Что было сделано:
+**Auth и Profiles — ✅ приведены к конвенциям.** Что было сделано:
 
 - Auth: суффикс `Str` в параметрах usecase (`emailStr`, `fullNameStr`) → `Raw` (N-3).
-- Profiles: `ToDomainUserID(req)` → `ToDomainUserID(raw string)` (N-1).
+- Profiles: `domainUUIDFromString(raw string)` принимает строку с идентификатором пользователя (N-1).
 - Profiles: порядок методов `ports.Repository` выровнен по CRUD-alphabetical (N-2).
 - Auth и Profiles: inline-скан → `Scan(row)` на модели (CS-3).
 - Auth и Profiles: обёртка `ModelToDomain` с id записи (CS-4).
 - Auth и Profiles: возврат через переменную (CS-8).
 - Auth и Profiles: package-комментарий — один раз, в представительном файле (CS-9).
 
-**Приоритет рефакторинга:** закрыт. Все четыре сервиса соответствуют конвенциям.
+**Мапперы gRPC (N-1):** соглашение применено в Auth, Profiles, Exercises, Habits и Workouts.
 
 ## Связанные решения
 

@@ -11,8 +11,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// sexFromProto конвертирует NullableString в Nullable[domain.Sex].
-func sexFromProto(wrapper *profiles.NullableString) (nullable.Nullable[domain.Sex], error) {
+// domainSexFromProto конвертирует NullableString в Nullable[domain.Sex].
+func domainSexFromProto(wrapper *profiles.NullableString) (nullable.Nullable[domain.Sex], error) {
 	if wrapper == nil {
 		return nullable.Nullable[domain.Sex]{}, nil
 	}
@@ -29,8 +29,8 @@ func sexFromProto(wrapper *profiles.NullableString) (nullable.Nullable[domain.Se
 	return nullable.Nullable[domain.Sex]{Set: true, Value: &sex}, nil
 }
 
-// weightKgFromProto конвертирует NullableDouble (кг) в Nullable[domain.Weight] (граммы).
-func weightKgFromProto(wrapper *profiles.NullableDouble) (nullable.Nullable[domain.Weight], error) {
+// domainWeightKgFromProto конвертирует NullableDouble (кг) в Nullable[domain.Weight] (граммы).
+func domainWeightKgFromProto(wrapper *profiles.NullableDouble) (nullable.Nullable[domain.Weight], error) {
 	if wrapper == nil {
 		return nullable.Nullable[domain.Weight]{}, nil
 	}
@@ -47,8 +47,8 @@ func weightKgFromProto(wrapper *profiles.NullableDouble) (nullable.Nullable[doma
 	return nullable.Nullable[domain.Weight]{Set: true, Value: &weight}, nil
 }
 
-// birthDateFromProto конвертирует NullableString (YYYY-MM-DD) в Nullable[domain.BirthDate].
-func birthDateFromProto(wrapper *profiles.NullableString) (nullable.Nullable[domain.BirthDate], error) {
+// domainBirthDateFromProto конвертирует NullableString (YYYY-MM-DD) в Nullable[domain.BirthDate].
+func domainBirthDateFromProto(wrapper *profiles.NullableString) (nullable.Nullable[domain.BirthDate], error) {
 	if wrapper == nil {
 		return nullable.Nullable[domain.BirthDate]{}, nil
 	}
@@ -70,8 +70,8 @@ func birthDateFromProto(wrapper *profiles.NullableString) (nullable.Nullable[dom
 	return nullable.Nullable[domain.BirthDate]{Set: true, Value: &birthDate}, nil
 }
 
-// heightCmFromProto конвертирует NullableInt32 в Nullable[domain.Height].
-func heightCmFromProto(wrapper *profiles.NullableInt32) (nullable.Nullable[domain.Height], error) {
+// domainHeightCmFromProto конвертирует NullableInt32 в Nullable[domain.Height].
+func domainHeightCmFromProto(wrapper *profiles.NullableInt32) (nullable.Nullable[domain.Height], error) {
 	if wrapper == nil {
 		return nullable.Nullable[domain.Height]{}, nil
 	}
@@ -90,24 +90,24 @@ func heightCmFromProto(wrapper *profiles.NullableInt32) (nullable.Nullable[domai
 
 // ===== Преобразования из protobuf в параметры use case =====
 
-// ToDomainProfilePatch преобразует pb.PatchMyProfileRequest в параметры для use case.
-func ToDomainProfilePatch(req *profiles.PatchMyProfileRequest) (domain.ProfilePatch, error) {
-	sex, err := sexFromProto(req.Sex)
+// domainProfilePatchFromProto преобразует pb.PatchMyProfileRequest в параметры для use case.
+func domainProfilePatchFromProto(req *profiles.PatchMyProfileRequest) (domain.ProfilePatch, error) {
+	sex, err := domainSexFromProto(req.Sex)
 	if err != nil {
 		return domain.ProfilePatch{}, err
 	}
 
-	weight, err := weightKgFromProto(req.WeightKg)
+	weight, err := domainWeightKgFromProto(req.WeightKg)
 	if err != nil {
 		return domain.ProfilePatch{}, err
 	}
 
-	birthDate, err := birthDateFromProto(req.BirthDate)
+	birthDate, err := domainBirthDateFromProto(req.BirthDate)
 	if err != nil {
 		return domain.ProfilePatch{}, err
 	}
 
-	height, err := heightCmFromProto(req.HeightCm)
+	height, err := domainHeightCmFromProto(req.HeightCm)
 	if err != nil {
 		return domain.ProfilePatch{}, err
 	}
@@ -115,8 +115,8 @@ func ToDomainProfilePatch(req *profiles.PatchMyProfileRequest) (domain.ProfilePa
 	return domain.NewProfilePatch(sex, weight, birthDate, height), nil
 }
 
-// ToDomainUserID парсит user_id из proto в uuid.UUID.
-func ToDomainUserID(raw string) (uuid.UUID, error) {
+// domainUUIDFromString парсит user_id из proto в uuid.UUID.
+func domainUUIDFromString(raw string) (uuid.UUID, error) {
 	userID, err := uuid.Parse(raw)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("parse user_id: %w", err)
@@ -127,8 +127,8 @@ func ToDomainUserID(raw string) (uuid.UUID, error) {
 
 // ===== Преобразования из доменных объектов в protobuf =====
 
-// ToProtoProfile преобразует профиль в pb.UserProfile.
-func ToProtoProfile(profile domain.Profile) *profiles.UserProfile {
+// protoUserProfileFromDomain преобразует профиль в pb.UserProfile.
+func protoUserProfileFromDomain(profile domain.Profile) *profiles.UserProfile {
 	sex := ""
 	if s := profile.Sex(); s != nil {
 		sex = s.String()

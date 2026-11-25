@@ -68,7 +68,7 @@ func (s *Server) CreateHabit(
 		}
 	}
 
-	resp := ToProtoHabit(created, 0, false)
+	resp := protoHabitFromDomain(created, 0, false)
 
 	return resp, nil
 }
@@ -78,7 +78,7 @@ func (s *Server) GetHabit(
 	ctx context.Context,
 	req *habits.GetHabitRequest,
 ) (*habits.Habit, error) {
-	id, err := ToDomainID(req.Id)
+	id, err := domainUUIDFromString(req.Id)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
 	}
@@ -95,7 +95,7 @@ func (s *Server) GetHabit(
 		}
 	}
 
-	resp := ToProtoHabitWithStreak(hws)
+	resp := protoHabitFromHabitWithStreak(hws)
 
 	return resp, nil
 }
@@ -117,7 +117,7 @@ func (s *Server) GetHabits(
 
 	protoHabits := make([]*habits.Habit, 0, len(list))
 	for _, hws := range list {
-		protoHabits = append(protoHabits, ToProtoHabitWithStreak(hws))
+		protoHabits = append(protoHabits, protoHabitFromHabitWithStreak(hws))
 	}
 
 	resp := &habits.GetHabitsResponse{
@@ -132,12 +132,12 @@ func (s *Server) PatchHabit(
 	ctx context.Context,
 	req *habits.PatchHabitRequest,
 ) (*habits.Habit, error) {
-	id, err := ToDomainID(req.Id)
+	id, err := domainUUIDFromString(req.Id)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
 	}
 
-	patch, err := ToDomainHabitPatch(req)
+	patch, err := domainHabitPatchFromProto(req)
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrInvalidName):
@@ -163,7 +163,7 @@ func (s *Server) PatchHabit(
 		}
 	}
 
-	resp := ToProtoHabit(updated, 0, false)
+	resp := protoHabitFromDomain(updated, 0, false)
 
 	return resp, nil
 }
@@ -173,7 +173,7 @@ func (s *Server) DeleteHabit(
 	ctx context.Context,
 	req *habits.DeleteHabitRequest,
 ) (*habits.DeleteHabitResponse, error) {
-	id, err := ToDomainID(req.Id)
+	id, err := domainUUIDFromString(req.Id)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
 	}
@@ -200,12 +200,12 @@ func (s *Server) CompleteHabit(
 	ctx context.Context,
 	req *habits.CompleteHabitRequest,
 ) (*habits.CompleteHabitResponse, error) {
-	id, err := ToDomainID(req.Id)
+	id, err := domainUUIDFromString(req.Id)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
 	}
 
-	date, err := ToDomainDate(req.Date)
+	date, err := domainDateFromString(req.Date)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid date")
 	}
@@ -233,12 +233,12 @@ func (s *Server) UncompleteHabit(
 	ctx context.Context,
 	req *habits.UncompleteHabitRequest,
 ) (*habits.UncompleteHabitResponse, error) {
-	id, err := ToDomainID(req.Id)
+	id, err := domainUUIDFromString(req.Id)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
 	}
 
-	date, err := ToDomainDate(req.Date)
+	date, err := domainDateFromString(req.Date)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid date")
 	}
@@ -266,17 +266,17 @@ func (s *Server) GetCompletions(
 	ctx context.Context,
 	req *habits.GetCompletionsRequest,
 ) (*habits.GetCompletionsResponse, error) {
-	id, err := ToDomainID(req.Id)
+	id, err := domainUUIDFromString(req.Id)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
 	}
 
-	from, err := ToDomainDateOrZero(req.From)
+	from, err := domainDateOrZeroFromString(req.From)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid from date")
 	}
 
-	to, err := ToDomainDateOrZero(req.To)
+	to, err := domainDateOrZeroFromString(req.To)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid to date")
 	}
@@ -297,7 +297,7 @@ func (s *Server) GetCompletions(
 
 	protoCompletions := make([]*habits.Completion, 0, len(completions))
 	for _, c := range completions {
-		protoCompletions = append(protoCompletions, ToProtoCompletion(c))
+		protoCompletions = append(protoCompletions, protoCompletionFromDomain(c))
 	}
 
 	resp := &habits.GetCompletionsResponse{

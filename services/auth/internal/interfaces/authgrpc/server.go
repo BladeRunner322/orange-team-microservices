@@ -42,7 +42,7 @@ func (s *Server) Register(
 	ctx context.Context,
 	req *auth.RegisterRequest,
 ) (*auth.RegisterResponse, error) {
-	email, password, fullName := ToDomainRegisterParams(req)
+	email, password, fullName := registerParamsFromProto(req)
 	user, err := s.registerUC.Execute(ctx, email, password, fullName)
 	if err != nil {
 		switch {
@@ -58,14 +58,14 @@ func (s *Server) Register(
 			return nil, status.Error(codes.Internal, "internal server error")
 		}
 	}
-	return ToProtoRegisterResponse(user), nil
+	return protoRegisterResponseFromDomain(user), nil
 }
 
 func (s *Server) Login(
 	ctx context.Context,
 	req *auth.LoginRequest,
 ) (*auth.LoginResponse, error) {
-	email, password := ToDomainLoginParams(req)
+	email, password := loginParamsFromProto(req)
 	result, err := s.loginUC.Execute(ctx, email, password)
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidCredentials) {
@@ -74,19 +74,19 @@ func (s *Server) Login(
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 
-	return ToProtoLoginResponse(result.AccessToken, result.RefreshToken), nil
+	return protoLoginResponseFromTokens(result.AccessToken, result.RefreshToken), nil
 }
 
 func (s *Server) ValidateToken(
 	ctx context.Context,
 	req *auth.ValidateTokenRequest,
 ) (*auth.ValidateTokenResponse, error) {
-	token := ToDomainValidateTokenParams(req)
+	token := tokenFromProto(req)
 	info, err := s.validateTokenUC.Execute(ctx, token)
 	if err != nil {
 		return &auth.ValidateTokenResponse{Valid: false}, nil
 	}
-	return ToProtoValidateTokenResponse(info, true), nil
+	return protoValidateTokenResponseFromUserInfo(info, true), nil
 }
 
 func (s *Server) RefreshToken(
@@ -100,7 +100,7 @@ func (s *Server) RefreshToken(
 		}
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
-	return ToProtoRefreshTokenResponse(result.AccessToken, result.RefreshToken), nil
+	return protoRefreshTokenResponseFromTokens(result.AccessToken, result.RefreshToken), nil
 }
 
 func (s *Server) Logout(

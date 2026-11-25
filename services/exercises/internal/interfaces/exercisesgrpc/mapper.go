@@ -10,9 +10,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// nameFromProto конвертирует *string из proto в *domain.Name.
+// domainNameFromProto конвертирует *string из proto в *domain.Name.
 // nil означает «не трогать».
-func nameFromProto(raw *string) (*domain.Name, error) {
+func domainNameFromProto(raw *string) (*domain.Name, error) {
 	if raw == nil {
 		return nil, nil
 	}
@@ -25,9 +25,9 @@ func nameFromProto(raw *string) (*domain.Name, error) {
 	return &name, nil
 }
 
-// descriptionFromProto конвертирует *string из proto в *domain.Description.
+// domainDescriptionFromProto конвертирует *string из proto в *domain.Description.
 // nil означает «не трогать».
-func descriptionFromProto(raw *string) (*domain.Description, error) {
+func domainDescriptionFromProto(raw *string) (*domain.Description, error) {
 	if raw == nil {
 		return nil, nil
 	}
@@ -40,9 +40,9 @@ func descriptionFromProto(raw *string) (*domain.Description, error) {
 	return &description, nil
 }
 
-// difficultyFromProto конвертирует *int32 из proto в *domain.Difficulty.
+// domainDifficultyFromProto конвертирует *int32 из proto в *domain.Difficulty.
 // nil означает «не трогать».
-func difficultyFromProto(raw *int32) (*domain.Difficulty, error) {
+func domainDifficultyFromProto(raw *int32) (*domain.Difficulty, error) {
 	if raw == nil {
 		return nil, nil
 	}
@@ -55,20 +55,20 @@ func difficultyFromProto(raw *int32) (*domain.Difficulty, error) {
 	return &difficulty, nil
 }
 
-// ToDomainPatch конвертирует PatchExerciseRequest в domain.ExercisePatch.
+// domainExercisePatchFromProto конвертирует PatchExerciseRequest в domain.ExercisePatch.
 // Поля с nil-значением не трогаются; не-nil проходят валидацию через VO.
-func ToDomainPatch(req *exercises.PatchExerciseRequest) (domain.ExercisePatch, error) {
-	name, err := nameFromProto(req.Name)
+func domainExercisePatchFromProto(req *exercises.PatchExerciseRequest) (domain.ExercisePatch, error) {
+	name, err := domainNameFromProto(req.Name)
 	if err != nil {
 		return domain.ExercisePatch{}, err
 	}
 
-	description, err := descriptionFromProto(req.Description)
+	description, err := domainDescriptionFromProto(req.Description)
 	if err != nil {
 		return domain.ExercisePatch{}, err
 	}
 
-	difficulty, err := difficultyFromProto(req.Difficulty)
+	difficulty, err := domainDifficultyFromProto(req.Difficulty)
 	if err != nil {
 		return domain.ExercisePatch{}, err
 	}
@@ -76,8 +76,8 @@ func ToDomainPatch(req *exercises.PatchExerciseRequest) (domain.ExercisePatch, e
 	return domain.NewExercisePatch(name, description, difficulty), nil
 }
 
-// ToProtoExercise конвертирует domain.Exercise в *exercises.Exercise (proto-ответ).
-func ToProtoExercise(exercise domain.Exercise) *exercises.Exercise {
+// protoExerciseFromDomain конвертирует domain.Exercise в *exercises.Exercise (proto-ответ).
+func protoExerciseFromDomain(exercise domain.Exercise) *exercises.Exercise {
 	var updatedAt *timestamppb.Timestamp
 	if t := exercise.UpdatedAt(); t != nil {
 		updatedAt = timestamppb.New(*t)
@@ -95,8 +95,8 @@ func ToProtoExercise(exercise domain.Exercise) *exercises.Exercise {
 	}
 }
 
-// ToDomainID парсит id из proto в uuid.UUID.
-func ToDomainID(raw string) (uuid.UUID, error) {
+// domainUUIDFromString парсит id из proto в uuid.UUID.
+func domainUUIDFromString(raw string) (uuid.UUID, error) {
 	id, err := uuid.Parse(raw)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("parse id: %w", err)
