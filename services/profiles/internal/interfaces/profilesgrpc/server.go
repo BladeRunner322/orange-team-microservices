@@ -53,7 +53,7 @@ func (s *Server) GetMyProfile(
 		}
 	}
 
-	return ToProtoProfile(profile), nil
+	return protoUserProfileFromDomain(profile), nil
 }
 
 // GetProfile возвращает профиль указанного пользователя (user_id из req).
@@ -62,7 +62,7 @@ func (s *Server) GetProfile(
 	ctx context.Context,
 	req *profiles.GetProfileRequest,
 ) (*profiles.UserProfile, error) {
-	userID, err := ToDomainUserID(req.UserId)
+	userID, err := domainUUIDFromString(req.UserId)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid user_id")
 	}
@@ -72,7 +72,7 @@ func (s *Server) GetProfile(
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 
-	return ToProtoProfile(profile), nil
+	return protoUserProfileFromDomain(profile), nil
 }
 
 // PatchMyProfile применяет патч к профилю текущего пользователя.
@@ -81,7 +81,7 @@ func (s *Server) PatchMyProfile(
 	ctx context.Context,
 	req *profiles.PatchMyProfileRequest,
 ) (*profiles.UserProfile, error) {
-	patch, err := ToDomainProfilePatch(req)
+	patch, err := domainProfilePatchFromProto(req)
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrInvalidSex):
@@ -115,7 +115,7 @@ func (s *Server) PatchMyProfile(
 		}
 	}
 
-	return ToProtoProfile(profile), nil
+	return protoUserProfileFromDomain(profile), nil
 }
 
 // DeleteMyProfile удаляет профиль текущего пользователя.
