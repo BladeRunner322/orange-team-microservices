@@ -64,7 +64,7 @@ func (s *Server) CreateExercise(
 		}
 	}
 
-	resp := ToProtoExercise(created)
+	resp := protoExerciseFromDomain(created)
 
 	return resp, nil
 }
@@ -75,7 +75,7 @@ func (s *Server) GetExercise(
 	ctx context.Context,
 	req *exercises.GetExerciseRequest,
 ) (*exercises.Exercise, error) {
-	id, err := ToDomainID(req.Id)
+	id, err := domainUUIDFromString(req.Id)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
 	}
@@ -89,7 +89,7 @@ func (s *Server) GetExercise(
 		return nil, status.Error(codes.Internal, "internal server error")
 	}
 
-	resp := ToProtoExercise(exercise)
+	resp := protoExerciseFromDomain(exercise)
 
 	return resp, nil
 }
@@ -106,7 +106,7 @@ func (s *Server) GetExercises(
 
 	protoExercises := make([]*exercises.Exercise, 0, len(list))
 	for _, ex := range list {
-		protoExercises = append(protoExercises, ToProtoExercise(ex))
+		protoExercises = append(protoExercises, protoExerciseFromDomain(ex))
 	}
 
 	resp := &exercises.GetExercisesResponse{
@@ -123,12 +123,12 @@ func (s *Server) PatchExercise(
 	ctx context.Context,
 	req *exercises.PatchExerciseRequest,
 ) (*exercises.Exercise, error) {
-	id, err := ToDomainID(req.Id)
+	id, err := domainUUIDFromString(req.Id)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
 	}
 
-	patch, err := ToDomainPatch(req)
+	patch, err := domainExercisePatchFromProto(req)
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrInvalidName):
@@ -154,7 +154,7 @@ func (s *Server) PatchExercise(
 		}
 	}
 
-	resp := ToProtoExercise(updated)
+	resp := protoExerciseFromDomain(updated)
 
 	return resp, nil
 }
@@ -166,7 +166,7 @@ func (s *Server) DeleteExercise(
 	ctx context.Context,
 	req *exercises.DeleteExerciseRequest,
 ) (*exercises.DeleteExerciseResponse, error) {
-	id, err := ToDomainID(req.Id)
+	id, err := domainUUIDFromString(req.Id)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid id")
 	}
