@@ -11,9 +11,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// nameFromProto конвертирует *string из proto в *domain.Name.
+// domainNameFromProto конвертирует *string из proto в *domain.Name.
 // nil означает «не трогать».
-func nameFromProto(raw *string) (*domain.Name, error) {
+func domainNameFromProto(raw *string) (*domain.Name, error) {
 	if raw == nil {
 		return nil, nil
 	}
@@ -26,9 +26,9 @@ func nameFromProto(raw *string) (*domain.Name, error) {
 	return &name, nil
 }
 
-// descriptionFromProto конвертирует *string из proto в *domain.Description.
+// domainDescriptionFromProto конвертирует *string из proto в *domain.Description.
 // nil означает «не трогать».
-func descriptionFromProto(raw *string) (*domain.Description, error) {
+func domainDescriptionFromProto(raw *string) (*domain.Description, error) {
 	if raw == nil {
 		return nil, nil
 	}
@@ -41,15 +41,15 @@ func descriptionFromProto(raw *string) (*domain.Description, error) {
 	return &description, nil
 }
 
-// ToDomainHabitPatch конвертирует PatchHabitRequest в domain.HabitPatch.
+// domainHabitPatchFromProto конвертирует PatchHabitRequest в domain.HabitPatch.
 // optional-поля proto → *T (nil = не трогать).
-func ToDomainHabitPatch(req *habits.PatchHabitRequest) (domain.HabitPatch, error) {
-	name, err := nameFromProto(req.Name)
+func domainHabitPatchFromProto(req *habits.PatchHabitRequest) (domain.HabitPatch, error) {
+	name, err := domainNameFromProto(req.Name)
 	if err != nil {
 		return domain.HabitPatch{}, err
 	}
 
-	description, err := descriptionFromProto(req.Description)
+	description, err := domainDescriptionFromProto(req.Description)
 	if err != nil {
 		return domain.HabitPatch{}, err
 	}
@@ -57,8 +57,8 @@ func ToDomainHabitPatch(req *habits.PatchHabitRequest) (domain.HabitPatch, error
 	return domain.NewHabitPatch(name, description), nil
 }
 
-// ToDomainID парсит id из proto в uuid.UUID.
-func ToDomainID(raw string) (uuid.UUID, error) {
+// domainUUIDFromString парсит id из proto в uuid.UUID.
+func domainUUIDFromString(raw string) (uuid.UUID, error) {
 	id, err := uuid.Parse(raw)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("parse id: %w", err)
@@ -67,12 +67,12 @@ func ToDomainID(raw string) (uuid.UUID, error) {
 	return id, nil
 }
 
-// ToDomainDate парсит "YYYY-MM-DD" в time.Time UTC (только дата, без времени).
+// domainDateFromString парсит "YYYY-MM-DD" в time.Time UTC (только дата, без времени).
 // Пустая строка → today (UTC, начало дня).
 //
 // Используется в CompleteHabit / UncompleteHabit, где пустая дата означает
 // «отметить сегодня» (ADR-023 п.4).
-func ToDomainDate(raw string) (time.Time, error) {
+func domainDateFromString(raw string) (time.Time, error) {
 	if raw == "" {
 		now := time.Now().UTC()
 		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC), nil
@@ -86,12 +86,12 @@ func ToDomainDate(raw string) (time.Time, error) {
 	return t, nil
 }
 
-// ToDomainDateOrZero парсит "YYYY-MM-DD" в time.Time UTC.
+// domainDateOrZeroFromString парсит "YYYY-MM-DD" в time.Time UTC.
 // Пустая строка → zero time (означает «не задано»).
 //
 // Используется в GetCompletions для from/to: если обе пустые, usecase
 // применит дефолт «последние 30 дней» (ADR-023 п.8).
-func ToDomainDateOrZero(raw string) (time.Time, error) {
+func domainDateOrZeroFromString(raw string) (time.Time, error) {
 	if raw == "" {
 		return time.Time{}, nil
 	}
@@ -104,14 +104,14 @@ func ToDomainDateOrZero(raw string) (time.Time, error) {
 	return t, nil
 }
 
-// ToProtoDate конвертирует time.Time в "YYYY-MM-DD".
-func ToProtoDate(t time.Time) string {
+// dateStringFromTime конвертирует time.Time в "YYYY-MM-DD".
+func dateStringFromTime(t time.Time) string {
 	return t.UTC().Format("2006-01-02")
 }
 
-// ToProtoHabit конвертирует доменную привычку в proto.
+// protoHabitFromDomain конвертирует доменную привычку в proto.
 // streak и completedToday — вычисляемые поля, передаются отдельно.
-func ToProtoHabit(h domain.Habit, streak int, completedToday bool) *habits.Habit {
+func protoHabitFromDomain(h domain.Habit, streak int, completedToday bool) *habits.Habit {
 	var updatedAt *timestamppb.Timestamp
 	if t := h.UpdatedAt(); t != nil {
 		updatedAt = timestamppb.New(*t)
@@ -130,16 +130,16 @@ func ToProtoHabit(h domain.Habit, streak int, completedToday bool) *habits.Habit
 	}
 }
 
-// ToProtoHabitWithStreak — из usecase-структуры в proto.
-func ToProtoHabitWithStreak(hws usecases.HabitWithStreak) *habits.Habit {
-	return ToProtoHabit(hws.Habit, hws.Streak, hws.CompletedToday)
+// protoHabitFromHabitWithStreak — из usecase-структуры в proto.
+func protoHabitFromHabitWithStreak(hws usecases.HabitWithStreak) *habits.Habit {
+	return protoHabitFromDomain(hws.Habit, hws.Streak, hws.CompletedToday)
 }
 
-// ToProtoCompletion конвертирует Completion в proto.
-func ToProtoCompletion(c domain.Completion) *habits.Completion {
+// protoCompletionFromDomain конвертирует Completion в proto.
+func protoCompletionFromDomain(c domain.Completion) *habits.Completion {
 	return &habits.Completion{
 		HabitId:   c.HabitID().String(),
-		Date:      ToProtoDate(c.Date().Time()),
+		Date:      dateStringFromTime(c.Date().Time()),
 		CreatedAt: timestamppb.New(c.CreatedAt()),
 	}
 }
