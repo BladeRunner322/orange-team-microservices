@@ -53,7 +53,6 @@ ADR ещё нет. Появится, когда начнётся (после Kaf
 | Dependabot / Renovate | [ADR-012](adr/012-ci-cd-optimization.md) | ~30 мин | Авто-PR на зависимости |
 | Docker logging options | [ADR-018](adr/018-storage-retention.md) | ~15 мин | `daemon.json` + перезапуск Docker |
 | Rotation SSH на Ed25519 | [ADR-006](adr/006-secrets-management.md), [ADR-021](adr/021-independent-deployment.md) | ~30 мин | `appleboy/ssh-action` уже обновлён |
-| Привести нейминг мапперов к ADR-011 | [ADR-011](adr/011-naming-and-code-style.md) | ~1.5 ч | Auth, Profiles, Exercises, Habits используют старый стандарт (`<field>FromProto`, `ToDomain<Type>`, `ToProto<Type>`). Workouts — первый на новом (`domainXFromProto` / `protoXFromDomain`). Переименовывать при следующем касании мапперов каждого сервиса — отдельными PR по сервису, не пачкой |
 
 ## 🟡 После недели наблюдений за CB/Retry
 
