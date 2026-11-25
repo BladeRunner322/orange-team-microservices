@@ -8,25 +8,25 @@ import (
 
 // ===== Преобразования из protobuf в параметры use case =====
 
-// ToDomainRegisterParams преобразует pb.RegisterRequest в параметры для use case.
-func ToDomainRegisterParams(req *auth.RegisterRequest) (email, password, fullName string) {
+// registerParamsFromProto преобразует pb.RegisterRequest в параметры для use case.
+func registerParamsFromProto(req *auth.RegisterRequest) (email, password, fullName string) {
 	return req.Email, req.Password, req.FullName
 }
 
-// ToDomainLoginParams преобразует pb.LoginRequest в параметры для use case.
-func ToDomainLoginParams(req *auth.LoginRequest) (email, password string) {
+// loginParamsFromProto преобразует pb.LoginRequest в параметры для use case.
+func loginParamsFromProto(req *auth.LoginRequest) (email, password string) {
 	return req.Email, req.Password
 }
 
-// ToDomainValidateTokenParams преобразует pb.ValidateTokenRequest в параметр для use case.
-func ToDomainValidateTokenParams(req *auth.ValidateTokenRequest) string {
+// tokenFromProto преобразует pb.ValidateTokenRequest в параметр для use case.
+func tokenFromProto(req *auth.ValidateTokenRequest) string {
 	return req.Token
 }
 
 // ===== Преобразования из доменных объектов в protobuf =====
 
-// ToProtoRegisterResponse преобразует доменного пользователя в pb.RegisterResponse.
-func ToProtoRegisterResponse(user domain.User) *auth.RegisterResponse {
+// protoRegisterResponseFromDomain преобразует доменного пользователя в pb.RegisterResponse.
+func protoRegisterResponseFromDomain(user domain.User) *auth.RegisterResponse {
 	return &auth.RegisterResponse{
 		Id:       user.ID().String(),
 		Email:    user.Email().String(),
@@ -34,8 +34,8 @@ func ToProtoRegisterResponse(user domain.User) *auth.RegisterResponse {
 	}
 }
 
-// ToProtoLoginResponse преобразует токен в pb.LoginResponse.
-func ToProtoLoginResponse(accessToken, refreshToken string) *auth.LoginResponse {
+// protoLoginResponseFromTokens преобразует токен в pb.LoginResponse.
+func protoLoginResponseFromTokens(accessToken, refreshToken string) *auth.LoginResponse {
 	return &auth.LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -43,8 +43,8 @@ func ToProtoLoginResponse(accessToken, refreshToken string) *auth.LoginResponse 
 	}
 }
 
-// ToProtoValidateTokenResponse преобразует результат валидации в pb.ValidateTokenResponse.
-func ToProtoValidateTokenResponse(info ports.UserInfo, valid bool) *auth.ValidateTokenResponse {
+// protoValidateTokenResponseFromUserInfo преобразует результат валидации в pb.ValidateTokenResponse.
+func protoValidateTokenResponseFromUserInfo(info ports.UserInfo, valid bool) *auth.ValidateTokenResponse {
 	return &auth.ValidateTokenResponse{
 		UserId: info.UserID,
 		Valid:  valid,
@@ -52,8 +52,8 @@ func ToProtoValidateTokenResponse(info ports.UserInfo, valid bool) *auth.Validat
 	}
 }
 
-// ToProtoRefreshTokenResponse преобразует новую пару токенов в pb.RefreshTokenResponse.
-func ToProtoRefreshTokenResponse(accessToken, refreshToken string) *auth.RefreshTokenResponse {
+// protoRefreshTokenResponseFromTokens преобразует новую пару токенов в pb.RefreshTokenResponse.
+func protoRefreshTokenResponseFromTokens(accessToken, refreshToken string) *auth.RefreshTokenResponse {
 	return &auth.RefreshTokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
