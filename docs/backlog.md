@@ -7,7 +7,8 @@
 
 - Каждая строка ссылается на ADR, где задача зафиксирована.
 - При закрытии задачи — обновить статус в ADR. Выполненное **не висит в «В работе»**: сервис переезжает в таблицу «Состояние сервисов» со статусом ✅, секция детализации удаляется.
-- Статусы: ✅ — сделано, 🚧 — в работе, ⬜ — не начато.
+- Статусы сервисов: ✅ — готов, 🚧 — в работе, ⬜ — не начат.
+- Статусы этапов: ✅ — завершён, ⬜ — ещё не завершён.
 - Задачи «по триггеру» не начинаем до наступления триггера — они здесь как напоминание.
 
 ## 📊 Состояние сервисов
@@ -31,8 +32,8 @@ Workouts считает очки за период. Leaderboard обновляе
 
 | Шаг | Что | Ветка | Статус |
 |---|---|---|---|
-| 1 | ADR-026, индекс ADR и план в backlog | `docs/adr-026-leaderboard` | 🚧 |
-| 2 | Запускаемый скелет: main, конфигурация, bootstrap, gRPC и health-проверка | `feat/leaderboard-skeleton` | ⬜ |
+| 1 | ADR-026, индекс ADR и план в backlog | `docs/adr-026-leaderboard` | ✅ |
+| 2 | Запускаемый скелет: main, конфигурация, bootstrap, gRPC, health-проверка, Dockerfile и `.env.example` | `feat/leaderboard-skeleton` | ✅ |
 | 3a | Domain: периоды UTC, строка рейтинга, готовый топ | `feat/leaderboard-domain` | ⬜ |
 | 3b | Domain: unit-тесты границ дня, недели, месяца и года | `feat/leaderboard-domain` | ⬜ |
 | 4a | Use cases: чтение готового топа, обновление одного периода, порт источника очков | `feat/leaderboard-usecases` | ⬜ |
@@ -43,7 +44,7 @@ Workouts считает очки за период. Leaderboard обновляе
 | 6a | Leaderboard: gRPC-клиент Workouts и потокобезопасное хранилище топов в памяти | `feat/leaderboard-grpc-and-bootstrap` | ⬜ |
 | 6b | Leaderboard: воркер, немедленная загрузка, таймауты и остановка по контексту | `feat/leaderboard-grpc-and-bootstrap` | ⬜ |
 | 6c | Leaderboard: рабочие gRPC-обработчики, мапперы и подключение клиента Workouts и воркера в bootstrap | `feat/leaderboard-grpc-and-bootstrap` | ⬜ |
-| 7a | Локальный стек: Dockerfile, Compose, Taskfile, env и health/readiness | `feat/leaderboard-compose-and-ci` | ⬜ |
+| 7a | Локальный стек: Compose, Taskfile, `.env.enc` и проверка запуска вместе с Workouts | `feat/leaderboard-compose-and-ci` | ⬜ |
 | 7b | CI/CD: проверка сборки, образ и деплой | `feat/leaderboard-compose-and-ci` | ⬜ |
 | 8a | Gateway: gRPC-клиент Leaderboard, конфигурация и bootstrap | `feat/leaderboard-gateway` | ⬜ |
 | 8b | Gateway: HTTP-хендлеры, мапперы, три маршрута и проверка `503` | `feat/leaderboard-gateway` | ⬜ |
