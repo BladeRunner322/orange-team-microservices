@@ -37,6 +37,7 @@
 - [ADR-023: Сервис привычек (Habits)](023-habits.md)
 - [ADR-024: Асинхронное взаимодействие через Kafka и сервис Notification](024-kafka-notification.md)
 - [ADR-025: Сервис тренировок (Workouts)](025-workouts.md)
+- [ADR-026: Сервис рейтинга (Leaderboard)](026-leaderboard.md)
 
 ## Как добавить
 

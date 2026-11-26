@@ -20,18 +20,36 @@
 | Exercises | ✅ | [ADR-008](adr/008-exercise-lifecycle.md) |
 | Habits | ✅ | [ADR-023](adr/023-habits.md) |
 | Workouts | ✅ | [ADR-025](adr/025-workouts.md) |
-| Leaderboard | ⬜ | — |
+| Leaderboard | 🚧 | [ADR-026](adr/026-leaderboard.md) |
 | Notification | ⬜ | [ADR-024](adr/024-kafka-notification.md) |
 
 ## 🚧 В работе
 
-Текущих задач нет.
+### Leaderboard (ADR-026)
+
+Workouts считает очки за период. Leaderboard обновляет готовые топы по расписанию и отдаёт их через Gateway. Правила рейтинга и зависимости описаны в [ADR-026](adr/026-leaderboard.md).
+
+| Шаг | Что | Ветка | Статус |
+|---|---|---|---|
+| 1 | ADR-026, индекс ADR и план в backlog | `docs/adr-026-leaderboard` | 🚧 |
+| 2 | Запускаемый скелет: main, конфигурация, bootstrap, gRPC и health-проверка | `feat/leaderboard-skeleton` | ⬜ |
+| 3a | Domain: периоды UTC, строка рейтинга, готовый топ | `feat/leaderboard-domain` | ⬜ |
+| 3b | Domain: unit-тесты границ дня, недели, месяца и года | `feat/leaderboard-domain` | ⬜ |
+| 4a | Use cases: чтение готового топа, обновление одного периода, порт источника очков | `feat/leaderboard-usecases` | ⬜ |
+| 4b | Use cases: моки, тесты пустого топа, сбоя обновления и смены периода | `feat/leaderboard-usecases` | ⬜ |
+| 5a | Workouts: SQL для суммирования очков за период, сортировки и лимита | `feat/workouts-period-ranking` | ⬜ |
+| 5b | Workouts: интеграционные тесты SQL, включая границы периода, фильтрацию, равные очки и лимит | `feat/workouts-period-ranking` | ⬜ |
+| 5c | Workouts: внутренний gRPC-метод, мапперы, валидация и проверка доступа | `feat/workouts-period-ranking` | ⬜ |
+| 6a | Leaderboard: gRPC-клиент Workouts и потокобезопасное хранилище топов в памяти | `feat/leaderboard-grpc-and-bootstrap` | ⬜ |
+| 6b | Leaderboard: воркер, немедленная загрузка, таймауты и остановка по контексту | `feat/leaderboard-grpc-and-bootstrap` | ⬜ |
+| 6c | Leaderboard: рабочие gRPC-обработчики, мапперы и подключение клиента Workouts и воркера в bootstrap | `feat/leaderboard-grpc-and-bootstrap` | ⬜ |
+| 7a | Локальный стек: Dockerfile, Compose, Taskfile, env и health/readiness | `feat/leaderboard-compose-and-ci` | ⬜ |
+| 7b | CI/CD: проверка сборки, образ и деплой | `feat/leaderboard-compose-and-ci` | ⬜ |
+| 8a | Gateway: gRPC-клиент Leaderboard, конфигурация и bootstrap | `feat/leaderboard-gateway` | ⬜ |
+| 8b | Gateway: HTTP-хендлеры, мапперы, три маршрута и проверка `503` | `feat/leaderboard-gateway` | ⬜ |
+| 8c | Postman, проверка деплоя, актуализация README и закрытие задачи | `feat/leaderboard-gateway` | ⬜ |
 
 ## ⏭️ Следующее
-
-### Leaderboard
-
-Первый этап — синхронный MVP. Источник данных и правила рейтинга зафиксируем в отдельном ADR.
 
 ### Kafka + Notification (ADR-024)
 
