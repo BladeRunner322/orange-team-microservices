@@ -27,7 +27,7 @@ func TestPatchExercise_Execute(t *testing.T) {
 		created, err := createUC.Execute(context.Background(), "Старое имя", "Описание", 5, "weight")
 		require.NoError(t, err)
 
-		uc := NewPatchExercise(repo, logger.NewTestLogger())
+		uc := NewPatchExercise(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		// Act
 		updated, err := uc.Execute(context.Background(), created.ID(), patchWithName("Новое имя"))
@@ -52,7 +52,7 @@ func TestPatchExercise_Execute(t *testing.T) {
 		newDifficulty, _ := domain.NewDifficulty(9)
 		patch := domain.NewExercisePatch(&newName, &newDescription, &newDifficulty)
 
-		uc := NewPatchExercise(repo, logger.NewTestLogger())
+		uc := NewPatchExercise(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		// Act
 		updated, err := uc.Execute(context.Background(), created.ID(), patch)
@@ -72,7 +72,7 @@ func TestPatchExercise_Execute(t *testing.T) {
 		require.NoError(t, err)
 
 		patch := domain.NewExercisePatch(nil, nil, nil)
-		uc := NewPatchExercise(repo, logger.NewTestLogger())
+		uc := NewPatchExercise(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		// Act
 		updated, err := uc.Execute(context.Background(), created.ID(), patch)
@@ -86,7 +86,7 @@ func TestPatchExercise_Execute(t *testing.T) {
 
 	t.Run("упражнение не найдено — ErrExerciseNotFound", func(t *testing.T) {
 		repo := newMockRepository()
-		uc := NewPatchExercise(repo, logger.NewTestLogger())
+		uc := NewPatchExercise(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		_, err := uc.Execute(context.Background(), uuid.New(), patchWithName("Новое имя"))
 
@@ -101,7 +101,7 @@ func TestPatchExercise_Execute(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, repo.MarkDeleted(context.Background(), created.ID()))
 
-		uc := NewPatchExercise(repo, logger.NewTestLogger())
+		uc := NewPatchExercise(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		// Act
 		_, err = uc.Execute(context.Background(), created.ID(), patchWithName("Новое имя"))
@@ -119,7 +119,7 @@ func TestPatchExercise_Execute(t *testing.T) {
 		_, err = createUC.Execute(context.Background(), "Приседания", "Описание 2", 7, "weight")
 		require.NoError(t, err)
 
-		uc := NewPatchExercise(repo, logger.NewTestLogger())
+		uc := NewPatchExercise(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		// Act — патчим first, ставим имя второго
 		_, err = uc.Execute(context.Background(), first.ID(), patchWithName("Приседания"))
@@ -135,7 +135,7 @@ func TestPatchExercise_Execute(t *testing.T) {
 		created, err := createUC.Execute(context.Background(), "Жим лёжа", "Описание", 5, "weight")
 		require.NoError(t, err)
 
-		uc := NewPatchExercise(repo, logger.NewTestLogger())
+		uc := NewPatchExercise(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		// Act — патчим имя на то же самое
 		updated, err := uc.Execute(context.Background(), created.ID(), patchWithName("Жим лёжа"))
@@ -148,7 +148,7 @@ func TestPatchExercise_Execute(t *testing.T) {
 	t.Run("ошибка репозитория при Get — пробрасывается", func(t *testing.T) {
 		repo := newMockRepository()
 		repo.err = errors.New("db is down")
-		uc := NewPatchExercise(repo, logger.NewTestLogger())
+		uc := NewPatchExercise(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		_, err := uc.Execute(context.Background(), uuid.New(), patchWithName("Новое имя"))
 

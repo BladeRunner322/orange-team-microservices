@@ -12,13 +12,18 @@ import (
 )
 
 type PatchExercise struct {
-	repo   ports.Repository
-	logger *logger.Logger
+	repo         ports.Repository
+	transactions ports.TransactionManager
+	logger       *logger.Logger
 }
 
 // NewPatchExercise создаёт usecase для обновления упражнения (admin-only).
-func NewPatchExercise(repo ports.Repository, log *logger.Logger) *PatchExercise {
-	return &PatchExercise{repo: repo, logger: log}
+func NewPatchExercise(repo ports.Repository, transactions ports.TransactionManager, log *logger.Logger) *PatchExercise {
+	return &PatchExercise{
+		repo:         repo,
+		transactions: transactions,
+		logger:       log,
+	}
 }
 
 // Execute применяет патч к упражнению по id.
@@ -28,10 +33,10 @@ func (uc *PatchExercise) Execute(ctx context.Context, id uuid.UUID, patch domain
 	log := uc.logger.With("operation", "PatchExercise", "exercise_id", id)
 
 	var updated domain.Exercise
-	err := uc.repo.WithTx(ctx, func(txRepo ports.Repository) error {
-		// SELECT ... FOR UPDATE — блокируем строку до COMMIT.
-		// Защита от lost update (ADR-007 F-2).
-		exercise, err := txRepo.GetExerciseForUpdate(ctx, id)
+	err := uc.transactions.Do(ctx, func(txCtx context.Context) error {
+		// SELECT ... FOR UPDATE блокирует строку до завершения транзакции.
+		// Защита от потерянного обновления (ADR-007 F-2).
+		exercise, err := uc.repo.GetExerciseForUpdate(txCtx, id)
 		if err != nil {
 			if errors.Is(err, domain.ErrExerciseNotFound) {
 				log.Warn("exercise not found")
@@ -43,7 +48,7 @@ func (uc *PatchExercise) Execute(ctx context.Context, id uuid.UUID, patch domain
 
 		exercise.ApplyPatch(patch)
 
-		updated, err = txRepo.Update(ctx, exercise)
+		updated, err = uc.repo.Update(txCtx, exercise)
 		if err != nil {
 			if errors.Is(err, domain.ErrExerciseNotFound) {
 				log.Warn("exercise not found or already deleted")
