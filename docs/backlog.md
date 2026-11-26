@@ -29,13 +29,13 @@
 
 ## ⏭️ Следующее
 
-### Kafka + Notification (ADR-024)
-
-Следующий этап после завершения Workouts. План реализации описан в [ADR-024](adr/024-kafka-notification.md).
-
 ### Leaderboard
 
-ADR ещё нет. Появится, когда начнётся (после Kafka + Notification, либо параллельно — по триггеру).
+Первый этап — синхронный MVP. Источник данных и правила рейтинга зафиксируем в отдельном ADR.
+
+### Kafka + Notification (ADR-024)
+
+Следующий этап после MVP Leaderboard. План внедрения Kafka и сервиса Notification описан в [ADR-024](adr/024-kafka-notification.md).
 
 ## 🟡 Стоит сделать в ближайшее время
 
@@ -80,7 +80,7 @@ ADR ещё нет. Появится, когда начнётся (после Kaf
 
 | Что | ADR |
 |-----|-----|
-| k8s, Kafka, Service mesh | [ADR-019](adr/019-microservices-evolution.md) |
+| k8s, Service mesh | [ADR-019](adr/019-microservices-evolution.md) |
 | Микросервис на каждый CRUD | [ADR-019](adr/019-microservices-evolution.md) |
 | Event sourcing / CQRS | [ADR-004](adr/004-microservices-patterns.md) |
 | Distributed-транзакции между сервисами | [ADR-003](adr/003-transactions.md) |
