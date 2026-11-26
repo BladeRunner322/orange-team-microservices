@@ -7,6 +7,7 @@ type Server struct {
 	leaderboard.UnimplementedLeaderboardServiceServer
 }
 
+// TODO: Подключить сценарий чтения к GetDaily, GetWeekly и GetMonthly и преобразовать топ в protobuf.
 func NewServer() *Server {
 	return &Server{}
 }

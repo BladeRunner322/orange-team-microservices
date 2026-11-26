@@ -26,6 +26,9 @@ type App struct {
 }
 
 func New(cfg config.Config, log *logger.Logger) (*App, error) {
+	// TODO: Собрать клиент Workouts, хранилище топов и сценарии Leaderboard.
+	// TODO: Запускать обновление топов при старте и по таймеру, останавливать воркер при завершении сервиса.
+
 	s, err := grpcserver.New(grpcserver.Config{
 		EnableTLS:        cfg.EnableTLS,
 		TLSCertFile:      cfg.TLSCertFile,
@@ -51,6 +54,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 
 	healthMux := http.NewServeMux()
 	healthMux.HandleFunc("/health", health.HealthHandler("leaderboard"))
+	// TODO: Добавить проверку готовности топов за текущие периоды.
 	healthMux.HandleFunc("/ready", health.ReadyHandler(nil))
 	healthMux.Handle("/metrics", health.MetricsHandler())
 
