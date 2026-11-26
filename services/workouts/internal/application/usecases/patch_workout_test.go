@@ -5,14 +5,13 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/BladeRunner322/orange-team-microservices/pkg/ctxkeys"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/nullable"
 	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/domain"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPatchWorkout_Execute(t *testing.T) {
@@ -48,7 +47,7 @@ func TestPatchWorkout_Execute(t *testing.T) {
 		w := setupWorkout(t, repo, ctx, userID, domain.StatusPlanned)
 
 		patch := domain.NewWorkoutPatch(nil, nullable.Nullable[domain.Intensity]{Set: true, Value: intensity7(t)})
-		uc := NewPatchWorkout(repo, logger.NewTestLogger())
+		uc := NewPatchWorkout(repo, repo.exerciseRepo, mockTransactionManager{}, logger.NewTestLogger())
 
 		updated, err := uc.Execute(ctx, w.ID(), patch)
 		require.NoError(t, err)
@@ -62,7 +61,7 @@ func TestPatchWorkout_Execute(t *testing.T) {
 		repo := newMockWorkoutRepository()
 		w := setupWorkout(t, repo, ctx, userID, domain.StatusPlanned)
 
-		uc := NewPatchWorkout(repo, logger.NewTestLogger())
+		uc := NewPatchWorkout(repo, repo.exerciseRepo, mockTransactionManager{}, logger.NewTestLogger())
 		updated, err := uc.Execute(ctx, w.ID(), patchStatus(domain.StatusInProgress))
 
 		require.NoError(t, err)
@@ -86,7 +85,7 @@ func TestPatchWorkout_Execute(t *testing.T) {
 		_, err = repo.exerciseRepo.Create(ctx, ex)
 		require.NoError(t, err)
 
-		uc := NewPatchWorkout(repo, logger.NewTestLogger())
+		uc := NewPatchWorkout(repo, repo.exerciseRepo, mockTransactionManager{}, logger.NewTestLogger())
 		updated, err := uc.Execute(ctx, w.ID(), patchStatus(domain.StatusCompleted))
 
 		require.NoError(t, err)
@@ -99,7 +98,7 @@ func TestPatchWorkout_Execute(t *testing.T) {
 		repo := newMockWorkoutRepository()
 		w := setupWorkout(t, repo, ctx, userID, domain.StatusInProgress)
 
-		uc := NewPatchWorkout(repo, logger.NewTestLogger())
+		uc := NewPatchWorkout(repo, repo.exerciseRepo, mockTransactionManager{}, logger.NewTestLogger())
 		_, err := uc.Execute(ctx, w.ID(), patchStatus(domain.StatusCompleted))
 
 		assert.ErrorIs(t, err, domain.ErrCannotCompleteEmptyWorkout)
@@ -111,7 +110,7 @@ func TestPatchWorkout_Execute(t *testing.T) {
 		repo := newMockWorkoutRepository()
 		w := setupWorkout(t, repo, ctx, userID, domain.StatusPlanned)
 
-		uc := NewPatchWorkout(repo, logger.NewTestLogger())
+		uc := NewPatchWorkout(repo, repo.exerciseRepo, mockTransactionManager{}, logger.NewTestLogger())
 		_, err := uc.Execute(ctx, w.ID(), patchStatus(domain.StatusCompleted))
 
 		assert.ErrorIs(t, err, domain.ErrInvalidStatusTransition)
@@ -120,7 +119,7 @@ func TestPatchWorkout_Execute(t *testing.T) {
 	t.Run("workout не найден — ErrWorkoutNotFound", func(t *testing.T) {
 		ctx := newCtx(uuid.New())
 		repo := newMockWorkoutRepository()
-		uc := NewPatchWorkout(repo, logger.NewTestLogger())
+		uc := NewPatchWorkout(repo, repo.exerciseRepo, mockTransactionManager{}, logger.NewTestLogger())
 
 		_, err := uc.Execute(ctx, uuid.New(), patchStatus(domain.StatusInProgress))
 		assert.ErrorIs(t, err, domain.ErrWorkoutNotFound)
@@ -134,14 +133,14 @@ func TestPatchWorkout_Execute(t *testing.T) {
 		_, err := repo.Create(ctx, w)
 		require.NoError(t, err)
 
-		uc := NewPatchWorkout(repo, logger.NewTestLogger())
+		uc := NewPatchWorkout(repo, repo.exerciseRepo, mockTransactionManager{}, logger.NewTestLogger())
 		_, err = uc.Execute(ctx, w.ID(), patchStatus(domain.StatusInProgress))
 		assert.ErrorIs(t, err, domain.ErrWorkoutNotFound)
 	})
 
 	t.Run("нет user_id в context — ErrUnauthenticated", func(t *testing.T) {
 		repo := newMockWorkoutRepository()
-		uc := NewPatchWorkout(repo, logger.NewTestLogger())
+		uc := NewPatchWorkout(repo, repo.exerciseRepo, mockTransactionManager{}, logger.NewTestLogger())
 
 		_, err := uc.Execute(context.Background(), uuid.New(), patchStatus(domain.StatusInProgress))
 		assert.ErrorIs(t, err, domain.ErrUnauthenticated)
@@ -151,7 +150,7 @@ func TestPatchWorkout_Execute(t *testing.T) {
 		ctx := newCtx(uuid.New())
 		repo := newMockWorkoutRepository()
 		repo.err = errors.New("db is down")
-		uc := NewPatchWorkout(repo, logger.NewTestLogger())
+		uc := NewPatchWorkout(repo, repo.exerciseRepo, mockTransactionManager{}, logger.NewTestLogger())
 
 		_, err := uc.Execute(ctx, uuid.New(), patchStatus(domain.StatusInProgress))
 		require.Error(t, err)

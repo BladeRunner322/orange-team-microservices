@@ -5,7 +5,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/BladeRunner322/orange-team-microservices/services/exercises/internal/application/ports"
 	"github.com/BladeRunner322/orange-team-microservices/services/exercises/internal/domain"
 )
 
@@ -25,12 +24,11 @@ func newMockRepository() *mockRepository {
 	return &mockRepository{exercises: make(map[uuid.UUID]domain.Exercise)}
 }
 
-func (m *mockRepository) WithTx(ctx context.Context, fn func(ports.Repository) error) error {
-	if m.err != nil {
-		return m.err
-	}
-	// В памяти транзакции нет — прокидываем тот же мок.
-	return fn(m)
+// mockTransactionManager выполняет callback в unit-тестах.
+type mockTransactionManager struct{}
+
+func (mockTransactionManager) Do(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
 }
 
 func (m *mockRepository) GetExerciseForUpdate(ctx context.Context, id uuid.UUID) (domain.Exercise, error) {

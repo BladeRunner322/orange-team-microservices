@@ -3,6 +3,8 @@ module github.com/BladeRunner322/orange-team-microservices
 go 1.26.7
 
 require (
+	github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2 v2.0.5
+	github.com/avito-tech/go-transaction-manager/trm/v2 v2.0.5
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-playground/validator/v10 v10.30.4
 	github.com/golang-jwt/jwt/v5 v5.3.1
@@ -82,6 +84,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.44.0 // indirect
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
+	go.uber.org/multierr v1.9.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect

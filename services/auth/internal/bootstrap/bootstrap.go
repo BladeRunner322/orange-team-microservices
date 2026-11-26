@@ -20,6 +20,7 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/infrastructure/postgres_repo"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/infrastructure/redis_repo"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/interfaces/authgrpc"
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
 	"google.golang.org/grpc"
 )
 
@@ -61,7 +62,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	// ============================================================
 	// 2. РЕПОЗИТОРИЙ (реализация для auth)
 	// ============================================================
-	repo := postgres_repo.NewRepository(pool)
+	repo := postgres_repo.NewRepository(pool.Pool, trmpgx.DefaultCtxGetter, pool.OpTimeout())
 	refreshRepo := redis_repo.NewRepository(redisClient)
 
 	// ============================================================

@@ -15,6 +15,7 @@ type CreateWorkoutExercise struct {
 	workoutRepo     ports.WorkoutRepository
 	exerciseRepo    ports.WorkoutExerciseRepository
 	exercisesClient ports.ExercisesClient
+	transactions    ports.TransactionManager
 	logger          *logger.Logger
 }
 
@@ -22,12 +23,14 @@ func NewCreateWorkoutExercise(
 	workoutRepo ports.WorkoutRepository,
 	exerciseRepo ports.WorkoutExerciseRepository,
 	exercisesClient ports.ExercisesClient,
+	transactions ports.TransactionManager,
 	log *logger.Logger,
 ) *CreateWorkoutExercise {
 	return &CreateWorkoutExercise{
 		workoutRepo:     workoutRepo,
 		exerciseRepo:    exerciseRepo,
 		exercisesClient: exercisesClient,
+		transactions:    transactions,
 		logger:          log,
 	}
 }
@@ -109,14 +112,14 @@ func (uc *CreateWorkoutExercise) Execute(
 	}
 
 	var created domain.WorkoutExercise
-	err = uc.workoutRepo.WithTx(ctx, func(wRepo ports.WorkoutRepository, eRepo ports.WorkoutExerciseRepository) error {
+	err = uc.transactions.Do(ctx, func(txCtx context.Context) error {
 		var err error
-		created, err = eRepo.Create(ctx, workoutExercise)
+		created, err = uc.exerciseRepo.Create(txCtx, workoutExercise)
 		if err != nil {
 			return fmt.Errorf("create workout exercise: %w", err)
 		}
 
-		return recalculateScore(ctx, wRepo, eRepo, userID, workoutID)
+		return recalculateScore(txCtx, uc.workoutRepo, uc.exerciseRepo, userID, workoutID)
 	})
 	if err != nil {
 		log.Error("failed to create workout exercise in transaction", "error", err)

@@ -21,7 +21,7 @@ import (
 // Поднимается один раз в TestMain: и HabitRepository, и CompletionRepository
 // ходят в одну схему (completion имеет FK на habits), поэтому отдельный
 // контейнер на каждый тест — избыточно.
-var testPool postgres.Pool
+var testPool *postgres.PgxPool
 
 func TestMain(m *testing.M) {
 	code, err := runTests(m)

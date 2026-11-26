@@ -7,17 +7,17 @@ import (
 	"context"
 	"testing"
 
+	"github.com/BladeRunner322/orange-team-microservices/pkg/nullable"
+	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/domain"
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
+	trmmanager "github.com/avito-tech/go-transaction-manager/trm/v2/manager"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/BladeRunner322/orange-team-microservices/pkg/nullable"
-	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/application/ports"
-	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/domain"
 )
 
 func TestWorkoutRepository_Integration(t *testing.T) {
-	repo := NewWorkoutRepository(testPool)
+	repo := NewWorkoutRepository(testPool.Pool, trmpgx.DefaultCtxGetter, testPool.OpTimeout())
 	runWorkoutRepositoryTests(t, repo)
 }
 
@@ -280,15 +280,24 @@ func runWorkoutRepositoryTests(t *testing.T, repo *WorkoutRepository) {
 	})
 
 	// ============================================================
-	//  WithTx
+	//  Транзакции
 	// ============================================================
 
-	t.Run("WithTx commit — изменения сохранены", func(t *testing.T) {
-		userID := uuid.New()
+	transactions, err := trmmanager.New(trmpgx.NewDefaultFactory(testPool.Pool))
+	require.NoError(t, err)
 
-		err := repo.WithTx(ctx, func(wRepo ports.WorkoutRepository, eRepo ports.WorkoutExerciseRepository) error {
-			w := mustWorkout(t, userID, 5)
-			_, err := wRepo.Create(ctx, w)
+	exerciseRepo := NewWorkoutExerciseRepository(testPool.Pool, trmpgx.DefaultCtxGetter, testPool.OpTimeout())
+
+	t.Run("Транзакция — тренировка и упражнение сохранены", func(t *testing.T) {
+		userID := uuid.New()
+		workout := mustWorkout(t, userID, 5)
+		exercise := mustWeightExercise(t, workout.ID())
+
+		err := transactions.Do(ctx, func(txCtx context.Context) error {
+			if _, err := repo.Create(txCtx, workout); err != nil {
+				return err
+			}
+			_, err := exerciseRepo.Create(txCtx, exercise)
 			return err
 		})
 		require.NoError(t, err)
@@ -298,19 +307,22 @@ func runWorkoutRepositoryTests(t *testing.T, repo *WorkoutRepository) {
 		assert.Len(t, list, 1)
 	})
 
-	t.Run("WithTx rollback — изменения откатились", func(t *testing.T) {
+	t.Run("Транзакция — изменения откатились", func(t *testing.T) {
 		userID := uuid.New()
+		workout := mustWorkout(t, userID, 5)
+		exercise := mustWeightExercise(t, workout.ID())
 		sentinel := assert.AnError
 
-		err := repo.WithTx(ctx, func(wRepo ports.WorkoutRepository, eRepo ports.WorkoutExerciseRepository) error {
-			w := mustWorkout(t, userID, 5)
-			if _, err := wRepo.Create(ctx, w); err != nil {
+		err := transactions.Do(ctx, func(txCtx context.Context) error {
+			if _, err := repo.Create(txCtx, workout); err != nil {
+				return err
+			}
+			if _, err := exerciseRepo.Create(txCtx, exercise); err != nil {
 				return err
 			}
 			return sentinel
 		})
-		require.Error(t, err)
-		assert.ErrorIs(t, err, sentinel)
+		require.ErrorIs(t, err, sentinel)
 
 		list, err := repo.GetByUserID(ctx, userID)
 		require.NoError(t, err)

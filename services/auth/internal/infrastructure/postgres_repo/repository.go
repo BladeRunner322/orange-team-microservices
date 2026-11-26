@@ -11,30 +11,30 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/pkg/pgerrors"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
 	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/domain"
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Repository реализует интерфейс ports.Repository для PostgreSQL.
 type Repository struct {
-	pool      postgres.Pool // nil, если репозиторий привязан к транзакции
-	tx        postgres.Tx   // nil, если репозиторий не в транзакции
+	db        *pgxpool.Pool
+	getter    *trmpgx.CtxGetter
 	opTimeout time.Duration
 }
 
 // NewRepository создаёт новый репозиторий с пулом соединений.
-func NewRepository(pool postgres.Pool) *Repository {
+func NewRepository(db *pgxpool.Pool, getter *trmpgx.CtxGetter, opTimeout time.Duration) *Repository {
 	return &Repository{
-		pool:      pool,
-		opTimeout: pool.OpTimeout(),
+		db:        db,
+		getter:    getter,
+		opTimeout: opTimeout,
 	}
 }
 
-// querier возвращает актуальный источник запросов: транзакцию или пул.
-func (r *Repository) querier() postgres.Querier {
-	if r.tx != nil {
-		return r.tx
-	}
-	return r.pool
+// queryExecutor выбирает транзакцию или пул и подключает обработку ошибок pgx.
+func (r *Repository) queryExecutor(ctx context.Context) postgres.QueryExecutor {
+	return postgres.WithMappedErrors(r.getter.DefaultTrOrDB(ctx, r.db))
 }
 
 // Save сохраняет пользователя в БД.
@@ -48,7 +48,7 @@ func (r *Repository) Save(ctx context.Context, user domain.User) error {
 		INSERT INTO auth.users (id, email, password_hash, full_name, role, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
 	`
-	_, err := r.querier().Exec(ctx, query,
+	_, err := r.queryExecutor(ctx).Exec(ctx, query,
 		m.ID,
 		m.Email,
 		m.PasswordHash,
@@ -79,7 +79,7 @@ func (r *Repository) FindByEmail(ctx context.Context, email domain.Email) (domai
 		WHERE email = $1
 	`
 	var m UserModel
-	row := r.querier().QueryRow(ctx, query, email.String())
+	row := r.queryExecutor(ctx).QueryRow(ctx, query, email.String())
 	err := m.Scan(row)
 
 	if errors.Is(err, pgerrors.ErrNoRows) {
@@ -109,7 +109,7 @@ func (r *Repository) FindByID(ctx context.Context, id uuid.UUID) (domain.User, e
 		WHERE id = $1
 	`
 	var m UserModel
-	row := r.querier().QueryRow(ctx, query, id)
+	row := r.queryExecutor(ctx).QueryRow(ctx, query, id)
 	err := m.Scan(row)
 
 	if errors.Is(err, pgerrors.ErrNoRows) {

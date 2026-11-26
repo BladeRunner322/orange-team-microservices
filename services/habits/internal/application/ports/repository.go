@@ -11,18 +11,14 @@ import (
 
 // HabitRepository — работа с таблицей habits.habits.
 type HabitRepository interface {
-	// WithTx выполняет fn в транзакции.
-	// Нужен для PatchHabit (read-then-write, по образцу Exercises).
-	WithTx(ctx context.Context, fn func(HabitRepository) error) error
-
 	// Create сохраняет новую привычку.
 	Create(ctx context.Context, habit domain.Habit) (domain.Habit, error)
 
 	// GetByID возвращает привычку по id (включая удалённые).
 	GetByID(ctx context.Context, id uuid.UUID) (domain.Habit, error)
 
-	// GetByIDForUpdate возвращает привычку с блокировкой строки.
-	// Вызывается только внутри WithTx.
+	// GetByIDForUpdate читает привычку с блокировкой строки.
+	// Вызывается с контекстом транзакции, чтобы блокировка держалась до её завершения.
 	GetByIDForUpdate(ctx context.Context, id uuid.UUID) (domain.Habit, error)
 
 	// ListByUser возвращает активные привычки пользователя.

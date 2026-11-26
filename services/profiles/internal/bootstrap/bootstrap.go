@@ -17,6 +17,8 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/application/usecases"
 	"github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/infrastructure/postgres_repo"
 	"github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/interfaces/profilesgrpc"
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
+	trmmanager "github.com/avito-tech/go-transaction-manager/trm/v2/manager"
 	"google.golang.org/grpc"
 )
 
@@ -46,14 +48,20 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	// ============================================================
 	// 2. РЕПОЗИТОРИЙ (реализация для profiles)
 	// ============================================================
-	repo := postgres_repo.NewRepository(pool)
+	transactions, err := trmmanager.New(trmpgx.NewDefaultFactory(pool.Pool))
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("create transaction manager: %w", err)
+	}
+
+	repo := postgres_repo.NewRepository(pool.Pool, trmpgx.DefaultCtxGetter, pool.OpTimeout())
 
 	// ============================================================
 	// 3. USE CASES
 	// ============================================================
 	getMyProfileUC := usecases.NewGetMyProfile(repo, log)
 	getProfileUC := usecases.NewGetProfile(repo, log)
-	patchMyProfileUC := usecases.NewPatchMyProfile(repo, log)
+	patchMyProfileUC := usecases.NewPatchMyProfile(repo, transactions, log)
 	deleteMyProfileUC := usecases.NewDeleteMyProfile(repo, log)
 	log.Info("use cases initialized")
 

@@ -17,6 +17,8 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/services/exercises/internal/application/usecases"
 	"github.com/BladeRunner322/orange-team-microservices/services/exercises/internal/infrastructure/postgres_repo"
 	"github.com/BladeRunner322/orange-team-microservices/services/exercises/internal/interfaces/exercisesgrpc"
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
+	trmmanager "github.com/avito-tech/go-transaction-manager/trm/v2/manager"
 	"google.golang.org/grpc"
 )
 
@@ -46,7 +48,13 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	// ============================================================
 	// 2. РЕПОЗИТОРИЙ (реализация для exercises)
 	// ============================================================
-	repo := postgres_repo.NewRepository(pool)
+	transactions, err := trmmanager.New(trmpgx.NewDefaultFactory(pool.Pool))
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("create transaction manager: %w", err)
+	}
+
+	repo := postgres_repo.NewRepository(pool.Pool, trmpgx.DefaultCtxGetter, pool.OpTimeout())
 
 	// ============================================================
 	// 3. USE CASES
@@ -54,7 +62,7 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	createExerciseUC := usecases.NewCreateExercise(repo, log)
 	getExerciseUC := usecases.NewGetExercise(repo, log)
 	getExercisesUC := usecases.NewGetExercises(repo, log)
-	patchExerciseUC := usecases.NewPatchExercise(repo, log)
+	patchExerciseUC := usecases.NewPatchExercise(repo, transactions, log)
 	deleteExerciseUC := usecases.NewDeleteExercise(repo, log)
 	log.Info("use cases initialized")
 

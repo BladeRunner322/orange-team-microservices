@@ -5,13 +5,12 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/BladeRunner322/orange-team-microservices/pkg/ctxkeys"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
 	"github.com/BladeRunner322/orange-team-microservices/services/habits/internal/domain"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // patchWithName — хелпер: собирает патч только с name.
@@ -48,7 +47,7 @@ func TestPatchHabit_Execute(t *testing.T) {
 		userID := uuid.New()
 		repo := newMockHabitRepository()
 		habit := createHabit(t, repo, userID, "Старое имя")
-		uc := NewPatchHabit(repo, logger.NewTestLogger())
+		uc := NewPatchHabit(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		// Act
 		updated, err := uc.Execute(newCtx(userID), habit.ID(), patchWithName("Новое имя"))
@@ -68,7 +67,7 @@ func TestPatchHabit_Execute(t *testing.T) {
 		newDesc, _ := domain.NewDescription("Новое описание")
 		patch := domain.NewHabitPatch(&newName, &newDesc)
 
-		uc := NewPatchHabit(repo, logger.NewTestLogger())
+		uc := NewPatchHabit(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		updated, err := uc.Execute(newCtx(userID), habit.ID(), patch)
 
@@ -82,7 +81,7 @@ func TestPatchHabit_Execute(t *testing.T) {
 		repo := newMockHabitRepository()
 		habit := createHabit(t, repo, userID, "Пить воду")
 
-		uc := NewPatchHabit(repo, logger.NewTestLogger())
+		uc := NewPatchHabit(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		updated, err := uc.Execute(newCtx(userID), habit.ID(), domain.NewHabitPatch(nil, nil))
 
@@ -94,7 +93,7 @@ func TestPatchHabit_Execute(t *testing.T) {
 	t.Run("привычка не найдена — ErrHabitNotFound", func(t *testing.T) {
 		userID := uuid.New()
 		repo := newMockHabitRepository()
-		uc := NewPatchHabit(repo, logger.NewTestLogger())
+		uc := NewPatchHabit(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		_, err := uc.Execute(newCtx(userID), uuid.New(), patchWithName("Новое имя"))
 
@@ -106,7 +105,7 @@ func TestPatchHabit_Execute(t *testing.T) {
 		otherID := uuid.New()
 		repo := newMockHabitRepository()
 		habit := createHabit(t, repo, ownerID, "Пить воду")
-		uc := NewPatchHabit(repo, logger.NewTestLogger())
+		uc := NewPatchHabit(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		_, err := uc.Execute(newCtx(otherID), habit.ID(), patchWithName("Новое имя"))
 
@@ -119,7 +118,7 @@ func TestPatchHabit_Execute(t *testing.T) {
 		habit := createHabit(t, repo, userID, "Пить воду")
 		require.NoError(t, repo.MarkDeleted(context.Background(), habit.ID()))
 
-		uc := NewPatchHabit(repo, logger.NewTestLogger())
+		uc := NewPatchHabit(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		_, err := uc.Execute(newCtx(userID), habit.ID(), patchWithName("Новое имя"))
 
@@ -132,7 +131,7 @@ func TestPatchHabit_Execute(t *testing.T) {
 		first := createHabit(t, repo, userID, "Пить воду")
 		_ = createHabit(t, repo, userID, "Читать")
 
-		uc := NewPatchHabit(repo, logger.NewTestLogger())
+		uc := NewPatchHabit(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		_, err := uc.Execute(newCtx(userID), first.ID(), patchWithName("Читать"))
 
@@ -144,7 +143,7 @@ func TestPatchHabit_Execute(t *testing.T) {
 		repo := newMockHabitRepository()
 		habit := createHabit(t, repo, userID, "Пить воду")
 
-		uc := NewPatchHabit(repo, logger.NewTestLogger())
+		uc := NewPatchHabit(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		updated, err := uc.Execute(newCtx(userID), habit.ID(), patchWithName("Пить воду"))
 
@@ -157,7 +156,7 @@ func TestPatchHabit_Execute(t *testing.T) {
 		repo := newMockHabitRepository()
 		habit := createHabit(t, repo, userID, "Пить воду")
 
-		uc := NewPatchHabit(repo, logger.NewTestLogger())
+		uc := NewPatchHabit(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		updated, err := uc.Execute(newCtx(userID), habit.ID(), patchWithDescription(""))
 
@@ -167,7 +166,7 @@ func TestPatchHabit_Execute(t *testing.T) {
 
 	t.Run("нет user_id в context — ErrUnauthenticated", func(t *testing.T) {
 		repo := newMockHabitRepository()
-		uc := NewPatchHabit(repo, logger.NewTestLogger())
+		uc := NewPatchHabit(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		_, err := uc.Execute(context.Background(), uuid.New(), patchWithName("X"))
 
@@ -178,7 +177,7 @@ func TestPatchHabit_Execute(t *testing.T) {
 		userID := uuid.New()
 		repo := newMockHabitRepository()
 		repo.err = errors.New("db is down")
-		uc := NewPatchHabit(repo, logger.NewTestLogger())
+		uc := NewPatchHabit(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		_, err := uc.Execute(newCtx(userID), uuid.New(), patchWithName("X"))
 

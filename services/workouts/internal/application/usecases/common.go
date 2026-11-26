@@ -27,7 +27,7 @@ func userIDFromContext(ctx context.Context, log *logger.Logger) (uuid.UUID, erro
 }
 
 // recalculateScore пересчитывает workout.workout_score по всем completed упражнениям.
-// Должен вызываться внутри WithTx (ADR-025 п.3.1).
+// Вызывается с контекстом транзакции (ADR-025 п.3.1).
 func recalculateScore(
 	ctx context.Context,
 	workoutRepo ports.WorkoutRepository,

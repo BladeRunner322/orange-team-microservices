@@ -72,6 +72,8 @@ fixes), но остаётся список того, что нужно зала�
 одну версию, оба применяли свой патч к ней, второй UPDATE затирал
 результат первого — **lost update** (классический last-write-wins).
 
+Актуальный механизм транзакций описан в [ADR-003](003-transactions.md). Ниже зафиксировано решение, с которым закрыли задачу.
+
 **Что сделано** (2026-10-13): **пессимистичная блокировка** через
 `SELECT ... FOR UPDATE` внутри транзакции. Оба usecase обёрнуты в
 `repo.WithTx`, читают сущность через `GetByUserIDForUpdate` /
@@ -253,11 +255,11 @@ lazy-create, а не про «сохранить всё».
 **Приоритет:** низкий (рефакторинг), не блокер.
 **Статус:** ✅ Закрыто (2026-10-13).
 
-**S-5. `pkg/postgres` не различает constraint при unique violation.**
+**S-5. `pkg/pgerrors` не различает constraint при unique violation.**
 
-`pkg/postgres/adapters.go`, функция `mapErrors`. Postgres возвращает
+`pkg/pgerrors/map.go`, функция `MapErrors`. Postgres возвращает
 один и тот же код `23505` для любого нарушения unique-индекса, вне
-зависимости от того, какой именно constraint сработал. `mapErrors`
+зависимости от того, какой именно constraint сработал. `MapErrors`
 смотрит только на код, но не на `pgErr.ConstraintName`, и возвращает
 общую `ErrViolatesUnique`.
 

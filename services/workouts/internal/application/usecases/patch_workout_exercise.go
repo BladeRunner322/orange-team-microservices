@@ -15,6 +15,7 @@ type PatchWorkoutExercise struct {
 	workoutRepo     ports.WorkoutRepository
 	exerciseRepo    ports.WorkoutExerciseRepository
 	exercisesClient ports.ExercisesClient
+	transactions    ports.TransactionManager
 	logger          *logger.Logger
 }
 
@@ -22,12 +23,14 @@ func NewPatchWorkoutExercise(
 	workoutRepo ports.WorkoutRepository,
 	exerciseRepo ports.WorkoutExerciseRepository,
 	exercisesClient ports.ExercisesClient,
+	transactions ports.TransactionManager,
 	log *logger.Logger,
 ) *PatchWorkoutExercise {
 	return &PatchWorkoutExercise{
 		workoutRepo:     workoutRepo,
 		exerciseRepo:    exerciseRepo,
 		exercisesClient: exercisesClient,
+		transactions:    transactions,
 		logger:          log,
 	}
 }
@@ -98,14 +101,14 @@ func (uc *PatchWorkoutExercise) Execute(
 	}
 
 	var updated domain.WorkoutExercise
-	err = uc.workoutRepo.WithTx(ctx, func(wRepo ports.WorkoutRepository, eRepo ports.WorkoutExerciseRepository) error {
+	err = uc.transactions.Do(ctx, func(txCtx context.Context) error {
 		var err error
-		updated, err = eRepo.Update(ctx, exercise)
+		updated, err = uc.exerciseRepo.Update(txCtx, exercise)
 		if err != nil {
 			return fmt.Errorf("update workout exercise: %w", err)
 		}
 
-		return recalculateScore(ctx, wRepo, eRepo, userID, workoutID)
+		return recalculateScore(txCtx, uc.workoutRepo, uc.exerciseRepo, userID, workoutID)
 	})
 	if err != nil {
 		log.Error("failed to patch workout exercise in transaction", "error", err)

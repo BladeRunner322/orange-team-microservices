@@ -5,19 +5,25 @@ package postgres_repo
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
-	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
 	"github.com/BladeRunner322/orange-team-microservices/services/habits/internal/domain"
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
+	trmmanager "github.com/avito-tech/go-transaction-manager/trm/v2/manager"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestHabitRepository_Integration(t *testing.T) {
-	repo := NewHabitRepository(testPool)
-	runHabitRepositoryTests(t, repo)
+	transactions, err := trmmanager.New(trmpgx.NewDefaultFactory(testPool.Pool))
+	require.NoError(t, err)
+
+	repo := NewHabitRepository(testPool.Pool, trmpgx.DefaultCtxGetter, testPool.OpTimeout())
+	runHabitRepositoryTests(t, repo, transactions)
 }
 
 // mustHabit создаёт доменную привычку или падает.
@@ -33,7 +39,7 @@ func mustHabit(t *testing.T, userID uuid.UUID, name, description string) domain.
 	return domain.NewHabit(userID, n, d)
 }
 
-func runHabitRepositoryTests(t *testing.T, repo *HabitRepository) {
+func runHabitRepositoryTests(t *testing.T, repo *HabitRepository, transactions *trmmanager.Manager) {
 	ctx := context.Background()
 
 	uniqueName := func(prefix string) string {
@@ -118,37 +124,64 @@ func runHabitRepositoryTests(t *testing.T, repo *HabitRepository) {
 	//  GetByIDForUpdate
 	// ============================================================
 
-	t.Run("GetByIDForUpdate — параллельный FOR UPDATE ждёт ROLLBACK", func(t *testing.T) {
-		created, err := repo.Create(ctx, mustHabit(t, uuid.New(), uniqueName("Блокировка"), "Описание"))
+	t.Run("Do — блокировка строки, rollback и commit", func(t *testing.T) {
+		created, err := repo.Create(ctx, mustHabit(t, uuid.New(), uniqueName("Блокировка"), "Исходное описание"))
 		require.NoError(t, err)
 
-		tx, err := repo.pool.(*postgres.PgxPool).BeginTx(ctx)
+		description, err := domain.NewDescription("Новое описание")
+		require.NoError(t, err)
+		patch := domain.NewHabitPatch(nil, &description)
+		rollbackErr := errors.New("force rollback")
+		var lockErr error
+
+		err = transactions.Do(ctx, func(txCtx context.Context) error {
+			habit, err := repo.GetByIDForUpdate(txCtx, created.ID())
+			if err != nil {
+				return err
+			}
+
+			// Запрос через пул проверяет блокировку с другого соединения.
+			lockCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			defer cancel()
+
+			var id uuid.UUID
+			lockErr = repo.db.QueryRow(lockCtx, `
+				SELECT id FROM habits.habits
+				WHERE id = $1
+				FOR UPDATE NOWAIT
+			`, created.ID()).Scan(&id)
+
+			habit.ApplyPatch(patch)
+			if _, err := repo.Update(txCtx, habit); err != nil {
+				return err
+			}
+			return rollbackErr
+		})
+		require.ErrorIs(t, err, rollbackErr)
+
+		var pgErr *pgconn.PgError
+		require.ErrorAs(t, lockErr, &pgErr)
+		require.Equal(t, "55P03", pgErr.Code, "строка должна быть заблокирована")
+
+		afterRollback, err := repo.GetByID(ctx, created.ID())
+		require.NoError(t, err)
+		require.Equal(t, created.Description(), afterRollback.Description())
+
+		err = transactions.Do(ctx, func(txCtx context.Context) error {
+			habit, err := repo.GetByIDForUpdate(txCtx, created.ID())
+			if err != nil {
+				return err
+			}
+
+			habit.ApplyPatch(patch)
+			_, err = repo.Update(txCtx, habit)
+			return err
+		})
 		require.NoError(t, err)
 
-		txRepo := &HabitRepository{tx: tx, opTimeout: 5 * time.Second}
-		_, err = txRepo.GetByIDForUpdate(ctx, created.ID())
+		afterCommit, err := repo.GetByID(ctx, created.ID())
 		require.NoError(t, err)
-
-		done := make(chan error, 1)
-		go func() {
-			_, err := repo.GetByIDForUpdate(ctx, created.ID())
-			done <- err
-		}()
-
-		select {
-		case <-done:
-			t.Fatal("параллельный FOR UPDATE не должен завершиться, пока первая транзакция открыта")
-		case <-time.After(200 * time.Millisecond):
-		}
-
-		require.NoError(t, tx.Rollback(ctx))
-
-		select {
-		case err := <-done:
-			require.NoError(t, err)
-		case <-time.After(2 * time.Second):
-			t.Fatal("параллельный FOR UPDATE должен был завершиться после ROLLBACK")
-		}
+		require.Equal(t, description, afterCommit.Description())
 	})
 
 	// ============================================================

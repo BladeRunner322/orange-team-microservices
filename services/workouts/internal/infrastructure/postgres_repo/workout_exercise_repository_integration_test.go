@@ -7,16 +7,16 @@ import (
 	"context"
 	"testing"
 
+	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/domain"
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/domain"
 )
 
 func TestWorkoutExerciseRepository_Integration(t *testing.T) {
-	workoutRepo := NewWorkoutRepository(testPool)
-	exerciseRepo := NewWorkoutExerciseRepository(testPool)
+	workoutRepo := NewWorkoutRepository(testPool.Pool, trmpgx.DefaultCtxGetter, testPool.OpTimeout())
+	exerciseRepo := NewWorkoutExerciseRepository(testPool.Pool, trmpgx.DefaultCtxGetter, testPool.OpTimeout())
 	runWorkoutExerciseRepositoryTests(t, exerciseRepo, workoutRepo)
 }
 

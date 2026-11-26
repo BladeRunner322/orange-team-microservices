@@ -12,12 +12,24 @@ import (
 )
 
 type PatchWorkout struct {
-	workoutRepo ports.WorkoutRepository
-	logger      *logger.Logger
+	workoutRepo  ports.WorkoutRepository
+	exerciseRepo ports.WorkoutExerciseRepository
+	transactions ports.TransactionManager
+	logger       *logger.Logger
 }
 
-func NewPatchWorkout(repo ports.WorkoutRepository, log *logger.Logger) *PatchWorkout {
-	return &PatchWorkout{workoutRepo: repo, logger: log}
+func NewPatchWorkout(
+	workoutRepo ports.WorkoutRepository,
+	exerciseRepo ports.WorkoutExerciseRepository,
+	transactions ports.TransactionManager,
+	log *logger.Logger,
+) *PatchWorkout {
+	return &PatchWorkout{
+		workoutRepo:  workoutRepo,
+		exerciseRepo: exerciseRepo,
+		transactions: transactions,
+		logger:       log,
+	}
 }
 
 func (uc *PatchWorkout) Execute(ctx context.Context, id uuid.UUID, patch domain.WorkoutPatch) (domain.Workout, error) {
@@ -29,8 +41,8 @@ func (uc *PatchWorkout) Execute(ctx context.Context, id uuid.UUID, patch domain.
 	}
 
 	var updated domain.Workout
-	err = uc.workoutRepo.WithTx(ctx, func(wRepo ports.WorkoutRepository, eRepo ports.WorkoutExerciseRepository) error {
-		workout, err := wRepo.GetByID(ctx, userID, id)
+	err = uc.transactions.Do(ctx, func(txCtx context.Context) error {
+		workout, err := uc.workoutRepo.GetByID(txCtx, userID, id)
 		if err != nil {
 			if errors.Is(err, domain.ErrWorkoutNotFound) {
 				log.Warn("workout not found")
@@ -51,7 +63,7 @@ func (uc *PatchWorkout) Execute(ctx context.Context, id uuid.UUID, patch domain.
 		}
 
 		if workout.Status() == domain.StatusCompleted {
-			exercises, err := eRepo.ListByWorkout(ctx, id)
+			exercises, err := uc.exerciseRepo.ListByWorkout(txCtx, id)
 			if err != nil {
 				log.Error("failed to list exercises for completion check", "error", err)
 				return fmt.Errorf("list exercises: %w", err)
@@ -70,7 +82,7 @@ func (uc *PatchWorkout) Execute(ctx context.Context, id uuid.UUID, patch domain.
 			}
 		}
 
-		updated, err = wRepo.Update(ctx, workout)
+		updated, err = uc.workoutRepo.Update(txCtx, workout)
 		if err != nil {
 			log.Error("failed to update workout", "error", err)
 			return fmt.Errorf("update workout: %w", err)

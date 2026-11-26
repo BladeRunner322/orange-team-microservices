@@ -31,7 +31,7 @@
 - `infrastructure/postgres_repo` — SQL, маппинг ошибок, транзакции.
 - `infrastructure/redis_repo` — TTL, set-операции.
 - `pkg/ratelimit` — Lua-скрипт, атомарность Token Bucket.
-- `pkg/postgres` — пул соединений, `WithTx`, адаптеры. Чистая логика над ошибками — в `pkg/pgerrors`, конфиг — в `pkg/pgconfig`.
+- `pkg/postgres` — пул соединений с таймаутом операций и адаптеры для преобразования ошибок pgx. Чистая логика над ошибками — в `pkg/pgerrors`, конфиг — в `pkg/pgconfig`.
 
 Integration-тесты помечены `//go:build integration` и в `task test` не участвуют.
 
@@ -44,7 +44,7 @@ Integration-тесты помечены `//go:build integration` и в `task tes
 - `interfaces/*grpc` — обвязка над usecase, тестируется e2e.
 - `application/ports` — интерфейсы, нет кода для покрытия.
 - `pkg/logger`, `pkg/health`, `pkg/nullable`, `pkg/redis`, `pkg/metrics`, `pkg/grpc/server` — тонкие обёртки.
-- `pkg/postgres` — pgx-специфика (пул, транзакции, адаптеры), покрывается integration-тестами. Чистая логика над ошибками вынесена в `pkg/pgerrors`.
+- `pkg/postgres` — pgx-специфика (пул и адаптеры), покрывается integration-тестами. Коммит и откат проверяются в интеграционных тестах репозиториев сервисов. Чистая логика над ошибками вынесена в `pkg/pgerrors`.
 
 ### Как это зафиксировано в коде
 

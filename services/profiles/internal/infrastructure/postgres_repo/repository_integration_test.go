@@ -5,14 +5,19 @@ package postgres_repo
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/BladeRunner322/orange-team-microservices/pkg/nullable"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/pgconfig"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
 	"github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/domain"
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
+	trmmanager "github.com/avito-tech/go-transaction-manager/trm/v2/manager"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -68,14 +73,15 @@ func TestRepository_Integration(t *testing.T) {
 	_, err = pool.Exec(ctx, string(migration))
 	require.NoError(t, err)
 
-	// 5. Создаём репозиторий
-	repo := NewRepository(pool)
+	// Создаём менеджер и репозиторий на одном пуле, как в bootstrap.
+	transactions, err := trmmanager.New(trmpgx.NewDefaultFactory(pool.Pool))
+	require.NoError(t, err)
 
-	// 6. Прогоняем подтесты
-	runRepositoryTests(t, repo)
+	repo := NewRepository(pool.Pool, trmpgx.DefaultCtxGetter, pool.OpTimeout())
+	runRepositoryTests(t, repo, transactions)
 }
 
-func runRepositoryTests(t *testing.T, repo *Repository) {
+func runRepositoryTests(t *testing.T, repo *Repository, transactions *trmmanager.Manager) {
 	ctx := context.Background()
 
 	newEmptyProfile := func() domain.Profile {
@@ -183,40 +189,69 @@ func runRepositoryTests(t *testing.T, repo *Repository) {
 		assert.ErrorIs(t, err, domain.ErrProfileNotFound)
 	})
 
-	t.Run("WithTx + GetByUserIDForUpdate — блокировка видна параллельному запросу", func(t *testing.T) {
+	t.Run("Do — блокировка строки, rollback и commit", func(t *testing.T) {
 		profile := newEmptyProfile()
 		require.NoError(t, repo.EnsureExists(ctx, profile))
 
-		// Открываем транзакцию, читаем с FOR UPDATE, не коммитим.
-		tx, err := repo.pool.BeginTx(ctx)
+		height, err := domain.NewHeight(180)
 		require.NoError(t, err)
-
-		txRepo := &Repository{tx: tx, opTimeout: 5 * time.Second}
-
-		_, err = txRepo.GetByUserIDForUpdate(ctx, profile.UserID())
-		require.NoError(t, err)
-
-		// Параллельный FOR UPDATE должен ждать. Проверяем через таймаут.
-		done := make(chan error, 1)
-		go func() {
-			_, err := repo.GetByUserIDForUpdate(ctx, profile.UserID())
-			done <- err
-		}()
-
-		select {
-		case <-done:
-			t.Fatal("параллельный FOR UPDATE не должен завершиться, пока первая транзакция открыта")
-		case <-time.After(200 * time.Millisecond):
-			// Ожидаемо: ждёт.
+		patch := domain.ProfilePatch{
+			Height: nullable.Nullable[domain.Height]{Set: true, Value: &height},
 		}
 
-		require.NoError(t, tx.Rollback(ctx))
+		rollbackErr := errors.New("force rollback")
+		var lockErr error
 
-		select {
-		case err := <-done:
-			require.NoError(t, err, "после ROLLBACK блокировка должна сняться")
-		case <-time.After(2 * time.Second):
-			t.Fatal("параллельный FOR UPDATE должен был завершиться после ROLLBACK")
-		}
+		err = transactions.Do(ctx, func(txCtx context.Context) error {
+			current, err := repo.GetByUserIDForUpdate(txCtx, profile.UserID())
+			if err != nil {
+				return err
+			}
+
+			// Через пул берём другое соединение. NOWAIT проверяет,
+			// что первая транзакция уже держит блокировку строки.
+			lockCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			defer cancel()
+
+			var userID uuid.UUID
+			lockErr = repo.db.QueryRow(lockCtx, `
+				SELECT user_id FROM profiles.users
+				WHERE user_id = $1
+				FOR UPDATE NOWAIT
+			`, profile.UserID()).Scan(&userID)
+
+			current.ApplyPatch(patch)
+			if _, err := repo.Update(txCtx, current); err != nil {
+				return err
+			}
+
+			return rollbackErr
+		})
+		require.ErrorIs(t, err, rollbackErr)
+
+		var pgErr *pgconn.PgError
+		require.ErrorAs(t, lockErr, &pgErr)
+		require.Equal(t, "55P03", pgErr.Code, "строка должна быть заблокирована")
+
+		afterRollback, err := repo.GetByUserID(ctx, profile.UserID())
+		require.NoError(t, err)
+		require.Nil(t, afterRollback.Height())
+
+		err = transactions.Do(ctx, func(txCtx context.Context) error {
+			current, err := repo.GetByUserIDForUpdate(txCtx, profile.UserID())
+			if err != nil {
+				return err
+			}
+
+			current.ApplyPatch(patch)
+			_, err = repo.Update(txCtx, current)
+			return err
+		})
+		require.NoError(t, err)
+
+		afterCommit, err := repo.GetByUserID(ctx, profile.UserID())
+		require.NoError(t, err)
+		require.NotNil(t, afterCommit.Height())
+		require.Equal(t, height, *afterCommit.Height())
 	})
 }

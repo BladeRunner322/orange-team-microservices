@@ -10,44 +10,32 @@ import (
 
 	"github.com/BladeRunner322/orange-team-microservices/pkg/pgerrors"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
-	"github.com/BladeRunner322/orange-team-microservices/services/exercises/internal/application/ports"
 	"github.com/BladeRunner322/orange-team-microservices/services/exercises/internal/domain"
 	"github.com/google/uuid"
+
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Repository реализует интерфейс ports.Repository для PostgreSQL.
 type Repository struct {
-	pool      postgres.Pool // nil, если репозиторий привязан к транзакции
-	tx        postgres.Tx   // nil, если репозиторий не в транзакции
+	db        *pgxpool.Pool
+	getter    *trmpgx.CtxGetter
 	opTimeout time.Duration
 }
 
-// NewRepository создаёт новый репозиторий с пулом соединений.
-func NewRepository(pool postgres.Pool) *Repository {
+// NewRepository создаёт репозиторий с пулом и доступом к транзакции из контекста.
+func NewRepository(db *pgxpool.Pool, getter *trmpgx.CtxGetter, opTimeout time.Duration) *Repository {
 	return &Repository{
-		pool:      pool,
-		opTimeout: pool.OpTimeout(),
+		db:        db,
+		getter:    getter,
+		opTimeout: opTimeout,
 	}
 }
 
-// querier возвращает актуальный источник запросов: транзакцию или пул.
-func (r *Repository) querier() postgres.Querier {
-	if r.tx != nil {
-		return r.tx
-	}
-	return r.pool
-}
-
-// WithTx выполняет fn внутри транзакции. Если репозиторий уже привязан
-// к транзакции — вложенная не открывается, fn вызывается с текущим.
-func (r *Repository) WithTx(ctx context.Context, fn func(ports.Repository) error) error {
-	if r.tx != nil {
-		return fn(r)
-	}
-	return r.pool.WithTx(ctx, func(tx postgres.Tx) error {
-		txRepo := &Repository{tx: tx, opTimeout: r.opTimeout}
-		return fn(txRepo)
-	})
+// queryExecutor выбирает транзакцию из контекста или пул и подключает обработку ошибок pgx.
+func (r *Repository) queryExecutor(ctx context.Context) postgres.QueryExecutor {
+	return postgres.WithMappedErrors(r.getter.DefaultTrOrDB(ctx, r.db))
 }
 
 // Create вставляет упражнение в БД и возвращает его из RETURNING.
@@ -62,8 +50,7 @@ func (r *Repository) Create(ctx context.Context, exercise domain.Exercise) (doma
     `
 	m := DomainToModel(exercise)
 
-	row := r.querier().QueryRow(ctx, query, m.ID, m.Name, m.Description, m.Difficulty, m.Type)
-
+	row := r.queryExecutor(ctx).QueryRow(ctx, query, m.ID, m.Name, m.Description, m.Difficulty, m.Type)
 	if err := m.Scan(row); err != nil {
 		if errors.Is(err, pgerrors.ErrViolatesUnique) {
 			return domain.Exercise{}, domain.ErrExerciseNameExists
@@ -92,7 +79,7 @@ func (r *Repository) GetExercise(ctx context.Context, id uuid.UUID) (domain.Exer
     `
 
 	var m ExerciseModel
-	row := r.querier().QueryRow(ctx, query, id)
+	row := r.queryExecutor(ctx).QueryRow(ctx, query, id)
 	if err := m.Scan(row); err != nil {
 		if errors.Is(err, pgerrors.ErrNoRows) {
 			return domain.Exercise{}, domain.ErrExerciseNotFound
@@ -124,7 +111,7 @@ func (r *Repository) GetExerciseForUpdate(ctx context.Context, id uuid.UUID) (do
     `
 
 	var m ExerciseModel
-	row := r.querier().QueryRow(ctx, query, id)
+	row := r.queryExecutor(ctx).QueryRow(ctx, query, id)
 	if err := m.Scan(row); err != nil {
 		if errors.Is(err, pgerrors.ErrNoRows) {
 			return domain.Exercise{}, domain.ErrExerciseNotFound
@@ -153,7 +140,7 @@ func (r *Repository) GetExercises(ctx context.Context) ([]domain.Exercise, error
 		ORDER BY name ASC
     `
 
-	rows, err := r.querier().Query(ctx, query)
+	rows, err := r.queryExecutor(ctx).Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query exercises: %w", err)
 	}
@@ -200,8 +187,7 @@ func (r *Repository) Update(ctx context.Context, exercise domain.Exercise) (doma
 
 	m := DomainToModel(exercise)
 
-	row := r.querier().QueryRow(ctx, query, m.ID, m.Name, m.Description, m.Difficulty)
-
+	row := r.queryExecutor(ctx).QueryRow(ctx, query, m.ID, m.Name, m.Description, m.Difficulty)
 	if err := m.Scan(row); err != nil {
 		if errors.Is(err, pgerrors.ErrNoRows) {
 			return domain.Exercise{}, domain.ErrExerciseNotFound
@@ -235,7 +221,7 @@ func (r *Repository) MarkDeleted(ctx context.Context, id uuid.UUID) error {
 			updated_at = NOW()
 		WHERE id = $1 AND deleted_at IS NULL
 	`
-	cmdTag, err := r.querier().Exec(ctx, query, id)
+	cmdTag, err := r.queryExecutor(ctx).Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("mark deleted: %w", err)
 	}

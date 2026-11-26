@@ -135,21 +135,18 @@ coeff = clamp(1 + (BMI - 18) × 9 / 17, 1, 10)
 
 ### 3.1. Транзакция вокруг мутации и пересчёта score
 
-Любая операция, которая меняет `workout_exercises` **и** пересчитывает `workouts.workout_score`, выполняется в **одной транзакции** через `WorkoutRepository.WithTx`.
+Любая операция, которая меняет `workout_exercises` **и** пересчитывает `workouts.workout_score`, выполняется в **одной транзакции** через `Do(ctx, fn)` менеджера транзакций.
 
-Порядок внутри `WithTx`:
-1. `WorkoutExerciseRepository.Update(ctx, exercise)` — `UPDATE workout_exercises` с version. Если 0 rows — `ErrConflict`, транзакция откатывается.
-2. `recalculateScore` — читает `workout_exercises` (уже обновлённые в tx), считает score, вызывает `WorkoutRepository.Update(ctx, workout)` — `UPDATE workouts` с version. Если 0 rows — `ErrConflict`, откат.
-3. Commit.
+Порядок при обновлении упражнения:
+1. `WorkoutExerciseRepository.Update(txCtx, exercise)` — `UPDATE workout_exercises` с version. Если 0 rows — `ErrConflict`, транзакция откатывается.
+2. `recalculateScore` — читает `workout_exercises` (уже обновлённые в tx), считает score, вызывает `WorkoutRepository.Update(txCtx, workout)` — `UPDATE workouts` с version. Если 0 rows — `ErrConflict`, откат.
+3. Менеджер делает commit после успешного завершения callback.
 
 **Почему без транзакции плохо.** Между шагом 1 и 2 другой клиент может патчить эту же тренировку. Оба читают `workout_exercises`, оба считают score, оба пытаются обновить `workouts` с одним `version`. Один выигрывает, второй получает 409 — но **его патч упражнения уже сохранён** (шаг 1 закоммичен). Клиент видит ошибку, хотя данные изменились, а `workout_score` рассинхронизирован с реальностью до следующей мутации.
 
 **С транзакцией** — либо обе операции прошли, либо ни одна. При конфликте откат обеих, клиент перечитывает и повторяет. Инвариант «`workout_score` всегда соответствует содержимому `workout_exercises`» держится.
 
-**Что это требует от репозиториев:**
-- `WorkoutRepository.WithTx(ctx, fn func(WorkoutRepository, WorkoutExerciseRepository) error) error` — открывает транзакцию, создаёт **оба** репозитория, привязанных к одному `*postgres.Tx`, передаёт их в callback. По образцу существующих `WithTx`, но с двумя репозиториями в аргументе (потому что `recalculateScore` ходит в оба).
-- Оба репозитория получают `NewWithTx(pool, tx)` — конструктор с транзакцией (или `NewRepository(pool)` для работы без транзакции).
-- В bootstrap создаются обычные репозитории на `*postgres.PgxPool`; `WithTx` создаёт временные с `tx` внутри callback.
+В bootstrap менеджер и оба репозитория получают один пул pgx. Сценарий передаёт `txCtx` из callback во все вызовы обоих репозиториев. Каждый репозиторий получает из него одну и ту же транзакцию через `DefaultTrOrDB`. Общие правила описаны в [ADR-003](003-transactions.md).
 
 ### 3.2. Soft delete (удаление тренировки)
 
@@ -215,11 +212,11 @@ DELETE тренировки — **soft delete**. Строка не удаляе�
 
 - `workout_exercises` — отдельная таблица, отдельные SQL-запросы (`INSERT` / `UPDATE` / `DELETE` / `SELECT`).
 - В одном репозитории смешались бы методы работы с `workouts` (6 шт.) и с `workout_exercises` (5 шт.) — неудобно тестировать и ревьюить.
-- `WithTx` передаёт **оба** репозитория в callback (п.3.1) — атомарная мутация агрегата возможна.
+- Оба репозитория участвуют в одной транзакции через общий `txCtx` (п. 3.1).
 
 Это компромисс между DDD-чистотой (один репозиторий на агрегат) и практичностью (два репозитория по таблицам). Осознанный выбор — как в Exercises и Habits.
 
-**Про `recalculateScore`.** Не метод репозитория, а helper в `usecases/common.go`. Координирует чтение из обоих репозиториев и обновление `workouts.workout_score` внутри `WithTx`. В монолите `WorkoutExercisesRepository.UpdateWorkoutScore` писал в `workouts` из репозитория `workout_exercises` — нарушение границ. В новом проекте: `WorkoutRepository.Update(ctx, workout)` с version, вызывается из `recalculateScore`.
+**Про `recalculateScore`.** Не метод репозитория, а helper в `usecases/common.go`. Координирует чтение из обоих репозиториев и обновление `workouts.workout_score` внутри транзакции. В монолите `WorkoutExercisesRepository.UpdateWorkoutScore` писал в `workouts` из репозитория `workout_exercises` — нарушение границ. В новом проекте: `WorkoutRepository.Update(ctx, workout)` с version, вызывается из `recalculateScore`.
 
 ### 5. `user_workout_score` не хранится
 

@@ -3,10 +3,8 @@ package usecases
 import (
 	"context"
 
-	"github.com/google/uuid"
-
-	"github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/application/ports"
 	"github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/domain"
+	"github.com/google/uuid"
 )
 
 // mockRepository — реализация ports.Repository для тестов.
@@ -20,12 +18,11 @@ func newMockRepository() *mockRepository {
 	return &mockRepository{profiles: make(map[uuid.UUID]domain.Profile)}
 }
 
-func (m *mockRepository) WithTx(ctx context.Context, fn func(ports.Repository) error) error {
-	if m.err != nil {
-		return m.err
-	}
-	// В памяти транзакции нет — прокидываем тот же мок.
-	return fn(m)
+// mockTransactionManager выполняет callback в unit-тестах.
+type mockTransactionManager struct{}
+
+func (mockTransactionManager) Do(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
 }
 
 func (m *mockRepository) GetByUserIDForUpdate(ctx context.Context, userID uuid.UUID) (domain.Profile, error) {

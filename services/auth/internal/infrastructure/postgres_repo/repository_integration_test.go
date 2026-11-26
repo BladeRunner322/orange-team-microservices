@@ -9,15 +9,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BladeRunner322/orange-team-microservices/pkg/pgconfig"
+	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
+	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/domain"
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
-
-	"github.com/BladeRunner322/orange-team-microservices/pkg/pgconfig"
-	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
-	"github.com/BladeRunner322/orange-team-microservices/services/auth/internal/domain"
 )
 
 func TestRepository_Integration(t *testing.T) {
@@ -76,7 +76,7 @@ func TestRepository_Integration(t *testing.T) {
 	}
 
 	// 5. Создаём репозиторий поверх пула
-	repo := NewRepository(pool)
+	repo := NewRepository(pool.Pool, trmpgx.DefaultCtxGetter, pool.OpTimeout())
 
 	// 6. Прогоняем тесты
 	runRepositoryTests(t, repo)

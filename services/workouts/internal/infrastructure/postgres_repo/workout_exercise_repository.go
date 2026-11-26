@@ -9,27 +9,28 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/pkg/pgerrors"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
 	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/domain"
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type WorkoutExerciseRepository struct {
-	pool      postgres.Pool
-	tx        postgres.Tx
+	db        *pgxpool.Pool
+	getter    *trmpgx.CtxGetter
 	opTimeout time.Duration
 }
 
-func NewWorkoutExerciseRepository(pool postgres.Pool) *WorkoutExerciseRepository {
+func NewWorkoutExerciseRepository(db *pgxpool.Pool, getter *trmpgx.CtxGetter, opTimeout time.Duration) *WorkoutExerciseRepository {
 	return &WorkoutExerciseRepository{
-		pool:      pool,
-		opTimeout: pool.OpTimeout(),
+		db:        db,
+		getter:    getter,
+		opTimeout: opTimeout,
 	}
 }
 
-func (r *WorkoutExerciseRepository) querier() postgres.Querier {
-	if r.tx != nil {
-		return r.tx
-	}
-	return r.pool
+// queryExecutor выбирает транзакцию или пул и подключает обработку ошибок pgx.
+func (r *WorkoutExerciseRepository) queryExecutor(ctx context.Context) postgres.QueryExecutor {
+	return postgres.WithMappedErrors(r.getter.DefaultTrOrDB(ctx, r.db))
 }
 
 // Create вставляет упражнение в БД и возвращает его из RETURNING.
@@ -46,7 +47,7 @@ func (r *WorkoutExerciseRepository) Create(ctx context.Context, exercise domain.
 	`
 	m := WorkoutExerciseDomainToModel(exercise)
 
-	row := r.querier().QueryRow(ctx, query,
+	row := r.queryExecutor(ctx).QueryRow(ctx, query,
 		m.ID,
 		m.Version,
 		m.WorkoutID,
@@ -86,7 +87,7 @@ func (r *WorkoutExerciseRepository) GetByID(ctx context.Context, workoutID uuid.
 	`
 
 	var m WorkoutExerciseModel
-	row := r.querier().QueryRow(ctx, query, workoutID, id)
+	row := r.queryExecutor(ctx).QueryRow(ctx, query, workoutID, id)
 	if err := m.Scan(row); err != nil {
 		if errors.Is(err, pgerrors.ErrNoRows) {
 			return domain.WorkoutExercise{}, domain.ErrWorkoutExerciseNotFound
@@ -117,7 +118,7 @@ func (r *WorkoutExerciseRepository) ListByWorkout(ctx context.Context, workoutID
 		ORDER BY created_at ASC, id ASC
 	`
 
-	rows, err := r.querier().Query(ctx, query, workoutID)
+	rows, err := r.queryExecutor(ctx).Query(ctx, query, workoutID)
 	if err != nil {
 		return nil, fmt.Errorf("query workout exercises: %w", err)
 	}
@@ -174,7 +175,7 @@ func (r *WorkoutExerciseRepository) Update(ctx context.Context, exercise domain.
 
 	m := WorkoutExerciseDomainToModel(exercise)
 
-	row := r.querier().QueryRow(ctx, query,
+	row := r.queryExecutor(ctx).QueryRow(ctx, query,
 		m.ID,
 		m.WorkoutID,
 		m.Version,
@@ -215,7 +216,7 @@ func (r *WorkoutExerciseRepository) Delete(ctx context.Context, workoutID uuid.U
 		WHERE workout_id = $1 AND id = $2
 	`
 
-	cmdTag, err := r.querier().Exec(ctx, query, workoutID, id)
+	cmdTag, err := r.queryExecutor(ctx).Exec(ctx, query, workoutID, id)
 	if err != nil {
 		return fmt.Errorf("delete workout exercise: %w", err)
 	}

@@ -336,7 +336,7 @@ orange-team-microservices/
 │   ├── nullable/                     # Nullable[T] для patch-полей (Set / Value)
 │   ├── pgconfig/                     # конфигурация подключения к PostgreSQL (envconfig)
 │   ├── pgerrors/                     # сентинелы и маппинг ошибок PostgreSQL (pgx/pgconn)
-│   ├── postgres/                     # пул соединений pgx, адаптеры
+│   ├── postgres/                     # пул pgx с таймаутом операций, маппинг ошибок
 │   ├── ratelimit/                    # Token Bucket на Redis (rate limiting)
 │   └── redis/                        # клиент Redis (refresh tokens, rate limiting)
 │

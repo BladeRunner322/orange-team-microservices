@@ -5,14 +5,13 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/BladeRunner322/orange-team-microservices/pkg/ctxkeys"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
 	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/application/ports"
 	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/domain"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCreateWorkoutExercise_Execute(t *testing.T) {
@@ -40,7 +39,7 @@ func TestCreateWorkoutExercise_Execute(t *testing.T) {
 		w := setupWorkout(t, repo, ctx, userID, domain.StatusInProgress)
 		exercisesClient := &mockExercisesClient{info: weightInfo}
 
-		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, logger.NewTestLogger())
+		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, mockTransactionManager{}, logger.NewTestLogger())
 		created, err := uc.Execute(ctx, w.ID(), uuid.New(), ptrWeight(t, 100), ptrSets(t, 4), ptrReps(t, 10), nil, true)
 
 		require.NoError(t, err)
@@ -62,7 +61,7 @@ func TestCreateWorkoutExercise_Execute(t *testing.T) {
 		w := setupWorkout(t, repo, ctx, userID, domain.StatusPlanned)
 		exercisesClient := &mockExercisesClient{info: weightInfo}
 
-		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, logger.NewTestLogger())
+		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, mockTransactionManager{}, logger.NewTestLogger())
 		created, err := uc.Execute(ctx, w.ID(), uuid.New(), ptrWeight(t, 100), ptrSets(t, 4), ptrReps(t, 10), nil, false)
 
 		require.NoError(t, err)
@@ -80,7 +79,7 @@ func TestCreateWorkoutExercise_Execute(t *testing.T) {
 		w := setupWorkout(t, repo, ctx, userID, domain.StatusPlanned)
 		exercisesClient := &mockExercisesClient{info: durationInfo}
 
-		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, logger.NewTestLogger())
+		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, mockTransactionManager{}, logger.NewTestLogger())
 		created, err := uc.Execute(ctx, w.ID(), uuid.New(), nil, nil, nil, ptrDuration(t, 600), false)
 
 		require.NoError(t, err)
@@ -95,7 +94,7 @@ func TestCreateWorkoutExercise_Execute(t *testing.T) {
 		w := setupWorkout(t, repo, ctx, userID, domain.StatusInProgress)
 		exercisesClient := &mockExercisesClient{info: weightInfo}
 
-		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, logger.NewTestLogger())
+		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, mockTransactionManager{}, logger.NewTestLogger())
 		created, err := uc.Execute(ctx, w.ID(), uuid.New(), ptrWeight(t, 100), ptrSets(t, 4), ptrReps(t, 10), nil, true)
 
 		require.NoError(t, err)
@@ -109,7 +108,7 @@ func TestCreateWorkoutExercise_Execute(t *testing.T) {
 		w := setupWorkout(t, repo, ctx, userID, domain.StatusPlanned)
 		exercisesClient := &mockExercisesClient{info: weightInfo}
 
-		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, logger.NewTestLogger())
+		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, mockTransactionManager{}, logger.NewTestLogger())
 		_, err := uc.Execute(ctx, w.ID(), uuid.New(), ptrWeight(t, 100), ptrSets(t, 4), ptrReps(t, 10), nil, true)
 
 		assert.ErrorIs(t, err, domain.ErrCannotMarkExerciseCompleted)
@@ -120,7 +119,7 @@ func TestCreateWorkoutExercise_Execute(t *testing.T) {
 		repo := newMockWorkoutRepository()
 		exercisesClient := &mockExercisesClient{info: weightInfo}
 
-		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, logger.NewTestLogger())
+		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, mockTransactionManager{}, logger.NewTestLogger())
 		_, err := uc.Execute(ctx, uuid.New(), uuid.New(), ptrWeight(t, 100), ptrSets(t, 4), ptrReps(t, 10), nil, false)
 
 		assert.ErrorIs(t, err, domain.ErrWorkoutNotFound)
@@ -135,7 +134,7 @@ func TestCreateWorkoutExercise_Execute(t *testing.T) {
 		require.NoError(t, err)
 		exercisesClient := &mockExercisesClient{info: weightInfo}
 
-		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, logger.NewTestLogger())
+		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, mockTransactionManager{}, logger.NewTestLogger())
 		_, err = uc.Execute(ctx, w.ID(), uuid.New(), ptrWeight(t, 100), ptrSets(t, 4), ptrReps(t, 10), nil, false)
 
 		assert.ErrorIs(t, err, domain.ErrWorkoutNotFound)
@@ -148,7 +147,7 @@ func TestCreateWorkoutExercise_Execute(t *testing.T) {
 		w := setupWorkout(t, repo, ctx, userID, domain.StatusCompleted)
 		exercisesClient := &mockExercisesClient{info: weightInfo}
 
-		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, logger.NewTestLogger())
+		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, mockTransactionManager{}, logger.NewTestLogger())
 		_, err := uc.Execute(ctx, w.ID(), uuid.New(), ptrWeight(t, 100), ptrSets(t, 4), ptrReps(t, 10), nil, false)
 
 		assert.ErrorIs(t, err, domain.ErrCannotModifyWorkoutExercise)
@@ -161,7 +160,7 @@ func TestCreateWorkoutExercise_Execute(t *testing.T) {
 		w := setupWorkout(t, repo, ctx, userID, domain.StatusPlanned)
 		exercisesClient := &mockExercisesClient{err: errors.New("exercises is down")}
 
-		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, logger.NewTestLogger())
+		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, mockTransactionManager{}, logger.NewTestLogger())
 		_, err := uc.Execute(ctx, w.ID(), uuid.New(), ptrWeight(t, 100), ptrSets(t, 4), ptrReps(t, 10), nil, false)
 
 		require.Error(t, err)
@@ -175,7 +174,7 @@ func TestCreateWorkoutExercise_Execute(t *testing.T) {
 		w := setupWorkout(t, repo, ctx, userID, domain.StatusPlanned)
 		exercisesClient := &mockExercisesClient{info: ports.ExerciseInfo{Type: "bogus", Difficulty: 5}}
 
-		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, logger.NewTestLogger())
+		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, mockTransactionManager{}, logger.NewTestLogger())
 		_, err := uc.Execute(ctx, w.ID(), uuid.New(), ptrWeight(t, 100), ptrSets(t, 4), ptrReps(t, 10), nil, false)
 
 		require.Error(t, err)
@@ -190,7 +189,7 @@ func TestCreateWorkoutExercise_Execute(t *testing.T) {
 		// duration-упражнение, но передали weight-поля
 		exercisesClient := &mockExercisesClient{info: durationInfo}
 
-		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, logger.NewTestLogger())
+		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, mockTransactionManager{}, logger.NewTestLogger())
 		_, err := uc.Execute(ctx, w.ID(), uuid.New(), ptrWeight(t, 100), ptrSets(t, 4), ptrReps(t, 10), nil, false)
 
 		assert.ErrorIs(t, err, domain.ErrInvalidWorkoutExerciseForType)
@@ -204,7 +203,7 @@ func TestCreateWorkoutExercise_Execute(t *testing.T) {
 		repo.exerciseRepo.err = errors.New("insert failed")
 		exercisesClient := &mockExercisesClient{info: weightInfo}
 
-		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, logger.NewTestLogger())
+		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, mockTransactionManager{}, logger.NewTestLogger())
 		_, err := uc.Execute(ctx, w.ID(), uuid.New(), ptrWeight(t, 100), ptrSets(t, 4), ptrReps(t, 10), nil, false)
 
 		require.Error(t, err)
@@ -214,7 +213,7 @@ func TestCreateWorkoutExercise_Execute(t *testing.T) {
 	t.Run("нет user_id в context — ErrUnauthenticated", func(t *testing.T) {
 		repo := newMockWorkoutRepository()
 		exercisesClient := &mockExercisesClient{info: weightInfo}
-		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, logger.NewTestLogger())
+		uc := NewCreateWorkoutExercise(repo, repo.exerciseRepo, exercisesClient, mockTransactionManager{}, logger.NewTestLogger())
 
 		_, err := uc.Execute(context.Background(), uuid.New(), uuid.New(), nil, nil, nil, nil, false)
 		assert.ErrorIs(t, err, domain.ErrUnauthenticated)
