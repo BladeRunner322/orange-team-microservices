@@ -11,13 +11,18 @@ import (
 )
 
 type PatchMyProfile struct {
-	repo   ports.Repository
-	logger *logger.Logger
+	repo         ports.Repository
+	transactions ports.TransactionManager
+	logger       *logger.Logger
 }
 
-// NewPatchMyProfile создаёт usecase для обновления профиля по user_id.
-func NewPatchMyProfile(repo ports.Repository, log *logger.Logger) *PatchMyProfile {
-	return &PatchMyProfile{repo: repo, logger: log}
+// NewPatchMyProfile создаёт сценарий обновления профиля текущего пользователя.
+func NewPatchMyProfile(repo ports.Repository, transactions ports.TransactionManager, log *logger.Logger) *PatchMyProfile {
+	return &PatchMyProfile{
+		repo:         repo,
+		transactions: transactions,
+		logger:       log,
+	}
 }
 
 // Execute применяет патч к профилю текущего пользователя.
@@ -31,10 +36,10 @@ func (uc *PatchMyProfile) Execute(ctx context.Context, patch domain.ProfilePatch
 	}
 
 	var updated domain.Profile
-	err = uc.repo.WithTx(ctx, func(txRepo ports.Repository) error {
-		// SELECT ... FOR UPDATE — блокируем строку до COMMIT.
-		// Защита от lost update (ADR-007 F-2).
-		profile, err := txRepo.GetByUserIDForUpdate(ctx, userID)
+	err = uc.transactions.Do(ctx, func(txCtx context.Context) error {
+		// SELECT ... FOR UPDATE блокирует строку до завершения транзакции.
+		// Защита от потерянного обновления (ADR-007 F-2).
+		profile, err := uc.repo.GetByUserIDForUpdate(txCtx, userID)
 		if err != nil {
 			if errors.Is(err, domain.ErrProfileNotFound) {
 				log.Warn("profile not found", "user_id", userID)
@@ -46,7 +51,7 @@ func (uc *PatchMyProfile) Execute(ctx context.Context, patch domain.ProfilePatch
 
 		profile.ApplyPatch(patch)
 
-		updated, err = txRepo.Update(ctx, profile)
+		updated, err = uc.repo.Update(txCtx, profile)
 		if err != nil {
 			if errors.Is(err, domain.ErrProfileNotFound) {
 				log.Warn("profile not found during update", "user_id", userID)

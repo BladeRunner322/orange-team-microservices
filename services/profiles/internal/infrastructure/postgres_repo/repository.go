@@ -10,44 +10,31 @@ import (
 
 	"github.com/BladeRunner322/orange-team-microservices/pkg/pgerrors"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
-	"github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/application/ports"
 	"github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/domain"
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Repository реализует интерфейс ports.Repository для PostgreSQL.
 type Repository struct {
-	pool      postgres.Pool // nil, если репозиторий привязан к транзакции
-	tx        postgres.Tx   // nil, если репозиторий не в транзакции
+	db        *pgxpool.Pool
+	getter    *trmpgx.CtxGetter
 	opTimeout time.Duration
 }
 
-// NewRepository создаёт новый репозиторий с пулом соединений.
-func NewRepository(pool postgres.Pool) *Repository {
+// NewRepository создаёт репозиторий с пулом и доступом к транзакции из контекста.
+func NewRepository(db *pgxpool.Pool, getter *trmpgx.CtxGetter, opTimeout time.Duration) *Repository {
 	return &Repository{
-		pool:      pool,
-		opTimeout: pool.OpTimeout(),
+		db:        db,
+		getter:    getter,
+		opTimeout: opTimeout,
 	}
 }
 
-// querier возвращает актуальный источник запросов: транзакцию или пул.
-func (r *Repository) querier() postgres.Querier {
-	if r.tx != nil {
-		return r.tx
-	}
-	return r.pool
-}
-
-// WithTx выполняет fn внутри транзакции. Если репозиторий уже привязан
-// к транзакции — вложенная не открывается, fn вызывается с текущим.
-func (r *Repository) WithTx(ctx context.Context, fn func(ports.Repository) error) error {
-	if r.tx != nil {
-		return fn(r)
-	}
-	return r.pool.WithTx(ctx, func(tx postgres.Tx) error {
-		txRepo := &Repository{tx: tx, opTimeout: r.opTimeout}
-		return fn(txRepo)
-	})
+// queryExecutor выбирает транзакцию или пул и подключает обработку ошибок pgx.
+func (r *Repository) queryExecutor(ctx context.Context) postgres.QueryExecutor {
+	return postgres.WithMappedErrors(r.getter.DefaultTrOrDB(ctx, r.db))
 }
 
 // GetByUserID возвращает профиль по user_id.
@@ -62,7 +49,7 @@ func (r *Repository) GetByUserID(ctx context.Context, userID uuid.UUID) (domain.
     `
 
 	var m ProfileModel
-	row := r.querier().QueryRow(ctx, query, userID)
+	row := r.queryExecutor(ctx).QueryRow(ctx, query, userID)
 	err := m.Scan(row)
 
 	if errors.Is(err, pgerrors.ErrNoRows) {
@@ -81,9 +68,8 @@ func (r *Repository) GetByUserID(ctx context.Context, userID uuid.UUID) (domain.
 	return profile, nil
 }
 
-// GetByUserIDForUpdate возвращает профиль с блокировкой строки (SELECT ... FOR UPDATE).
-// Блокировка держится до COMMIT/ROLLBACK транзакции. Если репозиторий не в tx —
-// поведение как у обычного SELECT, блокировка снимается сразу.
+// GetByUserIDForUpdate читает профиль с блокировкой строки.
+// Вызывается с контекстом транзакции, чтобы блокировка держалась до её завершения.
 func (r *Repository) GetByUserIDForUpdate(ctx context.Context, userID uuid.UUID) (domain.Profile, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.opTimeout)
 	defer cancel()
@@ -96,7 +82,7 @@ func (r *Repository) GetByUserIDForUpdate(ctx context.Context, userID uuid.UUID)
     `
 
 	var m ProfileModel
-	row := r.querier().QueryRow(ctx, query, userID)
+	row := r.queryExecutor(ctx).QueryRow(ctx, query, userID)
 	err := m.Scan(row)
 
 	if errors.Is(err, pgerrors.ErrNoRows) {
@@ -127,7 +113,7 @@ func (r *Repository) EnsureExists(ctx context.Context, profile domain.Profile) e
         VALUES ($1, $2)
         ON CONFLICT (user_id) DO NOTHING
 	`
-	_, err := r.querier().Exec(ctx, query, m.UserID, m.CreatedAt)
+	_, err := r.queryExecutor(ctx).Exec(ctx, query, m.UserID, m.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("ensure profile: %w", err)
 	}
@@ -153,7 +139,7 @@ func (r *Repository) Update(ctx context.Context, profile domain.Profile) (domain
 		WHERE user_id = $1
 		RETURNING user_id, sex, weight_grams, birth_date, height_cm, created_at, updated_at
 	`
-	row := r.querier().QueryRow(
+	row := r.queryExecutor(ctx).QueryRow(
 		ctx,
 		query,
 		m.UserID,
@@ -190,7 +176,7 @@ func (r *Repository) Delete(ctx context.Context, userID uuid.UUID) error {
 		WHERE user_id = $1
 	`
 
-	cmdTag, err := r.querier().Exec(ctx, query, userID)
+	cmdTag, err := r.queryExecutor(ctx).Exec(ctx, query, userID)
 	if err != nil {
 		return fmt.Errorf("delete profile: %w", err)
 	}

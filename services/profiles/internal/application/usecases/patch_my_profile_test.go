@@ -5,14 +5,13 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/BladeRunner322/orange-team-microservices/pkg/ctxkeys"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/logger"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/nullable"
 	"github.com/BladeRunner322/orange-team-microservices/services/profiles/internal/domain"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPatchMyProfile_Execute(t *testing.T) {
@@ -33,7 +32,7 @@ func TestPatchMyProfile_Execute(t *testing.T) {
 			nullable.Nullable[domain.BirthDate]{},
 			nullable.Nullable[domain.Height]{},
 		)
-		uc := NewPatchMyProfile(repo, logger.NewTestLogger())
+		uc := NewPatchMyProfile(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		// Act
 		result, err := uc.Execute(ctx, patch)
@@ -71,7 +70,7 @@ func TestPatchMyProfile_Execute(t *testing.T) {
 			nullable.Nullable[domain.BirthDate]{},
 			nullable.Nullable[domain.Height]{},
 		)
-		uc := NewPatchMyProfile(repo, logger.NewTestLogger())
+		uc := NewPatchMyProfile(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		// Act
 		result, err := uc.Execute(ctx, patch)
@@ -86,7 +85,7 @@ func TestPatchMyProfile_Execute(t *testing.T) {
 		userID := uuid.New()
 		ctx := ctxkeys.WithUserID(context.Background(), userID.String())
 		repo := newMockRepository()
-		uc := NewPatchMyProfile(repo, logger.NewTestLogger())
+		uc := NewPatchMyProfile(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		patch := domain.NewProfilePatch(
 			nullable.Nullable[domain.Sex]{},
@@ -107,7 +106,7 @@ func TestPatchMyProfile_Execute(t *testing.T) {
 		// Arrange
 		ctx := context.Background()
 		repo := newMockRepository()
-		uc := NewPatchMyProfile(repo, logger.NewTestLogger())
+		uc := NewPatchMyProfile(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		patch := domain.NewProfilePatch(
 			nullable.Nullable[domain.Sex]{},
@@ -130,7 +129,7 @@ func TestPatchMyProfile_Execute(t *testing.T) {
 		ctx := ctxkeys.WithUserID(context.Background(), userID.String())
 		repo := newMockRepository()
 		repo.err = errors.New("db is down")
-		uc := NewPatchMyProfile(repo, logger.NewTestLogger())
+		uc := NewPatchMyProfile(repo, mockTransactionManager{}, logger.NewTestLogger())
 
 		patch := domain.NewProfilePatch(
 			nullable.Nullable[domain.Sex]{},
