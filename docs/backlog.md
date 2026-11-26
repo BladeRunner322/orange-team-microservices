@@ -25,7 +25,11 @@
 
 ## 🚧 В работе
 
-Активных задач нет.
+### Переход на Avito Transaction Manager
+
+Переносим транзакционные сценарии на Avito Transaction Manager в ветке `refactor/postgres-transaction-manager`. Решение описано в [ADR-003](adr/003-transactions.md).
+
+Первый шаг — перенести PATCH в Exercises и проверить commit, rollback и блокировку строки в PostgreSQL. Затем перенести Profiles, Habits и Workouts, обновить репозиторий Auth и убрать старую транзакционную обвязку из `pkg/postgres`.
 
 ## ⏭️ Следующее
 
