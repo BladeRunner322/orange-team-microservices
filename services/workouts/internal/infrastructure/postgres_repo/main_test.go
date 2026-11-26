@@ -21,7 +21,7 @@ import (
 // Поднимается один раз в TestMain: оба репозитория (Workout, WorkoutExercise)
 // ходят в одну схему (workout_exercises имеет FK на workouts),
 // поэтому отдельный контейнер на каждый тест — избыточно.
-var testPool postgres.Pool
+var testPool *postgres.PgxPool
 
 func TestMain(m *testing.M) {
 	code, err := runTests(m)

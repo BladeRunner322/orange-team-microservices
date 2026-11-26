@@ -12,17 +12,23 @@ import (
 )
 
 type DeleteWorkoutExercise struct {
-	workoutRepo ports.WorkoutRepository
-	logger      *logger.Logger
+	workoutRepo  ports.WorkoutRepository
+	exerciseRepo ports.WorkoutExerciseRepository
+	transactions ports.TransactionManager
+	logger       *logger.Logger
 }
 
 func NewDeleteWorkoutExercise(
 	workoutRepo ports.WorkoutRepository,
+	exerciseRepo ports.WorkoutExerciseRepository,
+	transactions ports.TransactionManager,
 	log *logger.Logger,
 ) *DeleteWorkoutExercise {
 	return &DeleteWorkoutExercise{
-		workoutRepo: workoutRepo,
-		logger:      log,
+		workoutRepo:  workoutRepo,
+		exerciseRepo: exerciseRepo,
+		transactions: transactions,
+		logger:       log,
 	}
 }
 
@@ -39,8 +45,8 @@ func (uc *DeleteWorkoutExercise) Execute(ctx context.Context, workoutID, workout
 		return err
 	}
 
-	err = uc.workoutRepo.WithTx(ctx, func(wRepo ports.WorkoutRepository, eRepo ports.WorkoutExerciseRepository) error {
-		workout, err := wRepo.GetByID(ctx, userID, workoutID)
+	err = uc.transactions.Do(ctx, func(txCtx context.Context) error {
+		workout, err := uc.workoutRepo.GetByID(txCtx, userID, workoutID)
 		if err != nil {
 			return fmt.Errorf("get workout: %w", err)
 		}
@@ -51,14 +57,15 @@ func (uc *DeleteWorkoutExercise) Execute(ctx context.Context, workoutID, workout
 			return domain.ErrCannotModifyWorkoutExercise
 		}
 
-		if err := eRepo.Delete(ctx, workoutID, workoutExerciseID); err != nil {
+		if err := uc.exerciseRepo.Delete(txCtx, workoutID, workoutExerciseID); err != nil {
 			if errors.Is(err, domain.ErrWorkoutExerciseNotFound) {
 				return nil
 			}
 			return fmt.Errorf("delete workout exercise: %w", err)
 		}
 
-		return recalculateWorkoutScore(ctx, wRepo, eRepo, workout)
+		err = recalculateWorkoutScore(txCtx, uc.workoutRepo, uc.exerciseRepo, workout)
+		return err
 	})
 	if err != nil {
 		log.Error("failed to delete workout exercise", "error", err)

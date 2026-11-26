@@ -3,10 +3,9 @@ package usecases
 import (
 	"context"
 
-	"github.com/google/uuid"
-
 	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/application/ports"
 	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/domain"
+	"github.com/google/uuid"
 )
 
 // ============================================================
@@ -15,7 +14,7 @@ import (
 
 type mockWorkoutRepository struct {
 	workouts     map[uuid.UUID]domain.Workout
-	exerciseRepo *mockWorkoutExerciseRepository // нужен для WithTx
+	exerciseRepo *mockWorkoutExerciseRepository
 
 	// err — если задана, все методы возвращают её.
 	err error
@@ -28,15 +27,11 @@ func newMockWorkoutRepository() *mockWorkoutRepository {
 	}
 }
 
-func (m *mockWorkoutRepository) WithTx(
-	ctx context.Context,
-	fn func(ports.WorkoutRepository, ports.WorkoutExerciseRepository) error,
-) error {
-	if m.err != nil {
-		return m.err
-	}
-	// В памяти транзакции нет — прокидываем те же моки.
-	return fn(m, m.exerciseRepo)
+// mockTransactionManager выполняет callback в unit-тестах.
+type mockTransactionManager struct{}
+
+func (mockTransactionManager) Do(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
 }
 
 func (m *mockWorkoutRepository) Create(ctx context.Context, workout domain.Workout) (domain.Workout, error) {

@@ -19,6 +19,8 @@ import (
 	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/infrastructure/clients"
 	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/infrastructure/postgres_repo"
 	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/interfaces/workoutsgrpc"
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
+	trmmanager "github.com/avito-tech/go-transaction-manager/trm/v2/manager"
 	"google.golang.org/grpc"
 )
 
@@ -65,8 +67,14 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	// ============================================================
 	// 3. РЕПОЗИТОРИИ (реализация для workouts)
 	// ============================================================
-	workoutRepo := postgres_repo.NewWorkoutRepository(pool)
-	exerciseRepo := postgres_repo.NewWorkoutExerciseRepository(pool)
+	transactions, err := trmmanager.New(trmpgx.NewDefaultFactory(pool.Pool))
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("create transaction manager: %w", err)
+	}
+
+	workoutRepo := postgres_repo.NewWorkoutRepository(pool.Pool, trmpgx.DefaultCtxGetter, pool.OpTimeout())
+	exerciseRepo := postgres_repo.NewWorkoutExerciseRepository(pool.Pool, trmpgx.DefaultCtxGetter, pool.OpTimeout())
 
 	// ============================================================
 	// 4. USE CASES
@@ -74,12 +82,12 @@ func New(cfg config.Config, log *logger.Logger) (*App, error) {
 	createWorkoutUC := usecases.NewCreateWorkout(workoutRepo, profilesClient, log)
 	getWorkoutUC := usecases.NewGetWorkout(workoutRepo, log)
 	getWorkoutsUC := usecases.NewGetWorkouts(workoutRepo, log)
-	patchWorkoutUC := usecases.NewPatchWorkout(workoutRepo, log)
+	patchWorkoutUC := usecases.NewPatchWorkout(workoutRepo, exerciseRepo, transactions, log)
 	deleteWorkoutUC := usecases.NewDeleteWorkout(workoutRepo, log)
-	createWorkoutExerciseUC := usecases.NewCreateWorkoutExercise(workoutRepo, exerciseRepo, exercisesClient, log)
+	createWorkoutExerciseUC := usecases.NewCreateWorkoutExercise(workoutRepo, exerciseRepo, exercisesClient, transactions, log)
 	getWorkoutExercisesUC := usecases.NewGetWorkoutExercises(workoutRepo, exerciseRepo, log)
-	patchWorkoutExerciseUC := usecases.NewPatchWorkoutExercise(workoutRepo, exerciseRepo, exercisesClient, log)
-	deleteWorkoutExerciseUC := usecases.NewDeleteWorkoutExercise(workoutRepo, log)
+	patchWorkoutExerciseUC := usecases.NewPatchWorkoutExercise(workoutRepo, exerciseRepo, exercisesClient, transactions, log)
+	deleteWorkoutExerciseUC := usecases.NewDeleteWorkoutExercise(workoutRepo, exerciseRepo, transactions, log)
 	getUserScoreUC := usecases.NewGetUserScore(workoutRepo, log)
 	log.Info("use cases initialized")
 

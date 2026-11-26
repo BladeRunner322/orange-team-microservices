@@ -8,49 +8,29 @@ import (
 
 	"github.com/BladeRunner322/orange-team-microservices/pkg/pgerrors"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
-	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/application/ports"
 	"github.com/BladeRunner322/orange-team-microservices/services/workouts/internal/domain"
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type WorkoutRepository struct {
-	pool      postgres.Pool
-	tx        postgres.Tx
+	db        *pgxpool.Pool
+	getter    *trmpgx.CtxGetter
 	opTimeout time.Duration
 }
 
-func NewWorkoutRepository(pool postgres.Pool) *WorkoutRepository {
+func NewWorkoutRepository(db *pgxpool.Pool, getter *trmpgx.CtxGetter, opTimeout time.Duration) *WorkoutRepository {
 	return &WorkoutRepository{
-		pool:      pool,
-		opTimeout: pool.OpTimeout(),
+		db:        db,
+		getter:    getter,
+		opTimeout: opTimeout,
 	}
 }
 
-func (r *WorkoutRepository) querier() postgres.Querier {
-	if r.tx != nil {
-		return r.tx
-	}
-	return r.pool
-}
-
-// WithTx открывает транзакцию и передаёт оба репозитория (ADR-025 п.3.1).
-func (r *WorkoutRepository) WithTx(
-	ctx context.Context,
-	fn func(ports.WorkoutRepository, ports.WorkoutExerciseRepository) error,
-) error {
-	// Уже в транзакции (значит, fn вызвали изнутри другой WithTx).
-	// Создаём exercise-репозиторий на той же tx и передаём оба.
-	if r.tx != nil {
-		exRepo := &WorkoutExerciseRepository{tx: r.tx, opTimeout: r.opTimeout}
-		return fn(r, exRepo)
-	}
-
-	// Не в транзакции. Открываем новую.
-	return r.pool.WithTx(ctx, func(tx postgres.Tx) error {
-		txWorkoutRepo := &WorkoutRepository{tx: tx, opTimeout: r.opTimeout}
-		txExerciseRepo := &WorkoutExerciseRepository{tx: tx, opTimeout: r.opTimeout}
-		return fn(txWorkoutRepo, txExerciseRepo)
-	})
+// queryExecutor выбирает транзакцию или пул и подключает обработку ошибок pgx.
+func (r *WorkoutRepository) queryExecutor(ctx context.Context) postgres.QueryExecutor {
+	return postgres.WithMappedErrors(r.getter.DefaultTrOrDB(ctx, r.db))
 }
 
 // Create вставляет тренировку в БД и возвращает её из RETURNING.
@@ -67,7 +47,7 @@ func (r *WorkoutRepository) Create(ctx context.Context, workout domain.Workout) 
 	`
 	m := WorkoutDomainToModel(workout)
 
-	row := r.querier().QueryRow(ctx, query,
+	row := r.queryExecutor(ctx).QueryRow(ctx, query,
 		m.ID,
 		m.Version,
 		m.UserID,
@@ -106,7 +86,7 @@ func (r *WorkoutRepository) GetByID(ctx context.Context, userID uuid.UUID, id uu
 	`
 
 	var m WorkoutModel
-	row := r.querier().QueryRow(ctx, query, id, userID)
+	row := r.queryExecutor(ctx).QueryRow(ctx, query, id, userID)
 	if err := m.Scan(row); err != nil {
 		if errors.Is(err, pgerrors.ErrNoRows) {
 			return domain.Workout{}, domain.ErrWorkoutNotFound
@@ -136,7 +116,7 @@ func (r *WorkoutRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 		ORDER BY created_at DESC
 	`
 
-	rows, err := r.querier().Query(ctx, query, userID)
+	rows, err := r.queryExecutor(ctx).Query(ctx, query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("query workouts: %w", err)
 	}
@@ -193,7 +173,7 @@ func (r *WorkoutRepository) Update(ctx context.Context, workout domain.Workout) 
 
 	m := WorkoutDomainToModel(workout)
 
-	row := r.querier().QueryRow(ctx, query,
+	row := r.queryExecutor(ctx).QueryRow(ctx, query,
 		m.ID,
 		m.UserID,
 		m.Version,
@@ -237,7 +217,7 @@ func (r *WorkoutRepository) MarkDeleted(ctx context.Context, userID uuid.UUID, i
 		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
 	`
 
-	cmdTag, err := r.querier().Exec(ctx, query, id, userID)
+	cmdTag, err := r.queryExecutor(ctx).Exec(ctx, query, id, userID)
 	if err != nil {
 		return fmt.Errorf("mark workout deleted: %w", err)
 	}
@@ -262,7 +242,7 @@ func (r *WorkoutRepository) GetUserScore(ctx context.Context, userID uuid.UUID) 
 	`
 
 	var score int64
-	if err := r.querier().QueryRow(ctx, query, userID).Scan(&score); err != nil {
+	if err := r.queryExecutor(ctx).QueryRow(ctx, query, userID).Scan(&score); err != nil {
 		return 0, fmt.Errorf("get user score: %w", err)
 	}
 
