@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package leaderboard;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "internal/gen/api/leaderboard";
+
+service LeaderboardService {
+  rpc GetDaily(GetDailyRequest) returns (GetLeaderboardResponse);
+  rpc GetWeekly(GetWeeklyRequest) returns (GetLeaderboardResponse);
+  rpc GetMonthly(GetMonthlyRequest) returns (GetLeaderboardResponse);
+}
+
+message GetDailyRequest {}
+
+message GetWeeklyRequest {}
+
+message GetMonthlyRequest {}
+
+message GetLeaderboardResponse {
+  google.protobuf.Timestamp period_start = 1;
+  google.protobuf.Timestamp period_end   = 2;
+  google.protobuf.Timestamp updated_at   = 3;
+  repeated LeaderboardEntry entries      = 4;
+}
+
+message LeaderboardEntry {
+  int32  rank    = 1;
+  string user_id = 2;
+  int64  score   = 3;
+}
