@@ -9,44 +9,31 @@ import (
 
 	"github.com/BladeRunner322/orange-team-microservices/pkg/pgerrors"
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
-	"github.com/BladeRunner322/orange-team-microservices/services/habits/internal/application/ports"
 	"github.com/BladeRunner322/orange-team-microservices/services/habits/internal/domain"
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // HabitRepository реализует ports.HabitRepository для PostgreSQL.
 type HabitRepository struct {
-	pool      postgres.Pool // nil, если репозиторий привязан к транзакции
-	tx        postgres.Tx   // nil, если репозиторий не в транзакции
+	db        *pgxpool.Pool
+	getter    *trmpgx.CtxGetter
 	opTimeout time.Duration
 }
 
-// NewHabitRepository создаёт новый репозиторий с пулом.
-func NewHabitRepository(pool postgres.Pool) *HabitRepository {
+// NewHabitRepository создаёт репозиторий привычек с доступом к транзакции из контекста.
+func NewHabitRepository(db *pgxpool.Pool, getter *trmpgx.CtxGetter, opTimeout time.Duration) *HabitRepository {
 	return &HabitRepository{
-		pool:      pool,
-		opTimeout: pool.OpTimeout(),
+		db:        db,
+		getter:    getter,
+		opTimeout: opTimeout,
 	}
 }
 
-// querier возвращает актуальный источник запросов: транзакцию или пул.
-func (r *HabitRepository) querier() postgres.Querier {
-	if r.tx != nil {
-		return r.tx
-	}
-	return r.pool
-}
-
-// WithTx выполняет fn внутри транзакции. Если репозиторий уже привязан
-// к транзакции — вложенная не открывается, fn вызывается с текущим.
-func (r *HabitRepository) WithTx(ctx context.Context, fn func(ports.HabitRepository) error) error {
-	if r.tx != nil {
-		return fn(r)
-	}
-	return r.pool.WithTx(ctx, func(tx postgres.Tx) error {
-		txRepo := &HabitRepository{tx: tx, opTimeout: r.opTimeout}
-		return fn(txRepo)
-	})
+// queryExecutor выбирает транзакцию или пул и подключает обработку ошибок pgx.
+func (r *HabitRepository) queryExecutor(ctx context.Context) postgres.QueryExecutor {
+	return postgres.WithMappedErrors(r.getter.DefaultTrOrDB(ctx, r.db))
 }
 
 // Create сохраняет новую привычку, возвращает из RETURNING.
@@ -62,7 +49,7 @@ func (r *HabitRepository) Create(ctx context.Context, habit domain.Habit) (domai
 
 	m := HabitDomainToModel(habit)
 
-	row := r.querier().QueryRow(ctx, query, m.ID, m.UserID, m.Name, m.Description)
+	row := r.queryExecutor(ctx).QueryRow(ctx, query, m.ID, m.UserID, m.Name, m.Description)
 
 	if err := m.Scan(row); err != nil {
 		if errors.Is(err, pgerrors.ErrViolatesUnique) {
@@ -92,7 +79,7 @@ func (r *HabitRepository) GetByID(ctx context.Context, id uuid.UUID) (domain.Hab
 	`
 
 	var m HabitModel
-	row := r.querier().QueryRow(ctx, query, id)
+	row := r.queryExecutor(ctx).QueryRow(ctx, query, id)
 	if err := m.Scan(row); err != nil {
 		if errors.Is(err, pgerrors.ErrNoRows) {
 			return domain.Habit{}, domain.ErrHabitNotFound
@@ -109,9 +96,8 @@ func (r *HabitRepository) GetByID(ctx context.Context, id uuid.UUID) (domain.Hab
 	return habit, nil
 }
 
-// GetByIDForUpdate возвращает привычку с блокировкой строки (SELECT ... FOR UPDATE).
-// Блокировка держится до COMMIT/ROLLBACK транзакции. Если репозиторий не в tx —
-// поведение как у обычного SELECT, блокировка снимается сразу.
+// GetByIDForUpdate читает привычку с блокировкой строки.
+// Вызывается с контекстом транзакции, чтобы блокировка держалась до её завершения.
 func (r *HabitRepository) GetByIDForUpdate(ctx context.Context, id uuid.UUID) (domain.Habit, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.opTimeout)
 	defer cancel()
@@ -124,7 +110,7 @@ func (r *HabitRepository) GetByIDForUpdate(ctx context.Context, id uuid.UUID) (d
 	`
 
 	var m HabitModel
-	row := r.querier().QueryRow(ctx, query, id)
+	row := r.queryExecutor(ctx).QueryRow(ctx, query, id)
 	if err := m.Scan(row); err != nil {
 		if errors.Is(err, pgerrors.ErrNoRows) {
 			return domain.Habit{}, domain.ErrHabitNotFound
@@ -153,7 +139,7 @@ func (r *HabitRepository) ListByUser(ctx context.Context, userID uuid.UUID) ([]d
 		ORDER BY created_at ASC
 	`
 
-	rows, err := r.querier().Query(ctx, query, userID)
+	rows, err := r.queryExecutor(ctx).Query(ctx, query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("query habits: %w", err)
 	}
@@ -199,7 +185,7 @@ func (r *HabitRepository) Update(ctx context.Context, habit domain.Habit) (domai
 
 	m := HabitDomainToModel(habit)
 
-	row := r.querier().QueryRow(ctx, query, m.ID, m.Name, m.Description)
+	row := r.queryExecutor(ctx).QueryRow(ctx, query, m.ID, m.Name, m.Description)
 
 	if err := m.Scan(row); err != nil {
 		if errors.Is(err, pgerrors.ErrNoRows) {
@@ -235,7 +221,7 @@ func (r *HabitRepository) MarkDeleted(ctx context.Context, id uuid.UUID) error {
 		WHERE id = $1 AND deleted_at IS NULL
 	`
 
-	cmdTag, err := r.querier().Exec(ctx, query, id)
+	cmdTag, err := r.queryExecutor(ctx).Exec(ctx, query, id)
 	if err != nil {
 		return fmt.Errorf("mark deleted: %w", err)
 	}

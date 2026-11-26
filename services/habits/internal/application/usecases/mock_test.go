@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/BladeRunner322/orange-team-microservices/services/habits/internal/application/ports"
 	"github.com/BladeRunner322/orange-team-microservices/services/habits/internal/domain"
 	"github.com/google/uuid"
 )
@@ -24,12 +23,11 @@ func newMockHabitRepository() *mockHabitRepository {
 	return &mockHabitRepository{habits: make(map[uuid.UUID]domain.Habit)}
 }
 
-func (m *mockHabitRepository) WithTx(ctx context.Context, fn func(ports.HabitRepository) error) error {
-	if m.err != nil {
-		return m.err
-	}
-	// В памяти транзакции нет — прокидываем тот же мок.
-	return fn(m)
+// mockTransactionManager выполняет callback в unit-тестах.
+type mockTransactionManager struct{}
+
+func (mockTransactionManager) Do(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
 }
 
 func (m *mockHabitRepository) GetByIDForUpdate(ctx context.Context, id uuid.UUID) (domain.Habit, error) {

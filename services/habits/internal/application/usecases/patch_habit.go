@@ -12,17 +12,20 @@ import (
 )
 
 type PatchHabit struct {
-	habitRepo ports.HabitRepository
-	logger    *logger.Logger
+	habitRepo    ports.HabitRepository
+	transactions ports.TransactionManager
+	logger       *logger.Logger
 }
 
-func NewPatchHabit(habitRepo ports.HabitRepository, log *logger.Logger) *PatchHabit {
-	return &PatchHabit{habitRepo: habitRepo, logger: log}
+func NewPatchHabit(habitRepo ports.HabitRepository, transactions ports.TransactionManager, log *logger.Logger) *PatchHabit {
+	return &PatchHabit{
+		habitRepo:    habitRepo,
+		transactions: transactions,
+		logger:       log,
+	}
 }
 
-// Execute применяет патч к привычке.
-// Обёрнут в habitRepo.WithTx (read-then-write, защита от lost update).
-// Проверяет, что привычка принадлежит текущему пользователю.
+// Execute обновляет привычку текущего пользователя в одной транзакции.
 func (uc *PatchHabit) Execute(ctx context.Context, id uuid.UUID, patch domain.HabitPatch) (domain.Habit, error) {
 	log := uc.logger.With("operation", "PatchHabit", "habit_id", id)
 
@@ -32,10 +35,10 @@ func (uc *PatchHabit) Execute(ctx context.Context, id uuid.UUID, patch domain.Ha
 	}
 
 	var updated domain.Habit
-	err = uc.habitRepo.WithTx(ctx, func(txRepo ports.HabitRepository) error {
-		// SELECT ... FOR UPDATE — блокируем строку до COMMIT.
-		// Защита от lost update (ADR-007 F-2).
-		habit, err := txRepo.GetByIDForUpdate(ctx, id)
+	err = uc.transactions.Do(ctx, func(txCtx context.Context) error {
+		// SELECT ... FOR UPDATE блокирует строку до завершения транзакции.
+		// Защита от потерянного обновления (ADR-007 F-2).
+		habit, err := uc.habitRepo.GetByIDForUpdate(txCtx, id)
 		if err != nil {
 			if errors.Is(err, domain.ErrHabitNotFound) {
 				log.Warn("habit not found")
@@ -52,7 +55,7 @@ func (uc *PatchHabit) Execute(ctx context.Context, id uuid.UUID, patch domain.Ha
 
 		habit.ApplyPatch(patch)
 
-		updated, err = txRepo.Update(ctx, habit)
+		updated, err = uc.habitRepo.Update(txCtx, habit)
 		if err != nil {
 			if errors.Is(err, domain.ErrHabitNotFound) {
 				log.Warn("habit not found or already deleted")

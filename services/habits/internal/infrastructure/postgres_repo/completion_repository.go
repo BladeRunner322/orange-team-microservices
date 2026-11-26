@@ -6,44 +6,31 @@ import (
 	"time"
 
 	"github.com/BladeRunner322/orange-team-microservices/pkg/postgres"
-	"github.com/BladeRunner322/orange-team-microservices/services/habits/internal/application/ports"
 	"github.com/BladeRunner322/orange-team-microservices/services/habits/internal/domain"
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // CompletionRepository реализует ports.CompletionRepository для PostgreSQL.
 type CompletionRepository struct {
-	pool      postgres.Pool // nil, если репозиторий привязан к транзакции
-	tx        postgres.Tx   // nil, если репозиторий не в транзакции
+	db        *pgxpool.Pool
+	getter    *trmpgx.CtxGetter
 	opTimeout time.Duration
 }
 
-// NewCompletionRepository создаёт новый репозиторий с пулом.
-func NewCompletionRepository(pool postgres.Pool) *CompletionRepository {
+// NewCompletionRepository создаёт репозиторий отметок с доступом к транзакции из контекста.
+func NewCompletionRepository(db *pgxpool.Pool, getter *trmpgx.CtxGetter, opTimeout time.Duration) *CompletionRepository {
 	return &CompletionRepository{
-		pool:      pool,
-		opTimeout: pool.OpTimeout(),
+		db:        db,
+		getter:    getter,
+		opTimeout: opTimeout,
 	}
 }
 
-// querier возвращает актуальный источник запросов: транзакцию или пул.
-func (r *CompletionRepository) querier() postgres.Querier {
-	if r.tx != nil {
-		return r.tx
-	}
-	return r.pool
-}
-
-// WithTx выполняет fn внутри транзакции. Если репозиторий уже привязан
-// к транзакции — вложенная не открывается, fn вызывается с текущим.
-func (r *CompletionRepository) WithTx(ctx context.Context, fn func(ports.CompletionRepository) error) error {
-	if r.tx != nil {
-		return fn(r)
-	}
-	return r.pool.WithTx(ctx, func(tx postgres.Tx) error {
-		txRepo := &CompletionRepository{tx: tx, opTimeout: r.opTimeout}
-		return fn(txRepo)
-	})
+// queryExecutor выбирает транзакцию или пул и подключает обработку ошибок pgx.
+func (r *CompletionRepository) queryExecutor(ctx context.Context) postgres.QueryExecutor {
+	return postgres.WithMappedErrors(r.getter.DefaultTrOrDB(ctx, r.db))
 }
 
 // Complete добавляет отметку. ON CONFLICT DO NOTHING — повторная отметка не падает.
@@ -59,7 +46,7 @@ func (r *CompletionRepository) Complete(ctx context.Context, completion domain.C
 
 	m := CompletionDomainToModel(completion)
 
-	if _, err := r.querier().Exec(ctx, query, m.HabitID, m.Date); err != nil {
+	if _, err := r.queryExecutor(ctx).Exec(ctx, query, m.HabitID, m.Date); err != nil {
 		return fmt.Errorf("complete habit: %w", err)
 	}
 
@@ -76,7 +63,7 @@ func (r *CompletionRepository) Uncomplete(ctx context.Context, habitID uuid.UUID
 		WHERE habit_id = $1 AND date = $2
 	`
 
-	if _, err := r.querier().Exec(ctx, query, habitID, date); err != nil {
+	if _, err := r.queryExecutor(ctx).Exec(ctx, query, habitID, date); err != nil {
 		return fmt.Errorf("uncomplete habit: %w", err)
 	}
 
@@ -97,7 +84,7 @@ func (r *CompletionRepository) IsCompleted(ctx context.Context, habitID uuid.UUI
 	`
 
 	var exists bool
-	if err := r.querier().QueryRow(ctx, query, habitID, date).Scan(&exists); err != nil {
+	if err := r.queryExecutor(ctx).QueryRow(ctx, query, habitID, date).Scan(&exists); err != nil {
 		return false, fmt.Errorf("is completed: %w", err)
 	}
 
@@ -117,7 +104,7 @@ func (r *CompletionRepository) ListByHabit(ctx context.Context, habitID uuid.UUI
 		ORDER BY date ASC
 	`
 
-	rows, err := r.querier().Query(ctx, query, habitID, from, to)
+	rows, err := r.queryExecutor(ctx).Query(ctx, query, habitID, from, to)
 	if err != nil {
 		return nil, fmt.Errorf("query completions: %w", err)
 	}
@@ -163,7 +150,7 @@ func (r *CompletionRepository) Streak(ctx context.Context, habitID uuid.UUID, to
 		ORDER BY date DESC
 	`
 
-	rows, err := r.querier().Query(ctx, query, habitID, today)
+	rows, err := r.queryExecutor(ctx).Query(ctx, query, habitID, today)
 	if err != nil {
 		return 0, fmt.Errorf("query streak dates: %w", err)
 	}

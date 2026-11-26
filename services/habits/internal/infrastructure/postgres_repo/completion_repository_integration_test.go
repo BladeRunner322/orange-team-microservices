@@ -9,14 +9,15 @@ import (
 	"time"
 
 	"github.com/BladeRunner322/orange-team-microservices/services/habits/internal/domain"
+	trmpgx "github.com/avito-tech/go-transaction-manager/drivers/pgxv5/v2"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCompletionRepository_Integration(t *testing.T) {
-	completionRepo := NewCompletionRepository(testPool)
-	habitRepo := NewHabitRepository(testPool)
+	completionRepo := NewCompletionRepository(testPool.Pool, trmpgx.DefaultCtxGetter, testPool.OpTimeout())
+	habitRepo := NewHabitRepository(testPool.Pool, trmpgx.DefaultCtxGetter, testPool.OpTimeout())
 	runCompletionRepositoryTests(t, completionRepo, habitRepo)
 }
 
