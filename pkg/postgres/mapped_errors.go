@@ -3,10 +3,9 @@ package postgres
 import (
 	"context"
 
+	"github.com/BladeRunner322/orange-team-microservices/pkg/pgerrors"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-
-	"github.com/BladeRunner322/orange-team-microservices/pkg/pgerrors"
 )
 
 // QueryExecutor — методы выполнения SQL, общие для пула pgx и транзакции.
